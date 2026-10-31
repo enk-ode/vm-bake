@@ -238,7 +238,7 @@ __template_chain_head1() {
 	local cur="$1" chain="" p="" n=0
 	while test "$cur" != empty && test "$n" -lt 32; do
 		chain="$cur${chain:+ $chain}"
-		IFS= read -r p < "$VM_BAKE_BASE/template/$cur/parent" 2>/dev/null || p=empty
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
 		cur=$p; n=$((n + 1))
 	done
 	if test "$cur" = empty; then
@@ -259,7 +259,7 @@ __template_chain_table2() {
 	local cur="$1" chain="" p="" n=0
 	while test "$cur" != empty && test "$n" -lt 32; do
 		chain="$cur${chain:+ $chain}"
-		IFS= read -r p < "$VM_BAKE_BASE/template/$cur/parent" 2>/dev/null || p=empty
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
 		cur=$p; n=$((n + 1))
 	done
 	if test "$cur" = empty; then
@@ -1327,37 +1327,46 @@ ___template_dump1() {
 # @see     template dump
 #@end
 ___template_dump_all0() {
-	local emitted=" empty " l="" name="" p="" pending="" progress=yes
-	for l in "$VM_BAKE_BASE"/template/*; do
-		test -L "$l" || continue
-		pending="$pending ${l##*/}"
-	done
-	while test -n "$pending" && test "$progress" = yes; do
-		progress=no
-		for name in $pending; do
-			IFS= read -r p < "$VM_BAKE_BASE/template/$name/parent" 2>/dev/null || p=empty
-			case "$emitted" in *" $p "*)
-				printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template dump record '$name'"
-				emitted="$emitted$name "
-				pending=$(printf '%s\n' $pending | grep -vx "$name" | tr '\n' ' ')
+	local emitted="
+empty
+" l="" name="" p="" progress=yes left=1
+	while test "$left" -gt 0 && test "$progress" = yes; do
+		progress=no; left=0
+		for l in "$VM_BAKE_BASE"/template/*; do
+			test -L "$l" || continue
+			name=${l##*/}
+			case "$emitted" in *"
+$name
+"*) continue ;; esac
+			IFS= read -r p 2>/dev/null < "$l/parent" || p=empty
+			case "$emitted" in
+			*"
+$p
+"*)
+				printf "%s\n" "\"\$VM_BAKE_CONTEXT_SCRIPT\" template dump record $(sq "$name")"
+				emitted="$emitted$name
+"
 				progress=yes ;;
+			*)	left=$((left + 1)) ;;
 			esac
 		done
 	done
-	test -z "$pending" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template dump all: parents missing for$pending")"
-	test "$emitted" != " empty " || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'no templates to dump'"
+	test "$left" -eq 0 || printf "%s\n" "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template dump all: $left template(s) whose chain of parents does not end at empty")"
+	test "$emitted" != "
+empty
+" || printf "%s\n" "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'no templates to dump'"
 }
 
-#@help _template_dump_record1
+#@help ___template_dump_record1
 # @command template dump record <template>
-# @summary Display terminal: the replay lines of one template -- 'template add' with its parent, the scalars, every own list entry and mask
+# @summary The replay lines of one template, a batch pinned to cat so it is shown rather than run: 'template add' with its parent, the scalars, every own list entry and mask
 # @group   template
 # @internal
 # @see     template dump
 #@end
-_template_dump_record1() {
+___template_dump_record1() {
 	local d="$VM_BAKE_BASE/template/$1" p=empty v="" rest="" f="" l=""
-	IFS= read -r p < "$d/parent" 2>/dev/null || p=empty
+	IFS= read -r p 2>/dev/null < "$d/parent" || p=empty
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template add '$1' '$p'"
 	if test -f "$d/base"; then
 		IFS= read -r v < "$d/base"

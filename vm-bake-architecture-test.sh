@@ -8,13 +8,13 @@
 # Terminal functions (single underscore): output shell commands
 # Combinator functions (double underscore): output single vm-bake command
 # Batch-combinator functions (triple underscore): output multiple vm-bake commands
-TERMINAL_FUNCTIONS="_bootstrap_scaffold2 _bootstrap_link2 _database_dir_validated2 _database_dir_create2 _environment_install1 _environment_cache_render0 _environment_cache_place0 _environment_cache_off0 _environment_cache_status0 _environment_freeze_warn1 _environment_freeze_mark0 _setenv_write2 _getenv_read3 _unsetenv_erase1 _destroy_warning1 _destroy_records_remove0 _destroy_scaffold_remove0 _version0 _batch2 _printenv0 _unknown_command1 _note1 _comment1 _error1 _error2 _error3 _fail2 _log1 _log2 _log3 _help0 _help1 _help_environment0 _help2 _help3 _help4 _help5 _help6 _help_manual_title0 _help_manual_part_print1 _help_manual_commands0 _help_manual_environment0 _complete0 _complete1 _complete2 _complete3 _complete4 _complete5 _complete6 _complete7 _complete8 _complete9 _help_env0 _help_env2 _template_list0 _template_mint2 _template_unlink1 _template_show_head2 _template_line_table3 _template_leaf_write3 _template_leaf_erase2 _template_line_append3 _template_line_remove3 _template_line_mask3 _template_dump_record1"
+TERMINAL_FUNCTIONS="_bootstrap_scaffold2 _bootstrap_link2 _database_dir_validated2 _database_dir_create2 _environment_install1 _environment_cache_render0 _environment_cache_place0 _environment_cache_off0 _environment_cache_status0 _environment_freeze_warn1 _environment_freeze_mark0 _setenv_write2 _getenv_read3 _unsetenv_erase1 _destroy_warning1 _destroy_records_remove0 _destroy_scaffold_remove0 _version0 _batch2 _printenv0 _unknown_command1 _note1 _comment1 _error1 _error2 _error3 _fail2 _log1 _log2 _log3 _help0 _help1 _help_environment0 _help2 _help3 _help4 _help5 _help6 _help_manual_title0 _help_manual_part_print1 _help_manual_commands0 _help_manual_environment0 _complete0 _complete1 _complete2 _complete3 _complete4 _complete5 _complete6 _complete7 _complete8 _complete9 _help_env0 _help_env2 _template_list0 _template_mint2 _template_unlink1 _template_show_head2 _template_line_table3 _template_leaf_write3 _template_leaf_erase2 _template_line_append3 _template_line_remove3 _template_line_mask3"
 COMBINATOR_FUNCTIONS="__bootstrap1 __bootstrap_name_valid1 __bootstrap_init2 __environment_profile_valid1 __database_dir_ensure4 __database_dir_validate4 __environment_cache0 __environment_freeze_named1 __environment_frozen_allows1 __init0 __setenv_name_valid1 __environment_cache_refresh0 __getenv1 __unsetenv_remove1 __destroy_named1 __destroy_records1 __destroy_scaffold1 __batch1 __dump0 __dump1 __restore1 __wrong_arity1 __help_manual_part_exists1 __help_env1 __setintp2 __getintp1 __help_intp1 __help_intp2 __template_add1 __template_name_valid1 __template_check_template1 __template_add_new2 __template_drop_allowed1 __template_chain_head1 __template_chain_table2 __template_bake2 __template_firmware2 __template_leaf_record3 __template_leaf_set2 __template_package_add2 __template_package_valid1 __template_rc_valid1 __template_user_valid1 __template_uid_valid1 __template_service_valid2 __template_forbid_valid1 __template_forbid_valid2 __template_protocol_valid1 __template_line_listed3 __template_arch_valid1 __template_version_valid1 __template_sha256_valid1 __template_url_valid1 __template_path_valid1 __template_count_valid1 __template_size_valid1 __template_word_valid1 __template_restore1"
-BATCH_COMBINATOR_FUNCTIONS="___bootstrap2 ___database_init0 ___environment_init1 ___environment_cache_on0 ___environment_refresh0 ___environment_freeze1 ___environment_freeze_pins0 ___init1 ___setenv2 ___unsetenv1 ___dump_env_prologue0 ___dump_env_epilogue0 ___destroy1 ___batch0 ___dump_all0 ___help_manual0 ___help_manual_part1 ___template_add2 ___template_drop1 ___template_show1 ___template_base_release3 ___template_base_stage3 ___template_base_image4 ___template_base_iso4 ___template_base_drop1 ___template_bake_chroot1 ___template_bake_cloud_init1 ___template_bake_drop1 ___template_firmware_uefi1 ___template_firmware_bios1 ___template_firmware_drop1 ___template_resource4 ___template_resource_drop1 ___template_package_add_stdin1 ___template_package_add_entry2 ___template_package_drop2 ___template_package_mask2 ___template_package_show1 ___template_rc_add3 ___template_rc_drop3 ___template_rc_mask3 ___template_rc_show1 ___template_user_add3 ___template_user_drop3 ___template_user_mask3 ___template_user_show1 ___template_service_add3 ___template_service_drop3 ___template_service_mask3 ___template_service_show1 ___template_forbid_add2 ___template_forbid_add3 ___template_forbid_drop2 ___template_forbid_drop3 ___template_forbid_mask2 ___template_forbid_mask3 ___template_forbid_show1 ___template_data_add4 ___template_data_drop4 ___template_data_mask4 ___template_data_show1 ___template_session_add2 ___template_session_drop2 ___template_session_mask2 ___template_session_show1 ___template_dump1 ___template_dump_all0"
-ANCHOR_FUNCTIONS="_bootstrap_scaffold2 _bootstrap_link2 _database_dir_validated2 _database_dir_create2 _environment_install1 _environment_cache_render0 _environment_cache_place0 _environment_cache_off0 _environment_cache_status0 _environment_freeze_warn1 _environment_freeze_mark0 _setenv_write2 _getenv_read3 _unsetenv_erase1 _destroy_warning1 _destroy_records_remove0 _destroy_scaffold_remove0 _version0 _batch2 _printenv0 _unknown_command1 _note1 _comment1 _error1 _error2 _error3 _fail2 _log1 _log2 _log3 _help0 _help1 _help_environment0 _help2 _help3 _help4 _help5 _help6 _help_manual_title0 _help_manual_part_print1 _help_manual_commands0 _help_manual_environment0 _complete0 _complete1 _complete2 _complete3 _complete4 _complete5 _complete6 _complete7 _complete8 _complete9 _help_env0 _help_env2 _template_list0 _template_mint2 _template_unlink1 _template_show_head2 _template_line_table3 _template_leaf_write3 _template_leaf_erase2 _template_line_append3 _template_line_remove3 _template_line_mask3 _template_dump_record1 __bootstrap1 __bootstrap_name_valid1 __bootstrap_init2 __environment_profile_valid1 __database_dir_ensure4 __database_dir_validate4 __environment_cache0 __environment_freeze_named1 __environment_frozen_allows1 __init0 __setenv_name_valid1 __environment_cache_refresh0 __getenv1 __unsetenv_remove1 __destroy_named1 __destroy_records1 __destroy_scaffold1 __batch1 __dump0 __dump1 __restore1 __wrong_arity1 __help_manual_part_exists1 __help_env1 __setintp2 __getintp1 __help_intp1 __help_intp2 __template_add1 __template_name_valid1 __template_check_template1 __template_add_new2 __template_drop_allowed1 __template_chain_head1 __template_chain_table2 __template_bake2 __template_firmware2 __template_leaf_record3 __template_leaf_set2 __template_package_add2 __template_package_valid1 __template_rc_valid1 __template_user_valid1 __template_uid_valid1 __template_service_valid2 __template_forbid_valid1 __template_forbid_valid2 __template_protocol_valid1 __template_line_listed3 __template_arch_valid1 __template_version_valid1 __template_sha256_valid1 __template_url_valid1 __template_path_valid1 __template_count_valid1 __template_size_valid1 __template_word_valid1 __template_restore1 ___bootstrap2 ___database_init0 ___environment_init1 ___environment_cache_on0 ___environment_refresh0 ___environment_freeze1 ___environment_freeze_pins0 ___init1 ___setenv2 ___unsetenv1 ___dump_env_prologue0 ___dump_env_epilogue0 ___destroy1 ___batch0 ___dump_all0 ___help_manual0 ___help_manual_part1 ___template_add2 ___template_drop1 ___template_show1 ___template_base_release3 ___template_base_stage3 ___template_base_image4 ___template_base_iso4 ___template_base_drop1 ___template_bake_chroot1 ___template_bake_cloud_init1 ___template_bake_drop1 ___template_firmware_uefi1 ___template_firmware_bios1 ___template_firmware_drop1 ___template_resource4 ___template_resource_drop1 ___template_package_add_stdin1 ___template_package_add_entry2 ___template_package_drop2 ___template_package_mask2 ___template_package_show1 ___template_rc_add3 ___template_rc_drop3 ___template_rc_mask3 ___template_rc_show1 ___template_user_add3 ___template_user_drop3 ___template_user_mask3 ___template_user_show1 ___template_service_add3 ___template_service_drop3 ___template_service_mask3 ___template_service_show1 ___template_forbid_add2 ___template_forbid_add3 ___template_forbid_drop2 ___template_forbid_drop3 ___template_forbid_mask2 ___template_forbid_mask3 ___template_forbid_show1 ___template_data_add4 ___template_data_drop4 ___template_data_mask4 ___template_data_show1 ___template_session_add2 ___template_session_drop2 ___template_session_mask2 ___template_session_show1 ___template_dump1 ___template_dump_all0"
+BATCH_COMBINATOR_FUNCTIONS="___bootstrap2 ___database_init0 ___environment_init1 ___environment_cache_on0 ___environment_refresh0 ___environment_freeze1 ___environment_freeze_pins0 ___init1 ___setenv2 ___unsetenv1 ___dump_env_prologue0 ___dump_env_epilogue0 ___destroy1 ___batch0 ___dump_all0 ___help_manual0 ___help_manual_part1 ___template_add2 ___template_drop1 ___template_show1 ___template_base_release3 ___template_base_stage3 ___template_base_image4 ___template_base_iso4 ___template_base_drop1 ___template_bake_chroot1 ___template_bake_cloud_init1 ___template_bake_drop1 ___template_firmware_uefi1 ___template_firmware_bios1 ___template_firmware_drop1 ___template_resource4 ___template_resource_drop1 ___template_package_add_stdin1 ___template_package_add_entry2 ___template_package_drop2 ___template_package_mask2 ___template_package_show1 ___template_rc_add3 ___template_rc_drop3 ___template_rc_mask3 ___template_rc_show1 ___template_user_add3 ___template_user_drop3 ___template_user_mask3 ___template_user_show1 ___template_service_add3 ___template_service_drop3 ___template_service_mask3 ___template_service_show1 ___template_forbid_add2 ___template_forbid_add3 ___template_forbid_drop2 ___template_forbid_drop3 ___template_forbid_mask2 ___template_forbid_mask3 ___template_forbid_show1 ___template_data_add4 ___template_data_drop4 ___template_data_mask4 ___template_data_show1 ___template_session_add2 ___template_session_drop2 ___template_session_mask2 ___template_session_show1 ___template_dump1 ___template_dump_all0 ___template_dump_record1"
+ANCHOR_FUNCTIONS="_bootstrap_scaffold2 _bootstrap_link2 _database_dir_validated2 _database_dir_create2 _environment_install1 _environment_cache_render0 _environment_cache_place0 _environment_cache_off0 _environment_cache_status0 _environment_freeze_warn1 _environment_freeze_mark0 _setenv_write2 _getenv_read3 _unsetenv_erase1 _destroy_warning1 _destroy_records_remove0 _destroy_scaffold_remove0 _version0 _batch2 _printenv0 _unknown_command1 _note1 _comment1 _error1 _error2 _error3 _fail2 _log1 _log2 _log3 _help0 _help1 _help_environment0 _help2 _help3 _help4 _help5 _help6 _help_manual_title0 _help_manual_part_print1 _help_manual_commands0 _help_manual_environment0 _complete0 _complete1 _complete2 _complete3 _complete4 _complete5 _complete6 _complete7 _complete8 _complete9 _help_env0 _help_env2 _template_list0 _template_mint2 _template_unlink1 _template_show_head2 _template_line_table3 _template_leaf_write3 _template_leaf_erase2 _template_line_append3 _template_line_remove3 _template_line_mask3 __bootstrap1 __bootstrap_name_valid1 __bootstrap_init2 __environment_profile_valid1 __database_dir_ensure4 __database_dir_validate4 __environment_cache0 __environment_freeze_named1 __environment_frozen_allows1 __init0 __setenv_name_valid1 __environment_cache_refresh0 __getenv1 __unsetenv_remove1 __destroy_named1 __destroy_records1 __destroy_scaffold1 __batch1 __dump0 __dump1 __restore1 __wrong_arity1 __help_manual_part_exists1 __help_env1 __setintp2 __getintp1 __help_intp1 __help_intp2 __template_add1 __template_name_valid1 __template_check_template1 __template_add_new2 __template_drop_allowed1 __template_chain_head1 __template_chain_table2 __template_bake2 __template_firmware2 __template_leaf_record3 __template_leaf_set2 __template_package_add2 __template_package_valid1 __template_rc_valid1 __template_user_valid1 __template_uid_valid1 __template_service_valid2 __template_forbid_valid1 __template_forbid_valid2 __template_protocol_valid1 __template_line_listed3 __template_arch_valid1 __template_version_valid1 __template_sha256_valid1 __template_url_valid1 __template_path_valid1 __template_count_valid1 __template_size_valid1 __template_word_valid1 __template_restore1 ___bootstrap2 ___database_init0 ___environment_init1 ___environment_cache_on0 ___environment_refresh0 ___environment_freeze1 ___environment_freeze_pins0 ___init1 ___setenv2 ___unsetenv1 ___dump_env_prologue0 ___dump_env_epilogue0 ___destroy1 ___batch0 ___dump_all0 ___help_manual0 ___help_manual_part1 ___template_add2 ___template_drop1 ___template_show1 ___template_base_release3 ___template_base_stage3 ___template_base_image4 ___template_base_iso4 ___template_base_drop1 ___template_bake_chroot1 ___template_bake_cloud_init1 ___template_bake_drop1 ___template_firmware_uefi1 ___template_firmware_bios1 ___template_firmware_drop1 ___template_resource4 ___template_resource_drop1 ___template_package_add_stdin1 ___template_package_add_entry2 ___template_package_drop2 ___template_package_mask2 ___template_package_show1 ___template_rc_add3 ___template_rc_drop3 ___template_rc_mask3 ___template_rc_show1 ___template_user_add3 ___template_user_drop3 ___template_user_mask3 ___template_user_show1 ___template_service_add3 ___template_service_drop3 ___template_service_mask3 ___template_service_show1 ___template_forbid_add2 ___template_forbid_add3 ___template_forbid_drop2 ___template_forbid_drop3 ___template_forbid_mask2 ___template_forbid_mask3 ___template_forbid_show1 ___template_data_add4 ___template_data_drop4 ___template_data_mask4 ___template_data_show1 ___template_session_add2 ___template_session_drop2 ___template_session_mask2 ___template_session_show1 ___template_dump1 ___template_dump_all0 ___template_dump_record1"
 # Function-to-module mapping (format: "func:module.sh func:module.sh ...")
 # Used by process_arguments() for deterministic module loading
-FUNCTION_MODULES="__bootstrap1:database.sh ___bootstrap2:database.sh __bootstrap_name_valid1:database.sh _bootstrap_scaffold2:database.sh __bootstrap_init2:database.sh _bootstrap_link2:database.sh __environment_profile_valid1:database.sh ___database_init0:database.sh __database_dir_ensure4:database.sh __database_dir_validate4:database.sh _database_dir_validated2:database.sh _database_dir_create2:database.sh ___environment_init1:database.sh _environment_install1:database.sh __environment_cache0:database.sh ___environment_cache_on0:database.sh _environment_cache_render0:database.sh _environment_cache_place0:database.sh ___environment_refresh0:database.sh _environment_cache_off0:database.sh _environment_cache_status0:database.sh ___environment_freeze1:database.sh __environment_freeze_named1:database.sh _environment_freeze_warn1:database.sh ___environment_freeze_pins0:database.sh _environment_freeze_mark0:database.sh __environment_frozen_allows1:database.sh ___init1:database.sh __init0:database.sh ___setenv2:database.sh __setenv_name_valid1:database.sh _setenv_write2:database.sh __environment_cache_refresh0:database.sh __getenv1:database.sh _getenv_read3:database.sh ___unsetenv1:database.sh __unsetenv_remove1:database.sh _unsetenv_erase1:database.sh ___dump_env_prologue0:database.sh ___dump_env_epilogue0:database.sh ___destroy1:database.sh __destroy_named1:database.sh _destroy_warning1:database.sh __destroy_records1:database.sh _destroy_records_remove0:database.sh __destroy_scaffold1:database.sh _destroy_scaffold_remove0:database.sh _version0:database.sh ___batch0:database.sh __batch1:database.sh _batch2:database.sh _printenv0:database.sh __dump0:database.sh ___dump_all0:database.sh __dump1:database.sh __restore1:database.sh _help0:help.sh _help1:help.sh _help_environment0:help.sh _help2:help.sh _help3:help.sh _help4:help.sh _help5:help.sh _help6:help.sh ___help_manual0:help.sh _help_manual_title0:help.sh ___help_manual_part1:help.sh __help_manual_part_exists1:help.sh _help_manual_part_print1:help.sh _help_manual_commands0:help.sh _help_manual_environment0:help.sh _complete0:help.sh _complete1:help.sh _complete2:help.sh _complete3:help.sh _complete4:help.sh _complete5:help.sh _complete6:help.sh _complete7:help.sh _complete8:help.sh _complete9:help.sh _help_env0:helpenv.sh __help_env1:helpenv.sh _help_env2:helpenv.sh __setintp2:intp.sh __getintp1:intp.sh __help_intp1:intp.sh __help_intp2:intp.sh _template_list0:template.sh __template_add1:template.sh ___template_add2:template.sh __template_name_valid1:template.sh __template_check_template1:template.sh __template_add_new2:template.sh _template_mint2:template.sh ___template_drop1:template.sh __template_drop_allowed1:template.sh _template_unlink1:template.sh ___template_show1:template.sh __template_chain_head1:template.sh __template_chain_table2:template.sh _template_show_head2:template.sh _template_line_table3:template.sh ___template_base_release3:template.sh ___template_base_stage3:template.sh ___template_base_image4:template.sh ___template_base_iso4:template.sh ___template_base_drop1:template.sh ___template_bake_chroot1:template.sh ___template_bake_cloud_init1:template.sh __template_bake2:template.sh ___template_bake_drop1:template.sh ___template_firmware_uefi1:template.sh ___template_firmware_bios1:template.sh __template_firmware2:template.sh ___template_firmware_drop1:template.sh ___template_resource4:template.sh ___template_resource_drop1:template.sh __template_leaf_record3:template.sh _template_leaf_write3:template.sh __template_leaf_set2:template.sh _template_leaf_erase2:template.sh __template_package_add2:template.sh ___template_package_add_stdin1:template.sh ___template_package_add_entry2:template.sh __template_package_valid1:template.sh ___template_package_drop2:template.sh ___template_package_mask2:template.sh ___template_package_show1:template.sh ___template_rc_add3:template.sh __template_rc_valid1:template.sh ___template_rc_drop3:template.sh ___template_rc_mask3:template.sh ___template_rc_show1:template.sh ___template_user_add3:template.sh __template_user_valid1:template.sh __template_uid_valid1:template.sh ___template_user_drop3:template.sh ___template_user_mask3:template.sh ___template_user_show1:template.sh ___template_service_add3:template.sh __template_service_valid2:template.sh ___template_service_drop3:template.sh ___template_service_mask3:template.sh ___template_service_show1:template.sh ___template_forbid_add2:template.sh ___template_forbid_add3:template.sh __template_forbid_valid1:template.sh __template_forbid_valid2:template.sh ___template_forbid_drop2:template.sh ___template_forbid_drop3:template.sh ___template_forbid_mask2:template.sh ___template_forbid_mask3:template.sh ___template_forbid_show1:template.sh ___template_data_add4:template.sh ___template_data_drop4:template.sh ___template_data_mask4:template.sh ___template_data_show1:template.sh ___template_session_add2:template.sh __template_protocol_valid1:template.sh ___template_session_drop2:template.sh ___template_session_mask2:template.sh ___template_session_show1:template.sh _template_line_append3:template.sh __template_line_listed3:template.sh _template_line_remove3:template.sh _template_line_mask3:template.sh __template_arch_valid1:template.sh __template_version_valid1:template.sh __template_sha256_valid1:template.sh __template_url_valid1:template.sh __template_path_valid1:template.sh __template_count_valid1:template.sh __template_size_valid1:template.sh __template_word_valid1:template.sh ___template_dump1:template.sh ___template_dump_all0:template.sh _template_dump_record1:template.sh __template_restore1:template.sh"
+FUNCTION_MODULES="__bootstrap1:database.sh ___bootstrap2:database.sh __bootstrap_name_valid1:database.sh _bootstrap_scaffold2:database.sh __bootstrap_init2:database.sh _bootstrap_link2:database.sh __environment_profile_valid1:database.sh ___database_init0:database.sh __database_dir_ensure4:database.sh __database_dir_validate4:database.sh _database_dir_validated2:database.sh _database_dir_create2:database.sh ___environment_init1:database.sh _environment_install1:database.sh __environment_cache0:database.sh ___environment_cache_on0:database.sh _environment_cache_render0:database.sh _environment_cache_place0:database.sh ___environment_refresh0:database.sh _environment_cache_off0:database.sh _environment_cache_status0:database.sh ___environment_freeze1:database.sh __environment_freeze_named1:database.sh _environment_freeze_warn1:database.sh ___environment_freeze_pins0:database.sh _environment_freeze_mark0:database.sh __environment_frozen_allows1:database.sh ___init1:database.sh __init0:database.sh ___setenv2:database.sh __setenv_name_valid1:database.sh _setenv_write2:database.sh __environment_cache_refresh0:database.sh __getenv1:database.sh _getenv_read3:database.sh ___unsetenv1:database.sh __unsetenv_remove1:database.sh _unsetenv_erase1:database.sh ___dump_env_prologue0:database.sh ___dump_env_epilogue0:database.sh ___destroy1:database.sh __destroy_named1:database.sh _destroy_warning1:database.sh __destroy_records1:database.sh _destroy_records_remove0:database.sh __destroy_scaffold1:database.sh _destroy_scaffold_remove0:database.sh _version0:database.sh ___batch0:database.sh __batch1:database.sh _batch2:database.sh _printenv0:database.sh __dump0:database.sh ___dump_all0:database.sh __dump1:database.sh __restore1:database.sh _help0:help.sh _help1:help.sh _help_environment0:help.sh _help2:help.sh _help3:help.sh _help4:help.sh _help5:help.sh _help6:help.sh ___help_manual0:help.sh _help_manual_title0:help.sh ___help_manual_part1:help.sh __help_manual_part_exists1:help.sh _help_manual_part_print1:help.sh _help_manual_commands0:help.sh _help_manual_environment0:help.sh _complete0:help.sh _complete1:help.sh _complete2:help.sh _complete3:help.sh _complete4:help.sh _complete5:help.sh _complete6:help.sh _complete7:help.sh _complete8:help.sh _complete9:help.sh _help_env0:helpenv.sh __help_env1:helpenv.sh _help_env2:helpenv.sh __setintp2:intp.sh __getintp1:intp.sh __help_intp1:intp.sh __help_intp2:intp.sh _template_list0:template.sh __template_add1:template.sh ___template_add2:template.sh __template_name_valid1:template.sh __template_check_template1:template.sh __template_add_new2:template.sh _template_mint2:template.sh ___template_drop1:template.sh __template_drop_allowed1:template.sh _template_unlink1:template.sh ___template_show1:template.sh __template_chain_head1:template.sh __template_chain_table2:template.sh _template_show_head2:template.sh _template_line_table3:template.sh ___template_base_release3:template.sh ___template_base_stage3:template.sh ___template_base_image4:template.sh ___template_base_iso4:template.sh ___template_base_drop1:template.sh ___template_bake_chroot1:template.sh ___template_bake_cloud_init1:template.sh __template_bake2:template.sh ___template_bake_drop1:template.sh ___template_firmware_uefi1:template.sh ___template_firmware_bios1:template.sh __template_firmware2:template.sh ___template_firmware_drop1:template.sh ___template_resource4:template.sh ___template_resource_drop1:template.sh __template_leaf_record3:template.sh _template_leaf_write3:template.sh __template_leaf_set2:template.sh _template_leaf_erase2:template.sh __template_package_add2:template.sh ___template_package_add_stdin1:template.sh ___template_package_add_entry2:template.sh __template_package_valid1:template.sh ___template_package_drop2:template.sh ___template_package_mask2:template.sh ___template_package_show1:template.sh ___template_rc_add3:template.sh __template_rc_valid1:template.sh ___template_rc_drop3:template.sh ___template_rc_mask3:template.sh ___template_rc_show1:template.sh ___template_user_add3:template.sh __template_user_valid1:template.sh __template_uid_valid1:template.sh ___template_user_drop3:template.sh ___template_user_mask3:template.sh ___template_user_show1:template.sh ___template_service_add3:template.sh __template_service_valid2:template.sh ___template_service_drop3:template.sh ___template_service_mask3:template.sh ___template_service_show1:template.sh ___template_forbid_add2:template.sh ___template_forbid_add3:template.sh __template_forbid_valid1:template.sh __template_forbid_valid2:template.sh ___template_forbid_drop2:template.sh ___template_forbid_drop3:template.sh ___template_forbid_mask2:template.sh ___template_forbid_mask3:template.sh ___template_forbid_show1:template.sh ___template_data_add4:template.sh ___template_data_drop4:template.sh ___template_data_mask4:template.sh ___template_data_show1:template.sh ___template_session_add2:template.sh __template_protocol_valid1:template.sh ___template_session_drop2:template.sh ___template_session_mask2:template.sh ___template_session_show1:template.sh _template_line_append3:template.sh __template_line_listed3:template.sh _template_line_remove3:template.sh _template_line_mask3:template.sh __template_arch_valid1:template.sh __template_version_valid1:template.sh __template_sha256_valid1:template.sh __template_url_valid1:template.sh __template_path_valid1:template.sh __template_count_valid1:template.sh __template_size_valid1:template.sh __template_word_valid1:template.sh ___template_dump1:template.sh ___template_dump_all0:template.sh ___template_dump_record1:template.sh __template_restore1:template.sh"
 # === END AUTO-GENERATED ===
 # vm-bake Architecture Test Suite
 #
@@ -394,74 +394,33 @@ test_setup() {
 # See TEST DATABASE SPECIFICATION comment at top of file for full details.
 #
 create_messy_realistic_database() {
-  # vm-bake messy-but-deterministic database: stages in several states,
-  # broken links, adversarial names. Populated via the CLI where possible
-  # (records are laid down the real way); never touches devices or NVRAM.
-  run_vm-bake stage add alpha >/dev/null 2>&1
-  run_vm-bake stage add beta >/dev/null 2>&1
-  local A="$TEST_DIR/stage/alpha"
-
-  # alpha: populated boot tree, signed loader newer than the loader
-  mkdir -p "$A/boot/defaults" "$A/boot/lua" "$A/destdir/boot/defaults"
-  echo EFI > "$A/boot/loader.efi"
-  echo conf > "$A/boot/defaults/loader.conf"
-  echo lua > "$A/boot/lua/core.lua"
-  touch -t 202401010000 "$A/boot/loader.efi"
-  echo SIGNED > "$A/boot/loader.efi.signed"
-
-  # matching manifest pair (attest signature faked -- content consistency real)
-  ( cd "$A/boot" && find . -type f ! -name manifest ! -name manifest.asc \
-      | sed 's|^\./||' | LC_ALL=C sort | while read -r f; do
-        printf '%s sha256=%s\n' "$f" "$(sha256 -q "$f")"
-      done > manifest )
-  echo fakesig > "$A/boot/manifest.asc"
-
-  # curated filter with one satisfiable and one missing entry
-  echo x > "$A/destdir/boot/defaults/loader.conf"
-  printf 'defaults/loader.conf\nmissing/file\n' > "$A/filter"
-
-  # named medium + boot tree records via the CLI (node syntactically valid,
-  # deliberately nonexistent -- execution must fail early, never touch hw)
-  run_vm-bake stage device alpha a /dev/nonexistent99 >/dev/null 2>&1
-  run_vm-bake stage boot tree alpha a testlabel zpool99/testds >/dev/null 2>&1
-
-  # backups of medium a (two generations) -- RECORDS: label directory with
-  # loader.efi + description/sha256/created/source/by
-  local lbl
-  for lbl in 20240101T000000Z known-good; do
-    mkdir -p "$A/backup/a/$lbl"
-    echo "old-$lbl" > "$A/backup/a/$lbl/loader.efi"
-    sha256 -q "$A/backup/a/$lbl/loader.efi" > "$A/backup/a/$lbl/sha256"
-    echo "2024-01-01T00:00:00Z" > "$A/backup/a/$lbl/created"
-    echo "fixture backup $lbl" > "$A/backup/a/$lbl/description"
-    echo "/dev/nonexistent99:EFI/BOOT/BOOTX64.EFI" > "$A/backup/a/$lbl/source"
-    echo "tester@fixture" > "$A/backup/a/$lbl/by"
-  done
-
-  # marker RECORD only -- tests must never read or write NVRAM
-  mkdir -p "$A/marker"
-  echo Boot0000 > "$A/marker/bootvar"
-  echo "$TEST_DIR/marker-value" > "$A/marker/file"
-  echo cafecafecafecafecafecafecafecafe > "$TEST_DIR/marker-value"
-
-  # key bindings: pem pair + openpgp record (mock material)
-  echo key > "$TEST_DIR/test-key.pem"
-  echo crt > "$TEST_DIR/test-cert.pem"
-  mkdir -p "$TEST_DIR/gnupg"
-  run_vm-bake pem add db "$TEST_DIR/test-key.pem" "$TEST_DIR/test-cert.pem" >/dev/null 2>&1
-  run_vm-bake openpgp add manifest DEADBEEFDEADBEEF "$TEST_DIR/gnupg" >/dev/null 2>&1
-
-  # fake checked-out worktree for build/install/site mk paths
-  mkdir -p "$TEST_DIR/fakework/stand/libsa" "$TEST_DIR/fakework/stand/efi/loader/local"
-  ln -s "$TEST_DIR/fakework" "$A/work" 2>/dev/null || true
-
-  # beta stays empty (error paths); adversarial + broken stage links
-  ln -s ../.staging/stage-deadbeef "$TEST_DIR/stage/broken" 2>/dev/null || true
-  ln -s "$(readlink "$TEST_DIR/stage/alpha")" "$TEST_DIR/stage/echo hello" 2>/dev/null || true
-  ln -s "$(readlink "$TEST_DIR/stage/alpha")" "$TEST_DIR/stage/-rf" 2>/dev/null || true
+  run_vmbake template add alpha >/dev/null 2>&1
+  run_vmbake template add beta alpha >/dev/null 2>&1
+  run_vmbake template base release alpha amd64 15.1-RELEASE >/dev/null 2>&1
+  run_vmbake template bake chroot alpha >/dev/null 2>&1
+  run_vmbake template firmware uefi alpha >/dev/null 2>&1
+  run_vmbake template resource beta 2 4G 16G >/dev/null 2>&1
+  run_vmbake template package add alpha emacs >/dev/null 2>&1
+  run_vmbake template package add beta vscode >/dev/null 2>&1
+  run_vmbake template package mask beta emacs >/dev/null 2>&1
+  run_vmbake template rc add beta sshd_enable YES >/dev/null 2>&1
+  run_vmbake template user add beta brj host >/dev/null 2>&1
+  run_vmbake template service add beta display x >/dev/null 2>&1
+  run_vmbake template forbid add beta usb >/dev/null 2>&1
+  run_vmbake template data add beta home 8G none >/dev/null 2>&1
+  run_vmbake template session add beta ssh >/dev/null 2>&1
+  local A="$TEST_DIR/template/alpha"
+  printf 'odd line\n' > "$A/package.mask"
+  mkdir -p "$TEST_DIR/.templates/template-deadbeef"
+  echo gamma > "$TEST_DIR/.templates/template-deadbeef/parent"
+  ln -s ../.templates/template-nowhere "$TEST_DIR/template/broken" 2>/dev/null || true
+  ln -s ../.templates/template-deadbeef "$TEST_DIR/template/orphan" 2>/dev/null || true
+  ln -s "$(readlink "$TEST_DIR/template/alpha")" "$TEST_DIR/template/echo hello" 2>/dev/null || true
+  ln -s "$(readlink "$TEST_DIR/template/alpha")" "$TEST_DIR/template/-rf" 2>/dev/null || true
+  printf '%s\n' '"$VM_BAKE_CONTEXT_SCRIPT" template add delta' 'not a batch line' > "$TEST_DIR/messy.dump"
 }
 
-# run_vm-bake - Execute vm-bake.sh command
+# run_vmbake - Execute vm-bake.sh command
 #
 # Arguments: command and arguments to pass to vm-bake.sh
 # Returns: captured stdout and stderr
@@ -469,7 +428,7 @@ create_messy_realistic_database() {
 harness_script() {
   printf '%s\n' "$TEST_SCRIPT"
 }
-run_vm-bake() {
+run_vmbake() {
   # Pass through BATCH_KEEP_GOING if set (runtime parameter for testing)
   if [ -n "${VM_BAKE_BATCH_KEEP_GOING:-}" ]; then
     VM_BAKE_BASE="$TEST_DIR" \
@@ -493,7 +452,7 @@ set_function_interpreter() {
   local func_name="$1"
   local interpreter="$2"
 
-  run_vm-bake setenv "VM_BAKE_INTERPRETER_${func_name}" "$interpreter" > /dev/null 2>&1
+  run_vmbake setenv "VM_BAKE_INTERPRETER_${func_name}" "$interpreter" > /dev/null 2>&1
 }
 
 # create_failing_interpreter - Create type-appropriate failing interpreter
@@ -1178,11 +1137,11 @@ walk_command_tree() {
   set_function_interpreter "$mangled" "cat"
 
   # Execute and capture output
-  local output=$(run_vm-bake $cmd 2>&1)
+  local output=$(run_vmbake $cmd 2>&1)
   local exit_status=$?
 
   # Immediately unset this interpreter (cleanup - critical for correct recursion!)
-  run_vm-bake unsetenv "VM_BAKE_INTERPRETER_${mangled}" >/dev/null 2>&1 || true
+  run_vmbake unsetenv "VM_BAKE_INTERPRETER_${mangled}" >/dev/null 2>&1 || true
 
   # Call callback for this node
   $callback "$depth" "$func_type" "$func_name" "$cmd" "$output" "$exit_status"
@@ -1314,8 +1273,8 @@ EOF
   set_function_interpreter "wireguard_import1" "sh"
   set_function_interpreter "openvpn_import1" "sh"
 
-  run_vm-bake wireguard import "$test_wg_config" > /dev/null 2>&1 || true
-  run_vm-bake openvpn import "$test_ovpn_config" > /dev/null 2>&1 || true
+  run_vmbake wireguard import "$test_wg_config" > /dev/null 2>&1 || true
+  run_vmbake openvpn import "$test_ovpn_config" > /dev/null 2>&1 || true
 
   # Reset to cat for testing
   set_function_interpreter "$func" "cat"
@@ -1347,7 +1306,7 @@ EOF
 
     # Test this variation
     local output
-    output=$(run_vm-bake $func "$@" 2>&1 || true)
+    output=$(run_vmbake $func "$@" 2>&1 || true)
 
     # Validate syntax
     if ! validate_combinator_syntax "$output"; then
@@ -1382,9 +1341,9 @@ EOF
       # Test this variation
       local output
       if [ -z "$expanded_args" ]; then
-        output=$(run_vm-bake $func 2>&1 || true)
+        output=$(run_vmbake $func 2>&1 || true)
       else
-        output=$(run_vm-bake $func $expanded_args 2>&1 || true)
+        output=$(run_vmbake $func $expanded_args 2>&1 || true)
       fi
 
       # Validate syntax
@@ -1463,8 +1422,8 @@ EOF
   set_function_interpreter "wireguard_import1" "sh"
   set_function_interpreter "openvpn_import1" "sh"
 
-  run_vm-bake wireguard import "$test_wg_config" > /dev/null 2>&1 || true
-  run_vm-bake openvpn import "$test_ovpn_config" > /dev/null 2>&1 || true
+  run_vmbake wireguard import "$test_wg_config" > /dev/null 2>&1 || true
+  run_vmbake openvpn import "$test_ovpn_config" > /dev/null 2>&1 || true
 
   # Reset to cat for testing
   set_function_interpreter "$func" "cat"
@@ -1490,7 +1449,7 @@ EOF
 
     # Test this variation
     local output
-    output=$(run_vm-bake $func "$@" 2>&1 || true)
+    output=$(run_vmbake $func "$@" 2>&1 || true)
 
     # Validate terminal function rules
     if ! validate_terminal_function_output "$output" "_${func}"; then
@@ -1524,9 +1483,9 @@ EOF
       # Test this variation
       local output
       if [ -z "$expanded_args" ]; then
-        output=$(run_vm-bake $func 2>&1 || true)
+        output=$(run_vmbake $func 2>&1 || true)
       else
-        output=$(run_vm-bake $func $expanded_args 2>&1 || true)
+        output=$(run_vmbake $func $expanded_args 2>&1 || true)
       fi
 
       # Validate terminal function rules
@@ -1605,8 +1564,8 @@ EOF
   set_function_interpreter "wireguard_import1" "sh"
   set_function_interpreter "openvpn_import1" "sh"
 
-  run_vm-bake wireguard import "$test_wg_config" > /dev/null 2>&1 || true
-  run_vm-bake openvpn import "$test_ovpn_config" > /dev/null 2>&1 || true
+  run_vmbake wireguard import "$test_wg_config" > /dev/null 2>&1 || true
+  run_vmbake openvpn import "$test_ovpn_config" > /dev/null 2>&1 || true
 
   # Reset to cat for testing
   set_function_interpreter "$func" "cat"
@@ -1631,7 +1590,7 @@ EOF
 
     # Test this variation
     local output
-    output=$(run_vm-bake $func "$@" 2>&1 || true)
+    output=$(run_vmbake $func "$@" 2>&1 || true)
 
     # Validate syntax
     if ! validate_batch_combinator_syntax "$output"; then
@@ -1696,10 +1655,10 @@ EOF
   set_function_interpreter "log1" "sh -c 'cat && false'"
 
   # Run batch with KEEP_GOING=0
-  local output=$(VM_BAKE_BATCH_KEEP_GOING=0 run_vm-bake batch "$batch_file" 2>&1 || true)
+  local output=$(VM_BAKE_BATCH_KEEP_GOING=0 run_vmbake batch "$batch_file" 2>&1 || true)
 
   # Cleanup: Remove test interpreter override (template provides default)
-  run_vm-bake unsetenv VM_BAKE_INTERPRETER_log1 >/dev/null 2>&1 || true
+  run_vmbake unsetenv VM_BAKE_INTERPRETER_log1 >/dev/null 2>&1 || true
 
   # Verify: Should see "stopped due to error"
   if echo "$output" | grep -q "stopped due to error"; then
@@ -1723,11 +1682,11 @@ EOF
 
   # Run batch with KEEP_GOING=1; capture trace file since _batch2 dispatch
   # messages moved to trace_log in fd79dc8 (was needed so dump stderr stays clean).
-  # export needed because run_vm-bake is a shell function.
+  # export needed because run_vmbake is a shell function.
   local trace_file=$(mktemp)
   export VM_BAKE_BATCH_KEEP_GOING=1
   export VM_BAKE_TRACE_FILE="$trace_file"
-  output=$(run_vm-bake batch "$batch_file" 2>&1 || true)
+  output=$(run_vmbake batch "$batch_file" 2>&1 || true)
   unset VM_BAKE_BATCH_KEEP_GOING
   unset VM_BAKE_TRACE_FILE
 
@@ -1798,10 +1757,10 @@ EOF
   set_function_interpreter "error1" "sh -c 'cat && false'"
 
   # Test with KEEP_GOING=0 (fail-fast)
-  local output=$(VM_BAKE_BATCH_KEEP_GOING=0 run_vm-bake batch "$batch1" 2>&1 || true)
+  local output=$(VM_BAKE_BATCH_KEEP_GOING=0 run_vmbake batch "$batch1" 2>&1 || true)
 
   # Restore error1 interpreter
-  run_vm-bake unsetenv VM_BAKE_INTERPRETER_error1 >/dev/null 2>&1 || true
+  run_vmbake unsetenv VM_BAKE_INTERPRETER_error1 >/dev/null 2>&1 || true
 
   # Verify: Should NOT see "Batch 3 - command 3" (execution stopped)
   if ! echo "$output" | grep -q "Batch 3 - command 3"; then
@@ -1831,7 +1790,7 @@ EOF
   # decides for itself and is fail-fast: batch 2 stops at the failure of batch 3,
   # batch 1 goes on past the failed line (inherited: the checks of an
   # inner batch would not stop its act).
-  output=$(VM_BAKE_BATCH_KEEP_GOING=1 run_vm-bake batch "$batch1" 2>&1 || true)
+  output=$(VM_BAKE_BATCH_KEEP_GOING=1 run_vmbake batch "$batch1" 2>&1 || true)
 
   # Verify: batch 2 (nested, no pin of its own) stopped
   if ! echo "$output" | grep -q "Batch 2 - after"; then
@@ -1919,7 +1878,7 @@ EOF
   test_header "  Sub-test: KEEP_GOING=0 at position $failure_position/$total_commands"
 
   set_function_interpreter "$mangled_name" "$failing_interp"
-  local ff_output=$(VM_BAKE_BATCH_KEEP_GOING=0 run_vm-bake batch "$batch_file" 2>&1 || true)
+  local ff_output=$(VM_BAKE_BATCH_KEEP_GOING=0 run_vmbake batch "$batch_file" 2>&1 || true)
 
   # Count how many "# Executing:" lines appear (indicates command was attempted)
   local ff_executed=$(echo "$ff_output" | grep -c "# Executing:" || true)
@@ -1947,7 +1906,7 @@ EOF
   local cont_trace=$(mktemp)
   export VM_BAKE_BATCH_KEEP_GOING=1
   export VM_BAKE_TRACE_FILE="$cont_trace"
-  local cont_output=$(run_vm-bake batch "$batch_file" 2>&1 || true)
+  local cont_output=$(run_vmbake batch "$batch_file" 2>&1 || true)
   unset VM_BAKE_BATCH_KEEP_GOING
   unset VM_BAKE_TRACE_FILE
 
@@ -1979,7 +1938,7 @@ EOF
   fi
 
   # Cleanup: Remove test interpreter override (template provides default)
-  run_vm-bake unsetenv "VM_BAKE_INTERPRETER_${mangled_name}" >/dev/null 2>&1 || true
+  run_vmbake unsetenv "VM_BAKE_INTERPRETER_${mangled_name}" >/dev/null 2>&1 || true
 
   # Cleanup batch file
   rm -f "$batch_file"
@@ -2079,15 +2038,15 @@ test_batch_combinator_transitive_hull() {
     || echo "    ${COLOR_YELLOW}Note:${COLOR_RESET} interpreter override for $mangled not set"
 
   # Test 1: KEEP_GOING=0 (fail-fast mode)
-  local ff_output=$(VM_BAKE_BATCH_KEEP_GOING=0 run_vm-bake $test_cmd 2>&1 || true)
+  local ff_output=$(VM_BAKE_BATCH_KEEP_GOING=0 run_vmbake $test_cmd 2>&1 || true)
   local ff_exitcode=$?
 
   # Test 2: KEEP_GOING=1 (continue mode)
-  local cont_output=$(VM_BAKE_BATCH_KEEP_GOING=1 run_vm-bake $test_cmd 2>&1 || true)
+  local cont_output=$(VM_BAKE_BATCH_KEEP_GOING=1 run_vmbake $test_cmd 2>&1 || true)
   local cont_exitcode=$?
 
   # Cleanup: Remove the test interpreter override (template provides default)
-  run_vm-bake unsetenv "VM_BAKE_INTERPRETER_${mangled}" >/dev/null 2>&1 || true
+  run_vmbake unsetenv "VM_BAKE_INTERPRETER_${mangled}" >/dev/null 2>&1 || true
 
   # Analyze results: fail-fast should stop earlier
   local ff_lines=$(echo "$ff_output" | wc -l)
@@ -2221,9 +2180,9 @@ test_batch_combinator_keep_going_precise() {
 
   # Step 1: Capture batch combinator output with cat interpreter
   # Note: Use arity-specific interpreter name (e.g., stop0 not stop)
-  local output=$(run_vm-bake setenv "VM_BAKE_INTERPRETER_${func}" "cat" && \
-                 run_vm-bake $test_cmd 2>&1 && \
-                 run_vm-bake unsetenv "VM_BAKE_INTERPRETER_${func}")
+  local output=$(run_vmbake setenv "VM_BAKE_INTERPRETER_${func}" "cat" && \
+                 run_vmbake $test_cmd 2>&1 && \
+                 run_vmbake unsetenv "VM_BAKE_INTERPRETER_${func}")
 
   # Validate we got output
   local line_count=$(echo "$output" | wc -l | tr -d ' ')
@@ -2305,7 +2264,7 @@ $non_selected_lines
 EOF
 
   # Step 7: Execute with default interpreter (determines KEEP_GOING behavior)
-  local exec_output=$(run_vm-bake $test_cmd 2>&1 || true)
+  local exec_output=$(run_vmbake $test_cmd 2>&1 || true)
 
   # Step 8: Analyze execution - count which functions were executed
   local executed_failures=0
@@ -2356,13 +2315,13 @@ EOF
   # Step 10: Cleanup - restore all interpreters
   if [ -f "$TEST_BASE_DIR/injected_functions.txt" ]; then
     while IFS= read -r mangled_name; do
-      run_vm-bake unsetenv "VM_BAKE_INTERPRETER_${mangled_name}" >/dev/null 2>&1 || true
+      run_vmbake unsetenv "VM_BAKE_INTERPRETER_${mangled_name}" >/dev/null 2>&1 || true
     done < "$TEST_BASE_DIR/injected_functions.txt"
   fi
 
   if [ -f "$TEST_BASE_DIR/cat_functions.txt" ]; then
     while IFS= read -r mangled_name; do
-      run_vm-bake unsetenv "VM_BAKE_INTERPRETER_${mangled_name}" >/dev/null 2>&1 || true
+      run_vmbake unsetenv "VM_BAKE_INTERPRETER_${mangled_name}" >/dev/null 2>&1 || true
     done < "$TEST_BASE_DIR/cat_functions.txt"
   fi
 
@@ -2570,15 +2529,15 @@ EOF
   # Import configs (need writable database for this)
   set_function_interpreter "wireguard_import1" "sh"
   set_function_interpreter "openvpn_import1" "sh"
-  run_vm-bake wireguard import "$test_wg_config" > /dev/null 2>&1 || true
-  run_vm-bake openvpn import "$test_ovpn_config" > /dev/null 2>&1 || true
+  run_vmbake wireguard import "$test_wg_config" > /dev/null 2>&1 || true
+  run_vmbake openvpn import "$test_ovpn_config" > /dev/null 2>&1 || true
 
   # Reset to cat for testing
   set_function_interpreter "$func" "cat"
 
   # Regenerate cache to include new interpreter overrides
   # Without this, CACHE_ENV_ARGS from bootstrap would be used, missing our overrides
-  run_vm-bake environment cache on > /dev/null 2>&1 || true
+  run_vmbake environment cache on > /dev/null 2>&1 || true
 
   # Use first variation only (sufficient for read-only test)
   local first_variation
@@ -2601,9 +2560,9 @@ EOF
   local marker="$TEST_BASE_DIR/readonly-marker-$$"
   touch "$marker"
   if [ -z "$expanded_args" ]; then
-    run_vm-bake $func > "$writable_tmp" 2> "$writable_err" || true
+    run_vmbake $func > "$writable_tmp" 2> "$writable_err" || true
   else
-    run_vm-bake $func $expanded_args > "$writable_tmp" 2> "$writable_err" || true
+    run_vmbake $func $expanded_args > "$writable_tmp" 2> "$writable_err" || true
   fi
   writable_output=$(cat "$writable_tmp")
   # generation-time writers: the function ran under a cat pin, so nothing
@@ -2625,9 +2584,9 @@ EOF
   local readonly_err="${TMPDIR:-/tmp}/readonly-test-err-$$.txt"
 
   if [ -z "$expanded_args" ]; then
-    run_vm-bake $func > "$readonly_tmp" 2> "$readonly_err" || true
+    run_vmbake $func > "$readonly_tmp" 2> "$readonly_err" || true
   else
-    run_vm-bake $func $expanded_args > "$readonly_tmp" 2> "$readonly_err" || true
+    run_vmbake $func $expanded_args > "$readonly_tmp" 2> "$readonly_err" || true
   fi
   readonly_output=$(cat "$readonly_tmp")
   readonly_stderr=$(cat "$readonly_err")
@@ -2694,10 +2653,10 @@ EOF
   rm -f "$writable_tmp" "$writable_err" "$readonly_tmp" "$readonly_err"
 
   # Cleanup interpreter overrides to avoid polluting subsequent tests
-  run_vm-bake unsetenv "VM_BAKE_INTERPRETER_${func}" > /dev/null 2>&1 || true
-  run_vm-bake unsetenv "VM_BAKE_INTERPRETER_wireguard_import1" > /dev/null 2>&1 || true
-  run_vm-bake unsetenv "VM_BAKE_INTERPRETER_openvpn_import1" > /dev/null 2>&1 || true
-  run_vm-bake environment cache on > /dev/null 2>&1 || true
+  run_vmbake unsetenv "VM_BAKE_INTERPRETER_${func}" > /dev/null 2>&1 || true
+  run_vmbake unsetenv "VM_BAKE_INTERPRETER_wireguard_import1" > /dev/null 2>&1 || true
+  run_vmbake unsetenv "VM_BAKE_INTERPRETER_openvpn_import1" > /dev/null 2>&1 || true
+  run_vmbake environment cache on > /dev/null 2>&1 || true
 
   if ! $has_violation; then
     pass "${prefix}${func}: No permission errors on read-only database"
@@ -3385,7 +3344,7 @@ test_help_internal_hidden() {
   test_header "Help: @internal commands are not listed, their detail is reachable"
   local overview hidden viol="" p
   test_setup
-  overview=$(run_vm-bake help 2>/dev/null)
+  overview=$(run_vmbake help 2>/dev/null)
   # a path is hidden only when NO block of that path is public (an internal arity sibling of a public command is listed through its sibling)
   public=$(_help_records | awk -F'\t' '$4 == "command" && $5 !~ /@internal/ { print $5 }' | sed -n 's/.*@command  *\([^<[;]*\).*/\1/p' | sed 's/ *$//' | sort -u)
   hidden=$(_help_records | awk -F'\t' '$4 == "command" && $5 ~ /@internal/ { print $5 }' | sed -n 's/.*@command  *\([^<[;]*\).*/\1/p' | sed 's/ *$//' | sort -u | grep -vxF -f /dev/stdin <<EOF || true
@@ -3395,7 +3354,7 @@ EOF
   for p in $(printf '%s\n' "$hidden" | tr ' ' '\037'); do
     p=$(printf '%s' "$p" | tr '\037' ' ')
     printf '%s\n' "$overview" | grep -q "vm-bake $p\( \|$\)" && viol="$viol [$p]"
-    run_vm-bake help $p 2>/dev/null | grep -q "^vm-bake $p" || viol="$viol (no detail: $p)"
+    run_vmbake help $p 2>/dev/null | grep -q "^vm-bake $p" || viol="$viol (no detail: $p)"
   done
   if [ -z "$viol" ]; then
     pass "$(printf '%s\n' "$hidden" | grep -c .) internal commands hidden from the overview, each with reachable detail"
