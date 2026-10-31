@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the image bake (image repo write), pinned to sudo sh: zfs, md, gpart, newfs, mount, pkg -r and pw need root; sudo asks once per terminal within its timeout. Inspect first: vm-bake setintp image_repo_write cat.

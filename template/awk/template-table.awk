@@ -1,9 +1,11 @@
 # template-table.awk -- the resolved list of one family over a template's
 # chain. Variables: base (the database), family (the list), chain (the
-# names root to leaf, "empty" first). Walked root to leaf: a template's
-# masks hide what its ancestors contributed, then its own lines join with
-# the template as origin; a line already visible keeps its first origin.
-# Output: one "#   <origin>  <line>" per visible line, "#   (none)" if none.
+# names root to leaf, "empty" first), plain (1: the visible lines bare, for
+# the bake; 0: the human table). Walked root to leaf: a template's masks
+# hide what its ancestors contributed, then its own lines join with the
+# template as origin; a line already visible keeps its first origin.
+# Output: one "#   <origin>  <line>" per visible line, "#   (none)" if none;
+# plain: one line per visible line, nothing if none.
 BEGIN {
 	n = split(chain, c, " ")
 	for (i = 1; i <= n; i++) {
@@ -24,8 +26,8 @@ BEGIN {
 	shown = 0
 	for (k = 1; k <= cnt; k++) {
 		if (hide[k]) continue
-		printf "#   %-16s %s\n", origin[k], line[k]
+		if (plain) print line[k]; else printf "#   %-16s %s\n", origin[k], line[k]
 		shown++
 	}
-	if (shown == 0) print "#   (none)"
+	if (shown == 0 && !plain) print "#   (none)"
 }

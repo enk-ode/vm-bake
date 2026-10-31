@@ -87,3 +87,33 @@ display terminals to `cat`. Any single act can be read instead of run:
 
 `vm-bake help template` lists the family, `vm-bake help template base
 release` one command.
+
+## The image
+
+An image is the template baked onto a sparse UFS disk under
+`VM_BAKE_IMAGE_DIR/<image>` (a ZFS dataset of its own), from the pkgbase
+repository of the template's release, sealed by the snapshot `@image`.
+The bake is five commands; `image make freebsd` is the chain over them
+and names the image `<template>-<yyyymmdd>`:
+
+    vm-bake image create freebsd-dev freebsd-dev-20261031   # lock, record, dataset, disk, GPT, newfs, mount
+    vm-bake image base   freebsd-dev-20261031               # keys, pkg -r set-minimal + kernel + pkg, repos, loader, fstab
+    vm-bake image burn   freebsd-dev-20261031               # packages, rc.conf, users with the host key, sshd
+    vm-bake image close  freebsd-dev-20261031               # reports, umount, md detach, sha256
+    vm-bake image seal   freebsd-dev-20261031               # snapshot @image, readonly, lock dropped
+    vm-bake image list
+
+The acts that need root (zfs, md, gpart, newfs, mount, pkg -r, pw) are
+pinned to `sudo sh`; sudo asks once per terminal within its timeout. Three
+variables shape the bake: `VM_BAKE_IMAGE_DIR` (default `/data/vm/.images`),
+`VM_BAKE_SSH_PORT` (default 2222, the port the host's pf passes into the
+guest network) and `VM_BAKE_HOST_KEY` (the public key every user of the
+image gets; the guests know no password). Each step shows its plan under
+`vm-bake setintp batch cat`, each act its shell under
+`vm-bake setintp image_pkg_base cat` and the like; a bake that died with
+the lock held is released with `vm-bake image lock drop`.
+
+After an update of the checkout, `vm-bake bootstrap <name> minimal` again:
+the re-run refreshes `.env/default` with the variables of the new version
+(the pins of `image` among them) and leaves `.env/local` alone. `init` and
+`environment init` are its inner lines, not commands to type.

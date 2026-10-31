@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the image bake (image readonly set), pinned to sudo sh: zfs, md, gpart, newfs, mount, pkg -r and pw need root; sudo asks once per terminal within its timeout. Inspect first: vm-bake setintp image_readonly_set cat.

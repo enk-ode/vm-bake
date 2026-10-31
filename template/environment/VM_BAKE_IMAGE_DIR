@@ -1,0 +1,2 @@
+/data/vm/.images
+# @summary Directory of the images: VM_BAKE_IMAGE_DIR/<image> is the image's own ZFS dataset (created under the dataset mounted at the parent directory, zfs create -p), holding disk0.img, digest, packages.txt, audit.txt and the mount point mnt during the bake. The parent must be a ZFS mount point (vm-bhyve's vm_dir).

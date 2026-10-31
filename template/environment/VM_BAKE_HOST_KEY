@@ -1,0 +1,2 @@
+~/.ssh/id_ed25519.pub
+# @summary Public key file written into authorized_keys of every user of an image (image user make); a leading ~/ is the invoking user's home. The guests know no password, this key is the only way in. Point it at a key made for the guests (setenv VM_BAKE_HOST_KEY <path>) -- a FIDO2 key here means PIN and touch at every login.

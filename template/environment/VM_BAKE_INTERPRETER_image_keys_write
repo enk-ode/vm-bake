@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the image bake (image keys write), pinned to sudo sh: writes into the mounted image root; sudo asks once per terminal within its timeout. Inspect first: vm-bake setintp image_keys_write cat.

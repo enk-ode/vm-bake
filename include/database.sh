@@ -195,8 +195,9 @@ _database_dir_create2() {
 
 #@help ___environment_init1
 # @command environment init <profile>
-# @summary Install (or re-sync after an update) the profile's template variables into .env/default: the profile is shipped, then 'environment install'
+# @summary Install the profile's template variables into .env/default (a line of init; after an update, bootstrap <name> <profile> again re-syncs them): the profile is shipped, then 'environment install'
 # @group   configuration
+# @internal
 # @param   profile  minimal or all
 # @example vm-bake environment init all
 # @see     bootstrap
@@ -489,10 +490,10 @@ __environment_frozen_allows1() {
 
 #@help ___init1
 # @command init <profile>
-# @summary Initialize the database at VM_BAKE_BASE: the layout (database init), then the profile's environment (environment init), then the environment cache (environment cache on) -- every later invocation reads one file instead of the layered store
+# @summary The line bootstrap runs against the new database (and again on a re-run, which refreshes the defaults): initialize the database at VM_BAKE_BASE: the layout (database init), then the profile's environment (environment init), then the environment cache (environment cache on) -- every later invocation reads one file instead of the layered store
 # @group   configuration
+# @internal
 # @param   profile  minimal or all
-# @example vm-bake init minimal
 # @see     bootstrap
 #@end
 ___init1() {

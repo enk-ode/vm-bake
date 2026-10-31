@@ -1,0 +1,2 @@
+sh
+# Act terminal of the image bake (image lock drop), pinned to sh: bookkeeping of the invoking user (the record, the lock, the sparse file, the digest), it acts directly; cat shows it.

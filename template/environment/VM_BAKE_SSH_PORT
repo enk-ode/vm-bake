@@ -1,0 +1,2 @@
+2222
+# @summary Port sshd listens on in every guest baked from here (image ssh write). 2222 because the host's pf passes TCP from the host into the guest network only on its service ports (br0_services in /etc/pf.conf), and 22 is not among them; change it together with pf.
