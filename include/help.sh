@@ -1,0 +1,464 @@
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Copyright (c) 2026 Dr. Johannes Brügmann
+# help.sh - the generated help system (ported from vpn-switch, its source of
+# truth for mechanically assembled help).
+#
+# Help text is assembled from #@help doc-blocks declared above each anchor
+# function. This module owns:
+#   - the @defgroup taxonomy, @topic entries and the @defcompletion table (below),
+#   - the runtime parser + renderer (help_render),
+#   - the user-facing entry points (_help0 overview, _help1/_help2 detail),
+#   - the completion back-end (_completeN: candidates for the shell from the
+#     same corpus - see completion/vm-bake.bash).
+# A doc-block that lies is a bug; hand-maintained overviews are not accepted.
+
+# --- Help taxonomy: overview sections, ordered by @order ---------------------
+
+#@help
+# @defgroup setup  Without a database
+# @order   10
+#   The commands that run before a database exists: bootstrap creates one,
+#   help and the manual read the shipped corpus, complete serves the shell.
+#   Start here.
+#@end
+
+#@help
+# @defgroup configuration  Configuration
+# @order   20
+#   The database's environment: the profile installed and re-synced
+#   (environment init), the cache, the freeze; variables and interpreter
+#   pins read and changed (setenv, getenv, unsetenv, setintp, getintp).
+#@end
+
+#@help
+# @defgroup database  Database lifecycle
+# @order   30
+#   Back up, restore and batch-drive the database itself.
+#@end
+
+#@help
+# @topic Inspect-by-default
+# @group setup
+#   Pipeline commands PRINT their shell: review, then append '| sh' to run
+#   ('| sudo sh' where zfs, md or vm-bhyve are involved). Bookkeeping
+#   (template add/drop/mask, setenv) is pinned to sh and acts directly.
+#   Experienced users may flip the safety default so EVERY terminal acts:
+#   vm-bake setenv VM_BAKE_TERMINAL_INTERPRETER sh
+#   (inspect any single command via setintp <function> cat, or per run
+#   under an explicit interpreter).
+#@end
+
+# --- Completion sources: where a usage placeholder takes its candidates ------
+# One line per placeholder name as it appears in @command usages. 'vm-bake
+# complete' (the bash-completion back-end) resolves a placeholder through this
+# table; a command block overrides one name with '@completion <name> <source>'
+# (bootstrap/destroy: <name> is a database). A name listed here is a
+# placeholder wherever it appears in <...>; a word in <...> that is NOT listed
+# is a literal alternative (<exist|verify>, <path|->, <stage>|all). Sources are
+# the vocabulary of complete_values() below; 'none' offers nothing (free
+# text). Architecture test C checks that every <placeholder> resolves.
+
+#@help
+# @defcompletion VAR           env-var
+# @defcompletion profile       profile
+# @defcompletion function      interpreter-fn
+# @defcompletion command       command-path
+# @defcompletion location      layer
+# @defcompletion layer         layer
+# @defcompletion file          files
+# @defcompletion dump          files
+# @defcompletion base          dirs
+# @defcompletion root          dirs
+# @defcompletion dir           dirs
+# @defcompletion mode          none
+# @defcompletion exec-flag     none
+# @defcompletion policy        none
+# @defcompletion path          files
+# @defcompletion part          none
+# @defcompletion kind          none
+# @defcompletion stage         none
+# @defcompletion name          none
+# @defcompletion group         none
+# @defcompletion topic         none
+# @defcompletion value         none
+# @defcompletion text          none
+# @defcompletion n             none
+# @defcompletion interpreter   none
+# @defcompletion words         none
+#@end
+
+# --- Generated-help engine ---------------------------------------------------
+# help_source_files: the files scanned for #@help doc-blocks at runtime.
+
+help_source_files() {
+        echo "$VM_BAKE_CONTEXT_SCRIPT"
+        local m
+        for m in "$VM_BAKE_LIBDIR"/include/*.sh; do
+                [ -f "$m" ] || continue
+                [ "$m" = "$VM_BAKE_CONTEXT_SCRIPT" ] && continue
+                echo "$m"
+        done
+}
+
+# help_render MODE [TARGET] -- feed every source with doc-blocks to
+# template/awk/help-render.awk (overview | query <target> | group <target> |
+# manpage). Honours VM_BAKE_DISPLAY_ANSI. Pure read of the doc-blocks.
+
+help_render() {
+        local mode="$1" target="${2:-}"
+        local ch="" cc="" cg="" cr=""
+        if [ "${VM_BAKE_DISPLAY_ANSI:-0}" = "1" ]; then
+                ch="$COLOR_BLUE"; cc="$COLOR_CYAN"; cg="$COLOR_GRAY"; cr="$COLOR_RESET"
+        fi
+        help_source_files | tr '\n' '\0' | xargs -0 cat 2>>"$LOG_FILE" | awk \
+        -v tool="${VM_BAKE_CONTEXT_TOOL:-vm-bake}" -v only="$ANCHOR_FUNCTIONS" \
+        -v mode="$mode" -v target="$target" -v ctxname="template" \
+        -v ch="$ch" -v cc="$cc" -v cg="$cg" -v cr="$cr" \
+        -f "$VM_BAKE_TEMPLATE_DIR/awk/help-render.awk"
+}
+
+#@help _help0
+# @command help [<command|group|topic>]
+# @summary Show the grouped overview, or detail for a command, group or topic
+# @group   setup
+# @param   command  any command path, unquoted (stage sign key), a group (keys, stage,
+# @param            provisioning, deploy, ...) or a topic (environment)
+# @returns help text (no database required)
+# @env     VM_BAKE_DISPLAY_ANSI  0 disables colored output
+# @example vm-bake help stage
+# @example vm-bake help stage sign
+# @env     VM_BAKE_CONTEXT_TOOL     the harness's name in the overview and the usage lines (vm-bake, or elvboot when elvboot.sh runs); its tables (ANCHOR_FUNCTIONS) select the commands shown
+# @env     VM_BAKE_CONTEXT_TAGLINE  the line after the name (the harness sets it)
+#@end
+_help0() {
+        local c_reset="" c_heading="" c_gray="" tool="${VM_BAKE_CONTEXT_TOOL:-vm-bake}" example="template add"
+        if [ "${VM_BAKE_DISPLAY_ANSI:-0}" = "1" ]; then
+                c_reset="$COLOR_RESET"; c_heading="$COLOR_BLUE"; c_gray="$COLOR_GRAY"
+        fi
+        test "$tool" = vm-bake || example="help"
+        printf '%b\n' "${c_heading}${tool}${c_reset} - ${VM_BAKE_CONTEXT_TAGLINE:-bake images and guest configurations for vm-bhyve}"
+        echo ""
+        printf '%b\n' "${c_gray}Usage:${c_reset} $tool <command> [arguments]"
+        printf '%b\n' "${c_gray}Detail for any command:${c_reset} $tool help <command>   ${c_gray}(e.g. $tool help $example)${c_reset}"
+        echo ""
+        help_render overview
+        echo ""
+        printf '%b\n' "${c_gray}Concept topic:${c_reset} $tool help environment"
+}
+
+#@help _help1
+# @internal arity-1 sibling of 'help' (a group, a topic, a one-word command path): help_render query
+#@end
+_help1() {
+        help_render query "$1"
+}
+
+#@help _help_environment0
+# @command help environment
+# @summary The concept topic: the environment system and the safety-first design (interpreters, pins, the three-layer cascade, profiles, logs) -- template/manual/topic-environment.md
+# @group   setup
+# @env     VM_BAKE_TEMPLATE_DIR  where the topic text lives
+# @example vm-bake help environment
+# @see     help env
+# @see     setintp
+#@end
+_help_environment0() {
+        cat "$VM_BAKE_TEMPLATE_DIR/manual/topic-environment.md"
+}
+
+#@help _help2
+# @internal arity-2 sibling of 'help' (detail for two-word command paths)
+#@end
+_help2() {
+        help_render query "$1 $2"
+}
+
+#@help _help3
+# @internal arity-3 sibling of 'help' (three-word command paths, e.g. stage sign key)
+#@end
+_help3() {
+        help_render query "$1 $2 $3"
+}
+
+#@help _help4
+# @internal arity-4 sibling of 'help' (four-word command paths, e.g. stage prerequisites exist add)
+#@end
+_help4() {
+        help_render query "$1 $2 $3 $4"
+}
+
+#@help _help5
+# @internal arity-5 sibling of 'help' (five-word command paths, e.g. stage action exists in loader)
+#@end
+_help5() {
+        help_render query "$1 $2 $3 $4 $5"
+}
+
+#@help _help6
+# @internal arity-6 sibling of 'help' (six-word command paths)
+#@end
+_help6() {
+        help_render query "$1 $2 $3 $4 $5 $6"
+}
+
+#@help ___help_manual0
+# @command help manual
+# @summary Emit the complete manual as Pandoc Markdown, part by part: the title block, the prose building blocks from template/manual/, COMMANDS from the help corpus, ENVIRONMENT from the variable templates -- one truth per content kind (make man renders vm-bake.8 from it)
+# @group   setup
+# @returns Pandoc Markdown on stdout (no database required)
+# @example vm-bake help manual | pandoc -s -f markdown -t man -o docs/vm-bake.8
+# @example vm-bake help manual | lowdown -sTterm | less -R
+# @see     help
+# @see     help manual part
+#@end
+___help_manual0() {
+        local part
+        printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" help manual title"
+        for part in name synopsis description sources; do
+                printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" help manual part $part"
+        done
+        printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" help manual commands"
+        printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" help manual environment"
+        for part in files examples see-also authors; do
+                printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" help manual part $part"
+        done
+}
+
+#@help _help_manual_title0
+# @command help manual title
+# @summary The Pandoc title block of the manual: name, section, author, today's date
+# @group   setup
+# @see     help manual
+#@end
+_help_manual_title0() {
+        printf '%s\n' "% VM_BAKE(8) vm-bake | System Manager's Manual" "% Dr. Johannes Brügmann" "% $(date '+%B') $(date '+%e' | tr -d ' '), $(date '+%Y')" ""
+}
+
+#@help ___help_manual_part1
+# @command help manual part <part>
+# @summary One part of the manual page (template/manual/<part>.md): the part exists; then 'help manual part print'
+# @group   setup
+# @internal
+# @see     help manual
+#@end
+___help_manual_part1() {
+        printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" help manual part exists '$1'"
+        printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" help manual part print '$1'"
+}
+
+#@help __help_manual_part_exists1
+# @command help manual part exists <part>
+# @summary The part is a name and template/manual/<part>.md exists: a comment line, else an error line
+# @group   setup
+# @internal
+# @see     help manual
+# @env     VM_BAKE_TEMPLATE_DIR  where template/manual lives
+#@end
+__help_manual_part_exists1() {
+        local ok=yes
+        case "$1" in ""|.|..|*[!A-Za-z0-9_.-]*) ok=no ;; esac
+        if test "$ok" = yes && test -f "$VM_BAKE_TEMPLATE_DIR/manual/$1.md"; then
+                printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'manual part $1 shipped'"
+        else
+                printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error 'help manual part: template/manual/$1.md missing (or not a part name)'"
+        fi
+}
+
+#@help _help_manual_part_print1
+# @command help manual part print <part>
+# @summary Text terminal: the part's markdown and a blank line
+# @group   setup
+# @internal
+# @see     help manual
+# @env     VM_BAKE_TEMPLATE_DIR  where template/manual lives
+#@end
+_help_manual_part_print1() {
+        cat "$VM_BAKE_TEMPLATE_DIR/manual/$1.md"; printf '\n'
+}
+
+#@help _help_manual_commands0
+# @command help manual commands
+# @summary The COMMANDS section of the manual, generated from the help corpus and grouped as 'vm-bake help' groups it
+# @group   setup
+# @see     help manual
+#@end
+_help_manual_commands0() {
+        printf '%s\n' "# COMMANDS" "" "Every command, grouped as \`vm-bake help\` groups it. \`vm-bake help <command>\` shows parameters, environment and examples." ""
+        help_render manpage
+}
+
+#@help _help_manual_environment0
+# @command help manual environment
+# @summary The ENVIRONMENT section of the manual: one entry per shipped variable template, its @summary as the body -- the templates ARE the corpus (help env reads the same files)
+# @group   setup
+# @env     VM_BAKE_TEMPLATE_DIR  the shipped templates: variables under environment/
+# @env     VM_BAKE_TERMINAL_INTERPRETER  named in the prose as the class default
+# @env     VM_BAKE_INTERPRETER_<function>  named in the prose as the per-function pin
+# @env     VM_BAKE_PROFILE_*  skipped: profiles are install lists, not settings
+# @see     help manual
+#@end
+_help_manual_environment0() {
+        local f v sm
+        printf '%s\n' "# ENVIRONMENT" ""
+        printf '%s\n' "All configuration lives in \`VM_BAKE_*\` variables, layered as \`.env/local\` (override, written by \`setenv\`), \`.env/default\` (the installed profile) and the shipped templates. Interpreter pins \`VM_BAKE_INTERPRETER_<function>\` decide per function whether emitted shell is displayed or executed: arity-specific before arity-agnostic before the class default (\`VM_BAKE_TERMINAL_INTERPRETER\`, default \`cat\`). Every variable answers \`vm-bake help env <VAR>\`." ""
+        for f in "$VM_BAKE_TEMPLATE_DIR"/environment/VM_BAKE_*; do
+                [ -f "$f" ] || continue
+                v=$(basename "$f")
+                case "$v" in VM_BAKE_PROFILE_*) continue ;; esac
+                sm=$(sed -n 's/^#[ \t]*@summary[ \t]*//p' "$f" | head -n1)
+                [ -n "$sm" ] || continue
+                printf '%s\n' "**$v**" ":   $(printf '%s' "$sm" | sed 's/[<>|]/\\&/g')" ""
+        done
+}
+
+# --- Completion back-end -----------------------------------------------------
+# 'vm-bake complete <words...>' answers the shell's completion request from the
+# help corpus: literal command words come from the @command usages, placeholders
+# resolve through @completion / @defcompletion to a source, and complete_values
+# reads that source from the database. The shell side (completion/vm-bake.bash)
+# is a thin loop over these lines. Output is candidates, one per line, pinned
+# to cat (VM_BAKE_INTERPRETER_complete) - never executed. Helpers carry no
+# leading underscore: they emit nothing on their own.
+
+# complete_words WORD... - the words typed so far, the last one under the cursor.
+complete_words() {
+        local cur="" words="" a
+        if [ $# -gt 0 ]; then
+                eval "cur=\${$#}"
+                words="$1"; shift
+                for a in "$@"; do words="$words$(printf '\037')$a"; done
+        fi
+        help_render complete "$words" | complete_expand "$cur" | sort -u
+}
+
+# complete_expand CUR - "word ..." lines pass through, "src <source> [<ctx>]"
+# lines expand to values filtered by the prefix under the cursor.
+complete_expand() {
+        local cur="$1" line v src ctx
+        while IFS= read -r line; do
+                case "$line" in
+                "word "*) printf '%s\n' "${line#word }" ;;
+                "src "*)
+                        src=${line#src }; ctx=""
+                        case "$src" in *" "*) ctx=${src#* }; src=${src%% *} ;; esac
+                        complete_values "$src" "$ctx" | while IFS= read -r v; do
+                                case "$v" in "$cur"*|@*) printf '%s\n' "$v" ;; esac
+                        done ;;
+                esac
+        done
+}
+
+# complete_values SOURCE [CTX] - the values behind a @defcompletion source,
+# read straight from the database (the list commands format for humans).
+# CTX is the stage typed earlier on the line (media live per stage). @files
+# and @dirs are directives for the shell to complete paths itself.
+complete_values() {
+        local base="$VM_BAKE_BASE" d f
+        case "$1" in
+        files) echo "@files" ;;
+        dirs)  echo "@dirs" ;;
+        template) ls "$base/template" 2>/dev/null; echo empty ;;
+        database)
+                for d in "$VM_BAKE_ROOT"/*/; do
+                        d=${d%/}; [ -d "$d/.env" ] || continue
+                        d=${d##*/}; [ "$d" = db ] || printf '%s\n' "$d"
+                done ;;
+        env-var)
+                {
+                        ls "$VM_BAKE_TEMPLATE_DIR/environment" 2>/dev/null
+                        ls "$base/.env/default" 2>/dev/null
+                        ls "$base/.env/local" 2>/dev/null
+                } | grep -v '^VM_BAKE_PROFILE_' ;;
+        interpreter-fn)
+                printf '%s\n' terminal combinator batch
+                for f in $TERMINAL_FUNCTIONS $COMBINATOR_FUNCTIONS $BATCH_COMBINATOR_FUNCTIONS; do
+                        f=${f#___}; f=${f#__}; f=${f#_}
+                        printf '%s\n' "$f" "${f%[0-9]}"
+                done ;;
+        profile) ls "$VM_BAKE_TEMPLATE_DIR/environment" 2>/dev/null | sed -n 's/^VM_BAKE_PROFILE_//p' | tr 'A-Z' 'a-z' ;;
+        layer)   printf '%s\n' local default template ;;
+        none|*)  ;;
+        esac
+}
+
+#@help _complete0
+# @command complete [<words>]
+# @summary Print completion candidates for a partially typed command line (bash-completion back-end): the words typed so far, the last one being the word under the cursor
+# @group   setup
+# @param   words  the words typed so far; the last one is the (possibly empty) word under the cursor
+# @returns one candidate per line, sorted; the lines @files and @dirs ask the shell to complete paths
+# @env     VM_BAKE_TEMPLATE_DIR  profiles and documented variables come from the shipped templates
+# @env     VM_BAKE_ROOT  where the databases live (bootstrap/destroy complete their names)
+# @env     VM_BAKE_PSEUDO_BACKEND  directories of the base that are not key backends
+# @example vm-bake complete stage si
+# @example vm-bake complete stage sign ''
+# @see help
+#@end
+_complete0() {
+        complete_words
+}
+
+#@help _complete1
+# @internal arity-1 sibling of 'complete'
+#@end
+_complete1() {
+        complete_words "$@"
+}
+
+#@help _complete2
+# @internal arity-2 sibling of 'complete'
+#@end
+_complete2() {
+        complete_words "$@"
+}
+
+#@help _complete3
+# @internal arity-3 sibling of 'complete'
+#@end
+_complete3() {
+        complete_words "$@"
+}
+
+#@help _complete4
+# @internal arity-4 sibling of 'complete'
+#@end
+_complete4() {
+        complete_words "$@"
+}
+
+#@help _complete5
+# @internal arity-5 sibling of 'complete'
+#@end
+_complete5() {
+        complete_words "$@"
+}
+
+#@help _complete6
+# @internal arity-6 sibling of 'complete'
+#@end
+_complete6() {
+        complete_words "$@"
+}
+
+#@help _complete7
+# @internal arity-7 sibling of 'complete'
+#@end
+_complete7() {
+        complete_words "$@"
+}
+
+#@help _complete8
+# @internal arity-8 sibling of 'complete'
+#@end
+_complete8() {
+        complete_words "$@"
+}
+
+#@help _complete9
+# @internal arity-9 sibling of 'complete' (the arity digit ends at 9: a tenth word gets no candidates)
+#@end
+_complete9() {
+        complete_words "$@"
+}

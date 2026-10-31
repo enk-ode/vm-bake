@@ -1,0 +1,17 @@
+PATH VM_BAKE_TERMINAL_INTERPRETER VM_BAKE_COMBINATOR_INTERPRETER VM_BAKE_BATCH_COMBINATOR_INTERPRETER VM_BAKE_DISPLAY_ANSI VM_BAKE_RETENTION_DAYS_LOG VM_BAKE_RETENTION_DAYS_TRACE VM_BAKE_INCLUDES VM_BAKE_INTERPRETER_batch2 VM_BAKE_INTERPRETER_note VM_BAKE_INTERPRETER_comment VM_BAKE_INTERPRETER_log VM_BAKE_INTERPRETER_error VM_BAKE_INTERPRETER_fail2 VM_BAKE_INTERPRETER_printenv0 VM_BAKE_INTERPRETER_version VM_BAKE_INTERPRETER_unknown_command VM_BAKE_INTERPRETER_bootstrap_link VM_BAKE_INTERPRETER_bootstrap_scaffold VM_BAKE_INTERPRETER_bootstrap_init VM_BAKE_INTERPRETER_help VM_BAKE_INTERPRETER_help_env0 VM_BAKE_INTERPRETER_help_env2 VM_BAKE_INTERPRETER_help_environment VM_BAKE_INTERPRETER_help_manual_commands VM_BAKE_INTERPRETER_help_manual_environment VM_BAKE_INTERPRETER_help_manual_part_print VM_BAKE_INTERPRETER_help_manual_title VM_BAKE_INTERPRETER_complete VM_BAKE_INTERPRETER_dump_env_epilogue VM_BAKE_INTERPRETER_dump_env_prologue VM_BAKE_INTERPRETER_environment_cache_off VM_BAKE_INTERPRETER_environment_cache_render VM_BAKE_INTERPRETER_environment_cache_place VM_BAKE_INTERPRETER_environment_cache_status VM_BAKE_INTERPRETER_environment_freeze_warn VM_BAKE_INTERPRETER_environment_freeze_mark VM_BAKE_INTERPRETER_environment_install VM_BAKE_INTERPRETER_setenv_write VM_BAKE_INTERPRETER_getenv_read VM_BAKE_INTERPRETER_unsetenv_erase VM_BAKE_INTERPRETER_database_dir_create VM_BAKE_INTERPRETER_database_dir_validated VM_BAKE_INTERPRETER_destroy_records_remove VM_BAKE_INTERPRETER_destroy_scaffold_remove VM_BAKE_INTERPRETER_destroy_warning VM_BAKE_INTERPRETER_template_mint VM_BAKE_INTERPRETER_template_unlink VM_BAKE_INTERPRETER_template_leaf_write VM_BAKE_INTERPRETER_template_leaf_erase VM_BAKE_INTERPRETER_template_line_append VM_BAKE_INTERPRETER_template_line_remove VM_BAKE_INTERPRETER_template_line_mask VM_BAKE_INTERPRETER_template_list VM_BAKE_INTERPRETER_template_show_head VM_BAKE_INTERPRETER_template_line_table VM_BAKE_INTERPRETER_template_dump_record
+# Minimal profile: base interpreters + safe-by-default overrides.
+#
+# Line 1 (above) is the space-separated list of variables 'environment init'
+# copies from template/environment/ into .env/default/. Everything below is
+# documentation.
+#
+# Security model:
+# - TERMINAL_INTERPRETER defaults to 'cat' (display-only, safe by default).
+# - State-changing commands (setenv/getenv/unsetenv/printenv/error/fail/
+#   environment cache) are pinned to 'sh' so they still take effect.
+# - The bookkeeping terminals of the templates (mint, unlink, leaf write,
+#   leaf erase, line append, line remove, line mask) are pinned to sh so
+#   that add, drop and mask act directly; the display terminals (list, show
+#   head, line table, dump record) to cat so their text survives an
+#   executing terminal default.
+# - Users override anything by writing files into .env/local/ (setenv).

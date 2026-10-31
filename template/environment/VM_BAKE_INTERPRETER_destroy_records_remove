@@ -1,0 +1,4 @@
+cat
+# Act terminal of 'destroy': cat, so 'vm-bake destroy <name>' PRINTS what it would do;
+# the user pipes the listing into sh deliberately (nothing here has an undo).
+# @see VM_BAKE_INTERPRETER_destroy_warning

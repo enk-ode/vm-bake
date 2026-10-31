@@ -1,0 +1,4 @@
+PATH VM_BAKE_TERMINAL_INTERPRETER VM_BAKE_COMBINATOR_INTERPRETER VM_BAKE_BATCH_COMBINATOR_INTERPRETER VM_BAKE_DISPLAY_ANSI VM_BAKE_RETENTION_DAYS_LOG VM_BAKE_RETENTION_DAYS_TRACE VM_BAKE_INCLUDES
+# Prologue profile: the .env/local overrides a dump replays FIRST -- what the
+# restore itself depends on. Deliberately without function-specific
+# interpreter pins (they could deactivate replayed commands).
