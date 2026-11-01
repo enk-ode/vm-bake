@@ -512,7 +512,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release dataset_create dataset_destroy cache_ensure fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install rc_write user_make doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write network_write knownhosts_drop run halt dataset_destroy"
+GUEST_ACTS="switch_ensure clone conf_write network_write dns_write knownhosts_drop run halt dataset_destroy"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -781,13 +781,13 @@ test_guest_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake guest make b bake 172.16.100.250/24)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ] && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 11p | grep -q "guest knownhosts drop 'bake'"; then
-    pass "guest make: image checked, name, free, address, switch, record, clone, conf, network, known hosts"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "12" ] && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 12p | grep -q "guest knownhosts drop 'bake'"; then
+    pass "guest make: image checked, name, free, address, switch, record, clone, conf, network, dns, known hosts"
   else
     fail "guest make plan: $plan"
   fi
-  if [ "$(run_vmbake guest start bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest stop bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "4" ]; then
-    pass "start and stop two lines, drop four"
+  if [ "$(run_vmbake guest start bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest stop bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "5" ]; then
+    pass "start and stop two lines, drop five"
   else
     fail "guest start/stop/drop: $(run_vmbake guest drop bake)"
   fi
@@ -809,9 +809,9 @@ test_guest_plan() {
     fail "guest acts not pinned -- not calling them"; return
   fi
   local out
-  out=$(run_vmbake guest switch ensure; run_vmbake guest clone bake; run_vmbake guest conf write bake; run_vmbake guest network write bake)
-  if printf '%s\n' "$out" | grep -q "vm switch create -t manual -b 'bridge0' 'dev'" && printf '%s\n' "$out" | grep -q 'zfs clone -o readonly=off "$src@image" "$dst/bake"' && printf '%s\n' "$out" | grep -q "^cpu=2$" && printf '%s\n' "$out" | grep -q 'network0_switch="dev"' && printf '%s\n' "$out" | grep -q "mount '/dev/gpt/b-root'" && printf '%s\n' "$out" | grep -q '^ifconfig_vtnet0="inet 172.16.100.250/24"$' && printf '%s\n' "$out" | grep -q '^defaultrouter="172.16.100.100"$'; then
-    pass "switch on the bridge, clone writable, conf from the template, network into the clone by the image's label"
+  out=$(run_vmbake guest switch ensure; run_vmbake guest clone bake; run_vmbake guest conf write bake; run_vmbake guest network write bake; run_vmbake guest dns write)
+  if printf '%s\n' "$out" | grep -q "vm switch create -t manual -b 'bridge0' 'dev'" && printf '%s\n' "$out" | grep -q 'zfs clone -o readonly=off "$src@image" "$dst/bake"' && printf '%s\n' "$out" | grep -q "^cpu=2$" && printf '%s\n' "$out" | grep -q 'network0_switch="dev"' && printf '%s\n' "$out" | grep -q "mount '/dev/gpt/b-root'" && printf '%s\n' "$out" | grep -q '^ifconfig_vtnet0="inet 172.16.100.250/24"$' && printf '%s\n' "$out" | grep -q '^defaultrouter="172.16.100.100"$' && printf '%s\n' "$out" | grep -q 'local-data:     "bake.local. A 172.16.100.250"' && printf '%s\n' "$out" | grep -q "service local_unbound reload"; then
+    pass "switch on the bridge, clone writable, conf from the template, network into the clone by the image's label, unbound told"
   else
     fail "guest emissions: $out"
   fi

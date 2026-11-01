@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest dns write), pinned to sudo sh: writes under /var/unbound and reloads local_unbound. Inspect first: vm-bake setintp guest_dns_write cat.

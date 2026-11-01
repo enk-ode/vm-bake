@@ -28,7 +28,7 @@
 
 #@help ___guest_make3
 # @command guest make <image> <guest> <address>
-# @summary Make a guest from a sealed image: the image has a record and a digest, the guest name is a record name and free; then the switch ensured, the record, the clone of @image, the configuration, the network written into the clone, the guest's old ssh host key forgotten
+# @summary Make a guest from a sealed image: the image has a record and a digest, the guest name is a record name and free; then the switch ensured, the record, the clone of @image, the configuration, the network written into the clone, the host's unbound told the name, the guest's old ssh host key forgotten
 # @group   guest
 # @example vm-bake guest make freebsd-builder-20261101 bake 172.16.100.250/24
 # @see     guest start
@@ -46,6 +46,7 @@ ___guest_make3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest clone $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest conf write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest network write $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dns write"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest knownhosts drop $(sq "$2")"
 }
 
@@ -76,7 +77,7 @@ ___guest_stop1() {
 
 #@help ___guest_drop1
 # @command guest drop <guest>
-# @summary Remove the guest: it has a record; its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed, its ssh host key forgotten
+# @summary Remove the guest: it has a record; its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed, unbound told, its ssh host key forgotten
 # @group   guest
 # @example vm-bake guest drop bake
 # @see     guest make
@@ -86,6 +87,7 @@ ___guest_drop1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dataset destroy $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record remove $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dns write"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest knownhosts drop $(sq "$1")"
 }
 
@@ -266,6 +268,32 @@ _guest_network_write1() {
 	printf '%s\n' "printf 'nameserver %s\\n' '$VM_BAKE_GUEST_GATEWAY' > '$mnt/etc/resolv.conf'"
 	printf '%s\n' "umount '$mnt' && rmdir '$mnt' && mdconfig -d -u \"\${md#md}\" || exit 1"
 	printf '%s\n' "printf '# guest %s: %s on vtnet0, gateway %s\\n' '$1' '$addr' '$VM_BAKE_GUEST_GATEWAY' >&2"
+}
+
+#@help _guest_dns_write0
+# @command guest dns write
+# @summary Act terminal (root): VM_BAKE_DNS_FILE rendered from every guest record (read at generation time) -- for each guest 'local-data' <guest>.VM_BAKE_GUEST_DOMAIN A <address> and its 'local-data-ptr' -- then local_unbound reloaded; the host and every guest (their resolver is the host) know the names
+# @group   guest
+# @internal
+# @see     guest make
+# @see     guest drop
+# @env     VM_BAKE_DNS_FILE  the unbound include file vm-bake owns
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest names live in
+#@end
+_guest_dns_write0() {
+	local d="" a="" n=0
+	printf '%s\n' "cat > '$VM_BAKE_DNS_FILE' <<'EOF_DNS'"
+	printf '%s\n' "# written by vm-bake (guest make, guest drop) from its guest records -- do not edit" "server:"
+	for d in "$VM_BAKE_BASE"/guest/*/; do
+		test -f "$d/address" || continue
+		IFS= read -r a < "$d/address"
+		printf '\tlocal-data:     "%s.%s. A %s"\n' "$(basename "$d")" "$VM_BAKE_GUEST_DOMAIN" "${a%/*}"
+		printf '\tlocal-data-ptr: "%s %s.%s"\n' "${a%/*}" "$(basename "$d")" "$VM_BAKE_GUEST_DOMAIN"
+		n=$((n + 1))
+	done
+	printf '%s\n' "EOF_DNS"
+	printf '%s\n' "chmod 0644 '$VM_BAKE_DNS_FILE' && service local_unbound reload > /dev/null || exit 1"
+	printf '%s\n' "printf '# dns: %s guests in %s, unbound reloaded\\n' '$n' '$VM_BAKE_DNS_FILE' >&2"
 }
 
 #@help _guest_knownhosts_drop1

@@ -1,0 +1,2 @@
+/var/unbound/conf.d/11-vm-bake.conf
+# @summary The unbound include file vm-bake owns: rendered from the guest records by guest dns write (guest make, guest drop), one local-data and one local-data-ptr per guest, then local_unbound reloaded. local_unbound includes conf.d/*.conf.

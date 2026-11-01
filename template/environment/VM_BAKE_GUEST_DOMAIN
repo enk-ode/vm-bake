@@ -1,0 +1,2 @@
+local
+# @summary The domain the guests' names live in: a guest <name> is <name>.<domain> for the host and for every guest (their resolver is the host).
