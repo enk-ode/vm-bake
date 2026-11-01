@@ -1009,10 +1009,11 @@ _image_user_make1() {
 	for line; do
 		u=${line%% *}; s=${line#* }; uid=$s
 		test "$s" != host || uid=$(id -u "$u" 2>/dev/null || true)
-		printf '%s\n' "pw -R '$mnt' useradd $(sq "$u") -u $(sq "$uid") -c $(sq "$u") -d '/home/$u' -s /bin/sh -w no || exit 1"
+		printf '%s\n' "pw -R '$mnt' usershow $(sq "$u") > /dev/null 2>&1 || pw -R '$mnt' useradd $(sq "$u") -u $(sq "$uid") -c $(sq "$u") -d '/home/$u' -s /bin/sh -w no || exit 1"
+		printf '%s\n' "g=\$(awk -F: -v u=$(sq "$u") '\$1 == u { print \$3 }' '$mnt/etc/group'); test -n \"\$g\" || { printf '# Error: no group %s in the image\\n' $(sq "$u") >&2; exit 1; }"
 		printf '%s\n' "mkdir -p '$mnt/home/$u/.ssh' || exit 1"
 		printf '%s\n' "printf '%s\\n' $(sq "$keytext") > '$mnt/home/$u/.ssh/authorized_keys' || exit 1"
-		printf '%s\n' "chmod 700 '$mnt/home/$u/.ssh' && chmod 600 '$mnt/home/$u/.ssh/authorized_keys' && chown -R $(sq "$uid"):$(sq "$u") '$mnt/home/$u' || exit 1"
+		printf '%s\n' "chmod 700 '$mnt/home/$u/.ssh' && chmod 600 '$mnt/home/$u/.ssh/authorized_keys' && chown -R $(sq "$uid"):\"\$g\" '$mnt/home/$u' || exit 1"
 		printf '%s\n' "printf '# image %s: user %s (uid %s), key %s\\n' '$name' $(sq "$u") $(sq "$uid") $(sq "$key") >&2"
 	done
 	test -n "$lines" || emit_note "image $name: the template lists no users"
@@ -1050,7 +1051,7 @@ _image_doas_write1() {
 
 #@help _image_ssh_write1
 # @command image ssh write <image>
-# @summary Act terminal (root, host or builder): sshd_config of the image gets Port VM_BAKE_SSH_PORT, PermitRootLogin no, PasswordAuthentication no, KbdInteractiveAuthentication no (appended; the host's pf passes that port into the guest network)
+# @summary Act terminal (root, host or builder): sshd_config of the image gets Port VM_BAKE_SSH_PORT, PermitRootLogin no, PasswordAuthentication no, KbdInteractiveAuthentication no (appended once; the host's pf passes that port into the guest network)
 # @group   image
 # @internal
 # @see     image burn
@@ -1060,7 +1061,7 @@ _image_doas_write1() {
 _image_ssh_write1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
 	printf '%s\n' "test -d '$mnt/etc/ssh' || { printf '# Error: no /etc/ssh in the image (image base first)\\n' >&2; exit 1; }"
-	printf '%s\n' "cat >> '$mnt/etc/ssh/sshd_config' <<'EOF_SSHD'"
+	printf '%s\n' "grep -q '^Port $VM_BAKE_SSH_PORT$' '$mnt/etc/ssh/sshd_config' || cat >> '$mnt/etc/ssh/sshd_config' <<'EOF_SSHD'"
 	printf '%s\n' "" "Port $VM_BAKE_SSH_PORT" "PermitRootLogin no" "PasswordAuthentication no" "KbdInteractiveAuthentication no"
 	printf '%s\n' "EOF_SSHD"
 	printf '%s\n' "printf '# image %s: sshd on port %s, keys only, no root\\n' '$1' '$VM_BAKE_SSH_PORT' >&2"
