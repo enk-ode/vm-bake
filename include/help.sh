@@ -361,6 +361,7 @@ complete_values() {
         dirs)  echo "@dirs" ;;
         template) ls "$base/template" 2>/dev/null; echo empty ;;
         image) ls "$base/image" 2>/dev/null ;;
+        guest) ls "$base/guest" 2>/dev/null ;;
         database)
                 for d in "$VM_BAKE_ROOT"/*/; do
                         d=${d%/}; [ -d "$d/.env" ] || continue

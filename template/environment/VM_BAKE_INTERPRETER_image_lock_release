@@ -1,0 +1,2 @@
+sh
+# Act terminal of the image bake (image lock release), pinned to sh: the invoking user's own work (records, the lock, the download, the digest, ssh to the builder), it acts directly; cat shows it.

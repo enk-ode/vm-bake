@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest record write), pinned to sh: bookkeeping of the invoking user, it acts directly.

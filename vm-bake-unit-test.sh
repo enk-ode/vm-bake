@@ -507,18 +507,22 @@ test_inspect_by_default() {
   fi
 }
 
-# pin_image_cat - every act terminal of the image bake pinned to cat in the
-# sandbox, VERIFIED through getintp before any of them is called: the acts
-# default to 'sudo sh', and a sudo that does not ask would run them for real.
-IMAGE_ACTS="lock_take lock_drop dataset_create disk_create disk_attach disk_partition disk_format disk_mount keys_write pkg_base repo_write boot_write pkg_install rc_write user_make ssh_write pkg_report disk_unmount disk_detach digest_write snapshot_take readonly_set"
+# pin_image_cat - every act terminal of the image bake and the guests pinned
+# to cat in the sandbox, VERIFIED through getintp before any of them is
+# called: the acts default to 'sudo sh', and a sudo that does not ask would
+# run them for real.
+IMAGE_ACTS="lock_take lock_drop lock_release dataset_create dataset_destroy cache_ensure fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install rc_write user_make doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+GUEST_ACTS="switch_ensure clone conf_write network_write knownhosts_drop run halt dataset_destroy"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
+  for f in $GUEST_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_guest_$f"; done
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  [ "$(run_vmbake getintp image_dataset_create | tail -1)" = cat ] && [ "$(run_vmbake getintp image_snapshot_take | tail -1)" = cat ]
+  [ "$(run_vmbake getintp image_dataset_create | tail -1)" = cat ] && [ "$(run_vmbake getintp image_snapshot_take | tail -1)" = cat ] && [ "$(run_vmbake getintp guest_clone | tail -1)" = cat ]
 }
 
-# image_chain - the template chain of the walkthrough in the sandbox
+# image_chain - the template chain of the walkthrough in the sandbox: a
+# release-based freebsd-dev and an image-based freebsd-builder
 image_chain() {
   run_vmbake template add freebsd > /dev/null
   run_vmbake template add freebsd-15.1 freebsd > /dev/null
@@ -530,10 +534,16 @@ image_chain() {
   run_vmbake template rc add freebsd-dev sshd_enable YES > /dev/null
   run_vmbake template rc add freebsd-dev kern_securelevel 2 > /dev/null
   run_vmbake template user add freebsd-dev "$(id -un)" host > /dev/null
+  run_vmbake template add freebsd-builder freebsd > /dev/null
+  run_vmbake template base image freebsd-builder amd64 https://download.freebsd.org/x/FreeBSD-15.1-RELEASE-amd64-ufs.raw.xz a8e2c0f8331be615ef008c167069076833a417e968ff6b7d8e83b4ac762e9409 > /dev/null
+  run_vmbake template resource freebsd-builder 2 4G 16G > /dev/null
+  run_vmbake template package add freebsd-builder doas > /dev/null
+  run_vmbake template rc add freebsd-builder sshd_enable YES > /dev/null
+  run_vmbake template user add freebsd-builder bake 1010 > /dev/null
 }
 
 test_image_plan() {
-  test_header "image plan: make freebsd is the chain of five steps, each step its lines (batches shown, not run)"
+  test_header "image plan: make freebsd is the chain of five steps; create, base and close choose by base kind and VM_BAKE_BAKE_IN (batches shown, not run)"
   test_setup
   image_chain
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
@@ -541,55 +551,78 @@ test_image_plan() {
   local plan today
   today=$(date -u '+%Y%m%d')
   plan=$(run_vmbake image make freebsd freebsd-dev)
-  if [ "$(printf '%s\n' "$plan" | grep -c '"\$VM_BAKE_CONTEXT_SCRIPT"')" = "8" ] && printf '%s\n' "$plan" | grep -q "image create 'freebsd-dev' 'freebsd-dev-$today'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image seal 'freebsd-dev-$today'"; then
-    pass "make freebsd: three checks, then create, base, burn, close, seal with the dated name"
+  if [ "$(printf '%s\n' "$plan" | grep -c '"\$VM_BAKE_CONTEXT_SCRIPT"')" = "6" ] && printf '%s\n' "$plan" | grep -q "image create 'freebsd-dev' 'freebsd-dev-$today'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image seal 'freebsd-dev-$today'"; then
+    pass "make freebsd: the template checked, then create, base, burn, close, seal with the dated name"
   else
     fail "make plan: $plan"
   fi
   plan=$(run_vmbake image create freebsd-dev x)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "13" ] && printf '%s\n' "$plan" | grep -q "image disk create 'x' '64G'" && printf '%s\n' "$plan" | grep -q "image lock take 'x'" && printf '%s\n' "$plan" | sed -n 13p | grep -q "image disk mount 'x'"; then
-    pass "create: checks, lock, record, dataset, disk in 64G from the resource, attach, partition, format, mount"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "12" ] && printf '%s\n' "$plan" | grep -q "image disk create 'x' '64G'" && printf '%s\n' "$plan" | grep -q "image lock take 'x'" && printf '%s\n' "$plan" | sed -n 12p | grep -q "image disk detach 'x'"; then
+    pass "create of a release base: checks, lock, record, dataset, disk in 64G, attach, partition, format, detach"
   else
-    fail "create plan: $plan"
+    fail "create release plan: $plan"
+  fi
+  plan=$(run_vmbake image create freebsd-builder b)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "15" ] && printf '%s\n' "$plan" | grep -q "image fetch 'https://download.freebsd.org/x/FreeBSD-15.1-RELEASE-amd64-ufs.raw.xz'" && printf '%s\n' "$plan" | grep -q "image verify 'https://.*' 'a8e2c0f8" && printf '%s\n' "$plan" | grep -q "image disk write 'b' 'https://.*' '16G'" && printf '%s\n' "$plan" | grep -q "image disk relabel 'b'"; then
+    pass "create of an image base: cache, fetch, verify against the record, write, attach, grow, relabel, detach"
+  else
+    fail "create image plan: $plan"
+  fi
+  if run_vmbake image create freebsd x | grep -q "no release or image base"; then
+    pass "create without a base falls to the error line"
+  else
+    fail "create guard: $(run_vmbake image create freebsd x)"
   fi
   run_vmbake image record write freebsd-dev x > /dev/null
-  plan=$(run_vmbake image base x)
-  if printf '%s\n' "$plan" | grep -q "image pkg base 'x' 'FreeBSD:15:amd64' '1501000'" && printf '%s\n' "$plan" | grep -q "image keys write 'x'" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "6" ]; then
-    pass "base: ABI and OSVERSION derived from the release, keys before pkg, repo and boot after"
+  run_vmbake image record write freebsd-builder b > /dev/null
+  if [ "$(run_vmbake image base x | grep -c .)" = "5" ] && run_vmbake image base x | grep -q "image disk attach 'x'" && run_vmbake image base content x | grep -q "image pkg base 'x' 'FreeBSD:15:amd64' '1501000'" && [ "$(run_vmbake image base content b | grep -c .)" = "2" ]; then
+    pass "base on the host: attach, mount, content; release content installs pkgbase, image content only repos and loader"
   else
-    fail "base plan: $plan"
+    fail "base plan: $(run_vmbake image base x; run_vmbake image base content x; run_vmbake image base content b)"
   fi
+  printf 'builder\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake image base x | grep -q "image builder start 'x'" && [ "$(run_vmbake image base x | grep -c .)" = "4" ] && run_vmbake image close x | grep -q "image builder stop" && run_vmbake image builder start x | grep -q "guest check record 'bake'"; then
+    pass "base and close in the builder: the builder started with the disk, stopped before the digest"
+  else
+    fail "builder plans: $(run_vmbake image base x; run_vmbake image close x)"
+  fi
+  printf 'elsewhere\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake image base x | grep -q "VM_BAKE_BAKE_IN is 'elsewhere'"; then
+    pass "an unknown VM_BAKE_BAKE_IN falls to the error line"
+  else
+    fail "bake-in guard: $(run_vmbake image base x)"
+  fi
+  printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   plan=$(run_vmbake image burn x)
-  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image pkg install 'x' 'FreeBSD:15:amd64' '1501000'" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "7" ]; then
-    pass "burn: users checked, then packages, rc, users, sshd"
+  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image doas write 'x'" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "7" ]; then
+    pass "burn: users checked, then packages, rc, users, doas, sshd"
   else
     fail "burn plan: $plan"
   fi
-  if [ "$(run_vmbake image close x | grep -c .)" = "6" ] && [ "$(run_vmbake image seal x | grep -c .)" = "6" ] && run_vmbake image seal x | sed -n 6p | grep -q "image lock drop$"; then
-    pass "close and seal: six lines each, the seal ends with the lock dropped"
+  if [ "$(run_vmbake image close x | grep -c .)" = "6" ] && [ "$(run_vmbake image seal x | grep -c .)" = "6" ] && [ "$(run_vmbake image drop x | grep -c .)" = "5" ] && run_vmbake image drop x | grep -q "image dataset destroy 'x'"; then
+    pass "close and seal six lines each, drop five: release, destroy, record, lock"
   else
-    fail "close/seal plan: $(run_vmbake image close x; run_vmbake image seal x)"
+    fail "close/seal/drop plan: $(run_vmbake image close x; run_vmbake image seal x; run_vmbake image drop x)"
+  fi
+  plan=$(run_vmbake image builder use)
+  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "12" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "12" ]; then
+    pass "builder use and leave: the place and twelve pins, each a setintp or unsetintp line"
+  else
+    fail "builder use/leave: $plan"
   fi
 }
 
 test_image_guards() {
-  test_header "image guards: base release, resource, name, absent, record, mounted, closed, lock, users"
+  test_header "image guards: resource, name, absent, record, mounted, closed, lock, users"
   test_setup
   image_chain
-  if run_vmbake image check base release freebsd | grep -q "no release base (none" && run_vmbake image check resource freebsd | grep -q "no resource"; then
-    pass "a template without base or resource is refused"
+  if run_vmbake image check resource freebsd | grep -q "no resource"; then
+    pass "a template without resource is refused"
   else
-    fail "base/resource guard: $(run_vmbake image check base release freebsd; run_vmbake image check resource freebsd)"
+    fail "resource guard: $(run_vmbake image check resource freebsd)"
   fi
-  run_vmbake template add stagey > /dev/null
-  run_vmbake template base stage stagey amd64 daily-v1 > /dev/null
-  if run_vmbake image check base release stagey | grep -q "stage"; then
-    pass "a stage base is refused with the word stage"
-  else
-    fail "stage guard: $(run_vmbake image check base release stagey)"
-  fi
-  if run_vmbake image name valid 'bad name' | grep -q "invalid image name" && [ -z "$(run_vmbake image name valid ok-name.1)" ]; then
-    pass "image names are record names"
+  if run_vmbake image name valid 'bad name' | grep -q "invalid image name" && run_vmbake image name valid a-name-of-thirty-one-characters1 | grep -q "invalid image name" && [ -z "$(run_vmbake image name valid ok-name.1)" ]; then
+    pass "image names are record names of at most 30 characters"
   else
     fail "name guard"
   fi
@@ -630,14 +663,16 @@ test_image_emissions() {
   test_setup
   image_chain
   if pin_image_cat; then
-    pass "every image act is pinned to cat in the sandbox"
+    pass "every image and guest act is pinned to cat in the sandbox"
   else
-    fail "image acts not pinned to cat -- not calling them"; return
+    fail "acts not pinned to cat -- not calling them"; return
   fi
   run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
+  run_vmbake setenv VM_BAKE_IMAGE_CACHE "$TEST_DIR/cache" > /dev/null
   printf 'ssh-ed25519 AAAATEST test@host\n' > "$TEST_DIR/key.pub"
   run_vmbake setenv VM_BAKE_HOST_KEY "$TEST_DIR/key.pub" > /dev/null
   run_vmbake image record write freebsd-dev x > /dev/null
+  run_vmbake image record write freebsd-builder b > /dev/null
   local out
   out=$(run_vmbake image dataset create x)
   if printf '%s\n' "$out" | grep -q "zfs list -H -o name '$TEST_DIR'" && printf '%s\n' "$out" | grep -q 'zfs create -p "$ds/img/x"' && printf '%s\n' "$out" | grep -q "chown $(id -u):$(id -g) '$TEST_DIR/img/x'"; then
@@ -646,40 +681,53 @@ test_image_emissions() {
     fail "dataset create: $out"
   fi
   out=$(run_vmbake image disk partition x; run_vmbake image disk format x; run_vmbake image disk mount x)
-  if printf '%s\n' "$out" | grep -q "gpart add -t efi -s 260M -a 1m -l vm-efi" && printf '%s\n' "$out" | grep -q "gpart add -t freebsd-ufs -a 1m -l vm-root" && printf '%s\n' "$out" | grep -q 'newfs -j -L vmroot "/dev/${md}p2"' && printf '%s\n' "$out" | grep -q "mount -t msdosfs" && [ "$(printf '%s\n' "$out" | grep -c "mdconfig -lv | awk -v f='$TEST_DIR/img/x/disk0.img'")" = "3" ]; then
-    pass "partition, format, mount: the md found by the image path, GPT labels, SUJ, both mounts"
+  if printf '%s\n' "$out" | grep -q "gpart add -t efi -s 260M -a 1m -l 'x-efi'" && printf '%s\n' "$out" | grep -q "gpart add -t freebsd-ufs -a 1m -l 'x-root'" && printf '%s\n' "$out" | grep -q "newfs -j '/dev/gpt/x-root'" && printf '%s\n' "$out" | grep -q "mount '/dev/gpt/x-root' '$TEST_DIR/img/x/mnt'" && printf '%s\n' "$out" | grep -q "mount -t msdosfs '/dev/gpt/x-efi'"; then
+    pass "partition, format, mount: labels <image>-efi and <image>-root, SUJ, both mounts by label"
   else
     fail "disk emissions: $out"
   fi
+  out=$(run_vmbake image fetch https://h/FreeBSD.raw.xz; run_vmbake image verify https://h/FreeBSD.raw.xz 0123; run_vmbake image disk write b https://h/FreeBSD.raw.xz 16G; run_vmbake image disk grow b; run_vmbake image disk relabel b)
+  if printf '%s\n' "$out" | grep -q "fetch -q -R -o '$TEST_DIR/cache/FreeBSD.raw.xz' 'https://h/FreeBSD.raw.xz'" && printf '%s\n' "$out" | grep -q "sha256 -q '$TEST_DIR/cache/FreeBSD.raw.xz'" && printf '%s\n' "$out" | grep -q "xz -dc '$TEST_DIR/cache/FreeBSD.raw.xz' > '$TEST_DIR/img/b/disk0.img'" && printf '%s\n' "$out" | grep -q "truncate -s '16G'" && printf '%s\n' "$out" | grep -q 'gpart recover "$md"' && printf '%s\n' "$out" | grep -q 'growfs -y "/dev/${md}p$i"' && printf '%s\n' "$out" | grep -q "gpart modify -i \"\$e\" -l 'b-efi'"; then
+    pass "image base: fetch into the cache, verify, write and grow, relabel efiboot0 and rootfs"
+  else
+    fail "image-kind emissions: $out"
+  fi
   out=$(run_vmbake image keys write x; run_vmbake image pkg base x FreeBSD:15:amd64 1501000)
-  if printf '%s\n' "$out" | grep -q "cp -R /usr/share/keys/.* '$TEST_DIR/img/x/mnt/usr/share/keys/'" && printf '%s\n' "$out" | grep -q "pkg -r '$TEST_DIR/img/x/mnt' -o ABI='FreeBSD:15:amd64' -o OSVERSION='1501000' -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install FreeBSD-set-minimal FreeBSD-kernel-generic pkg"; then
-    pass "keys copied, then pkg -r with the pinned ABI and OSVERSION"
+  if printf '%s\n' "$out" | grep -q 'for d in /usr/share/keys/\*/; do' && printf '%s\n' "$out" | grep -q "pkg -r '$TEST_DIR/img/x/mnt' -o ABI='FreeBSD:15:amd64' -o OSVERSION='1501000' -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install FreeBSD-set-minimal FreeBSD-kernel-generic pkg"; then
+    pass "keys copied where it runs, then pkg -r with the pinned ABI and OSVERSION"
   else
     fail "keys/pkg base: $out"
   fi
   out=$(run_vmbake image boot write x)
-  if printf '%s\n' "$out" | grep -q "EFI/BOOT/BOOTX64.efi" && printf '%s\n' "$out" | grep -q 'vfs.root.mountfrom="ufs:/dev/gpt/vm-root"' && printf '%s\n' "$out" | grep -q "^/dev/gpt/vm-efi.*noauto"; then
-    pass "boot write: loader into the ESP, loader.conf, fstab"
+  if printf '%s\n' "$out" | grep -q "EFI/BOOT/BOOTX64.efi" && printf '%s\n' "$out" | grep -q 'vfs.root.mountfrom="ufs:/dev/gpt/x-root"' && printf '%s\n' "$out" | grep -q "^/dev/gpt/x-efi.*noauto"; then
+    pass "boot write: loader into the ESP, loader.conf and fstab on the image's labels"
   else
     fail "boot write: $out"
   fi
   out=$(run_vmbake image pkg install x FreeBSD:15:amd64 1501000; run_vmbake image rc write x)
-  if printf '%s\n' "$out" | grep -q "install claude-code git " && printf '%s\n' "$out" | grep -q '^sshd_enable=YES$' && printf '%s\n' "$out" | grep -q '^kern_securelevel=2$'; then
-    pass "pkg install and rc write carry the template's resolved lists"
+  if printf '%s\n' "$out" | grep -q "install claude-code git " && printf '%s\n' "$out" | grep -q '^sshd_enable="YES"$' && printf '%s\n' "$out" | grep -q '^kern_securelevel="2"$'; then
+    pass "pkg install and rc write carry the template's resolved lists, rc values quoted"
   else
     fail "pkg install/rc: $out"
   fi
-  out=$(run_vmbake image user make x; run_vmbake image ssh write x)
-  if printf '%s\n' "$out" | grep -q "pw -R '$TEST_DIR/img/x/mnt' useradd '$(id -un)' -u '$(id -u)'" && printf '%s\n' "$out" | grep -q "ssh-ed25519 AAAATEST test@host" && printf '%s\n' "$out" | grep -q "^Port 2222$" && printf '%s\n' "$out" | grep -q "^PermitRootLogin no$"; then
-    pass "user make resolves uid host and writes the key; sshd on 2222, keys only, no root"
+  out=$(run_vmbake image user make x; run_vmbake image ssh write x; run_vmbake image doas write x; run_vmbake image doas write b)
+  if printf '%s\n' "$out" | grep -q "pw -R '$TEST_DIR/img/x/mnt' useradd '$(id -un)' -u '$(id -u)'" && printf '%s\n' "$out" | grep -q "ssh-ed25519 AAAATEST test@host" && printf '%s\n' "$out" | grep -q "^Port 2222$" && printf '%s\n' "$out" | grep -q "no doas in the template" && printf '%s\n' "$out" | grep -q "^permit nopass bake$"; then
+    pass "user make resolves uid host and writes the key; sshd on 2222; doas only where the template lists it"
   else
-    fail "user/ssh: $out"
+    fail "user/ssh/doas: $out"
   fi
-  out=$(run_vmbake image pkg report x; run_vmbake image disk unmount x; run_vmbake image disk detach x; run_vmbake image digest write x; run_vmbake image snapshot take x; run_vmbake image readonly set x)
-  if printf '%s\n' "$out" | grep -q "audit -F" && printf '%s\n' "$out" | grep -q "umount '$TEST_DIR/img/x/mnt/boot/efi'" && printf '%s\n' "$out" | grep -q 'mdconfig -d -u "${md#md}"' && printf '%s\n' "$out" | grep -q "sha256 -q '$TEST_DIR/img/x/disk0.img'" && printf '%s\n' "$out" | grep -q 'zfs snapshot "$ds@image"' && printf '%s\n' "$out" | grep -q 'zfs set readonly=on "$ds"'; then
-    pass "report, unmount, detach, digest, snapshot, readonly in their words"
+  out=$(run_vmbake image pkg report x; run_vmbake image disk unmount x; run_vmbake image disk detach x; run_vmbake image digest write x; run_vmbake image snapshot take x; run_vmbake image readonly set x; run_vmbake image disk release x; run_vmbake image dataset destroy x)
+  if printf '%s\n' "$out" | grep -q "audit -F > '$TEST_DIR/img/x/mnt/var/log/vm-bake/audit.txt'" && printf '%s\n' "$out" | grep -q "umount '$TEST_DIR/img/x/mnt/boot/efi'" && printf '%s\n' "$out" | grep -q 'mdconfig -d -u "${md#md}"' && printf '%s\n' "$out" | grep -q "sha256 -q '$TEST_DIR/img/x/disk0.img'" && printf '%s\n' "$out" | grep -q 'zfs snapshot "$ds@image"' && printf '%s\n' "$out" | grep -q 'zfs set readonly=on "$ds"' && printf '%s\n' "$out" | grep -q 'zfs destroy -r "$ds"'; then
+    pass "report into the image, unmount, detach, digest, snapshot, readonly, release, destroy in their words"
   else
-    fail "close/seal emissions: $out"
+    fail "close/seal/drop emissions: $out"
+  fi
+  run_vmbake guest record write b bake 172.16.100.250/24 > /dev/null
+  out=$(run_vmbake image builder conf write x; run_vmbake image builder wait; run_vmbake image builder shutdown; run_vmbake image builder gone)
+  if printf '%s\n' "$out" | grep -q "cat > '/data/vm/bake/bake.conf'" && printf '%s\n' "$out" | grep -q "^cpu=2$" && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/x/disk0.img\"$" && printf '%s\n' "$out" | grep -q 'disk1_dev="custom"' && printf '%s\n' "$out" | grep -q "until ssh -p 2222 -i '$TEST_DIR/key'" && printf '%s\n' "$out" | grep -q "'doas shutdown -p now'" && printf '%s\n' "$out" | grep -q "pgrep -q -f 'bhyve: bake"; then
+    pass "builder: conf with the image as disk1 and the builder template's resources, wait on ssh, shutdown, gone"
+  else
+    fail "builder emissions: $out"
   fi
 }
 
@@ -710,11 +758,62 @@ test_image_record_lock_list() {
   else
     fail "lock: $(run_vmbake image lock take y)"
   fi
-  run_vmbake image lock drop > /dev/null
-  if [ ! -e "$TEST_DIR/.tmp/image.lock" ]; then
-    pass "lock drop removes the lock"
+  run_vmbake image lock release y > /dev/null
+  if [ -e "$TEST_DIR/.tmp/image.lock" ] && run_vmbake image lock release x > /dev/null && [ ! -e "$TEST_DIR/.tmp/image.lock" ]; then
+    pass "lock release: only the holder's drop releases it"
   else
-    fail "lock drop"
+    fail "lock release"
+  fi
+  run_vmbake image record remove x > /dev/null
+  if [ ! -e "$TEST_DIR/image/x" ] && run_vmbake image list | grep -q "(none)"; then
+    pass "record remove"
+  else
+    fail "record remove: $(run_vmbake image list)"
+  fi
+}
+
+test_guest_plan() {
+  test_header "guests: make, start, stop, drop as plans; the records; the guards"
+  test_setup
+  image_chain
+  run_vmbake image record write freebsd-builder b > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  local plan
+  plan=$(run_vmbake guest make b bake 172.16.100.250/24)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ] && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 11p | grep -q "guest knownhosts drop 'bake'"; then
+    pass "guest make: image checked, name, free, address, switch, record, clone, conf, network, known hosts"
+  else
+    fail "guest make plan: $plan"
+  fi
+  if [ "$(run_vmbake guest start bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest stop bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "4" ]; then
+    pass "start and stop two lines, drop four"
+  else
+    fail "guest start/stop/drop: $(run_vmbake guest drop bake)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake guest name valid Bad_Name | grep -q "invalid guest name" && run_vmbake guest address valid 172.16.100.250 | grep -q "invalid address" && run_vmbake guest check record bake | grep -q "unknown guest bake" && [ -z "$(run_vmbake guest address valid 172.16.100.250/24)" ]; then
+    pass "guest name, address and record guards"
+  else
+    fail "guest guards"
+  fi
+  run_vmbake guest record write b bake 172.16.100.250/24 > /dev/null
+  if [ "$(cat "$TEST_DIR/guest/bake/image")" = "b" ] && [ "$(cat "$TEST_DIR/guest/bake/address")" = "172.16.100.250/24" ] && run_vmbake guest list | grep -q "^#   bake  *b  *172.16.100.250/24" && run_vmbake guest check absent bake | grep -q "bake exists"; then
+    pass "guest record write and list"
+  else
+    fail "guest record: $(run_vmbake guest list)"
+  fi
+  if pin_image_cat; then
+    pass "guest acts pinned to cat"
+  else
+    fail "guest acts not pinned -- not calling them"; return
+  fi
+  local out
+  out=$(run_vmbake guest switch ensure; run_vmbake guest clone bake; run_vmbake guest conf write bake; run_vmbake guest network write bake)
+  if printf '%s\n' "$out" | grep -q "vm switch create -t manual -b 'bridge0' 'dev'" && printf '%s\n' "$out" | grep -q 'zfs clone -o readonly=off "$src@image" "$dst/bake"' && printf '%s\n' "$out" | grep -q "^cpu=2$" && printf '%s\n' "$out" | grep -q 'network0_switch="dev"' && printf '%s\n' "$out" | grep -q "mount '/dev/gpt/b-root'" && printf '%s\n' "$out" | grep -q '^ifconfig_vtnet0="inet 172.16.100.250/24"$' && printf '%s\n' "$out" | grep -q '^defaultrouter="172.16.100.100"$'; then
+    pass "switch on the bridge, clone writable, conf from the template, network into the clone by the image's label"
+  else
+    fail "guest emissions: $out"
   fi
 }
 
@@ -783,6 +882,7 @@ main() {
   should_run_test test_image_guards
   should_run_test test_image_emissions
   should_run_test test_image_record_lock_list
+  should_run_test test_guest_plan
 
   test_summary
 }

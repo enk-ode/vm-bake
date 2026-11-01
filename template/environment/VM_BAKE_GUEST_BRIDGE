@@ -1,0 +1,2 @@
+bridge0
+# @summary The existing bridge interface the switch attaches to; the host's pf rules and its address on it (VM_BAKE_GUEST_GATEWAY) are the guests' network policy.

@@ -1,0 +1,2 @@
+bake
+# @summary Name of the builder guest (guest make <image> bake <address>): a FreeBSD guest at securelevel -1 that mounts an image's disk under VM_BAKE_IMAGE_DIR/<image>/mnt and runs the content terminals there. Its ssh host key is remembered in .tmp/known_hosts.<name>.

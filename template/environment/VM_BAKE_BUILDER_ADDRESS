@@ -1,0 +1,2 @@
+172.16.100.250
+# @summary Address of the builder guest (without prefix), the one guest make gave it; ssh goes there on VM_BAKE_SSH_PORT.

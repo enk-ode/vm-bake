@@ -1,0 +1,2 @@
+/data/vm
+# @summary Directory of the guests, vm-bhyve's vm_dir: a guest is the dataset <dir>/<guest> with disk0.img and <guest>.conf inside. Must be a ZFS mount point: guests are clones.

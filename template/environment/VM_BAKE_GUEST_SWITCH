@@ -1,0 +1,2 @@
+dev
+# @summary Name of the vm-bhyve switch the guests hang on; created as a manual switch on VM_BAKE_GUEST_BRIDGE when missing (guest switch ensure).

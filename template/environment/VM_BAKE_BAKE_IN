@@ -1,0 +1,2 @@
+host
+# @summary Where image base, burn and close act: host (the content terminals pinned to sudo sh, the disk attached as md on the host) or builder (pinned to ssh into the builder guest, which gets the disk as its second disk). pkgbase cannot be installed with pkg -r on a host at securelevel 1 or higher, so a release base needs the builder. Set by image builder use / image builder leave.

@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest dataset destroy), pinned to sudo sh: zfs, md, vm-bhyve need root. Inspect first: vm-bake setintp guest_dataset_destroy cat.

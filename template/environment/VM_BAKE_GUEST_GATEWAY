@@ -1,0 +1,2 @@
+172.16.100.100
+# @summary The host's address on the bridge: default router and resolver of every guest (guest network write).

@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the image bake (image cache ensure), pinned to sudo sh: zfs, md, gpart or vm-bhyve's directory need root. Inspect first: vm-bake setintp image_cache_ensure cat.

@@ -1,0 +1,2 @@
+bake
+# @summary User ssh logs in as in the builder; the builder's template lists it and doas, so it escalates without a password (image doas write).

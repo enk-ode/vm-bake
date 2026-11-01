@@ -1,0 +1,2 @@
+/data/vm/.images/.cache
+# @summary Directory the FreeBSD VM images of base kind image are fetched into (image fetch), kept across bakes, owned by the invoking user (image cache ensure).

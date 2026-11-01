@@ -119,3 +119,31 @@ After an update of the checkout, `vm-bake bootstrap <name> minimal` again:
 the re-run refreshes `.env/default` with the variables of the new version
 (the pins of `image` among them) and leaves `.env/local` alone. `init` and
 `environment init` are its inner lines, not commands to type.
+
+## The builder
+
+A host at securelevel 1 cannot install pkgbase with `pkg -r`: FreeBSD-runtime
+carries files with the schg flag, and pkg refuses them at any securelevel
+above -1, wherever the root is. So a release base is baked in the builder,
+a FreeBSD guest at securelevel -1 that gets the image's disk as its second
+disk and mounts it under the same path. The builder itself comes from the
+official FreeBSD VM image (base kind `image`: fetched, verified against the
+template's sha256, written, grown, relabelled), baked on the host:
+
+    vm-bake template add freebsd-builder freebsd
+    vm-bake template base image freebsd-builder amd64 https://download.freebsd.org/releases/VM-IMAGES/15.1-RELEASE/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-ufs.raw.xz a8e2c0f8331be615ef008c167069076833a417e968ff6b7d8e83b4ac762e9409
+    vm-bake template resource freebsd-builder 2 4G 16G
+    vm-bake template package add freebsd-builder doas
+    vm-bake template rc add freebsd-builder sshd_enable YES
+    vm-bake template user add freebsd-builder bake 1010
+    vm-bake image make freebsd freebsd-builder
+    vm-bake guest make freebsd-builder-20261101 bake 172.16.100.250/24
+    vm-bake image builder use
+    vm-bake image make freebsd freebsd-dev
+
+A template that lists `doas` gives its users doas without a password; that
+is how the builder's user escalates. `image builder use` sets
+`VM_BAKE_BAKE_IN=builder` and pins the twelve content terminals to
+`ssh ... doas sh`, one setintp line each; `image builder leave` takes them
+back. The emissions are the same on both sides: the interpreter decides
+where they run.
