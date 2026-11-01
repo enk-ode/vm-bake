@@ -857,7 +857,7 @@ _image_disk_mount1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
 	printf '%s\n' "mkdir -p '$mnt' && mount '/dev/gpt/$1-root' '$mnt' || exit 1"
 	printf '%s\n' "mkdir -p '$mnt/boot/efi' && mount -t msdosfs '/dev/gpt/$1-efi' '$mnt/boot/efi' || exit 1"
-	printf '%s\n' "mount -t devfs devfs '$mnt/dev' || exit 1"
+	printf '%s\n' "install -d -m 755 '$mnt/dev' && mount -t devfs devfs '$mnt/dev' || exit 1"
 	printf '%s\n' "printf '# image %s: mounted at %s\\n' '$1' '$mnt' >&2"
 }
 

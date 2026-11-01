@@ -334,8 +334,7 @@ _guest_link_drop1() {
 # @see     guest make
 #@end
 _guest_knownhosts_drop1() {
-	printf '%s\n' "rm -f '$VM_BAKE_BASE/.tmp/known_hosts.$1'"
-	emit_note "guest $1: ssh host key forgotten"
+	printf '%s\n' "test -f '$VM_BAKE_BASE/.tmp/known_hosts.$1' && rm -f '$VM_BAKE_BASE/.tmp/known_hosts.$1' && printf '# guest %s: ssh host key forgotten\n' '$1' >&2 || printf '# guest %s: no ssh host key remembered yet\n' '$1' >&2"
 }
 
 #@help _guest_run1
