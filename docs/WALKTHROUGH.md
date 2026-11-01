@@ -131,7 +131,7 @@ official FreeBSD VM image (base kind `image`: fetched, verified against the
 template's sha256, written, grown, relabelled), baked on the host:
 
     vm-bake template add freebsd-builder freebsd
-    vm-bake template base image freebsd-builder amd64 https://download.freebsd.org/releases/VM-IMAGES/15.1-RELEASE/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-ufs.raw.xz a8e2c0f8331be615ef008c167069076833a417e968ff6b7d8e83b4ac762e9409
+    vm-bake template base image freebsd-builder amd64 15.1-RELEASE https://download.freebsd.org/releases/VM-IMAGES/15.1-RELEASE/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-ufs.raw.xz a8e2c0f8331be615ef008c167069076833a417e968ff6b7d8e83b4ac762e9409
     vm-bake template resource freebsd-builder 2 4G 16G
     vm-bake template package add freebsd-builder doas
     vm-bake template rc add freebsd-builder sshd_enable YES

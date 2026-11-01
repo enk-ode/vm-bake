@@ -337,19 +337,20 @@ ___template_base_stage3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf record $(sq "$1") base $(sq "stage $2 $3")"
 }
 
-#@help ___template_base_image4
-# @command template base image <template> <arch> <url> <sha256>
-# @summary The base is a cloud image (Linux; bake: cloud-init): the template exists, arch, url and digest are valid; then the record 'image <arch> <url> <sha256>'
+#@help ___template_base_image5
+# @command template base image <template> <arch> <version> <url> <sha256>
+# @summary The base is a ready-made image (a FreeBSD VM image, a Linux cloud image): the template exists, arch, version (a word; FreeBSD's <major>.<minor>-RELEASE gives the ABI), url and digest are valid; then the record 'image <arch> <version> <url> <sha256>'
 # @group   template
-# @example vm-bake template base image debian amd64 https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2 0123...cdef
+# @example vm-bake template base image freebsd-builder amd64 15.1-RELEASE https://download.freebsd.org/releases/VM-IMAGES/15.1-RELEASE/amd64/Latest/FreeBSD-15.1-RELEASE-amd64-ufs.raw.xz a8e2...9409
 # @see     template base iso
 #@end
-___template_base_image4() {
+___template_base_image5() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template arch valid $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template url valid $(sq "$3")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template sha256 valid $(sq "$4")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf record $(sq "$1") base $(sq "image $2 $3 $4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template url valid $(sq "$4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template sha256 valid $(sq "$5")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf record $(sq "$1") base $(sq "image $2 $3 $4 $5")"
 }
 
 #@help ___template_base_iso4

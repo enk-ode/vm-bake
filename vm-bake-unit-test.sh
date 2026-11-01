@@ -246,15 +246,15 @@ test_template_scalars() {
   fi
   run_vmbake template base stage freebsd amd64 daily-v1 > /dev/null
   run_vmbake template add debian > /dev/null
-  run_vmbake template base image debian amd64 https://cloud.debian.org/x.qcow2 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef > /dev/null
+  run_vmbake template base image debian amd64 13 https://cloud.debian.org/x.qcow2 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef > /dev/null
   run_vmbake template add windows > /dev/null
   run_vmbake template base iso windows amd64 /data/iso/win.iso 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef > /dev/null
-  if [ "$(cat "$(record_of freebsd)/base")" = "stage amd64 daily-v1" ] && grep -q '^image amd64 https://cloud.debian.org/x.qcow2 0123' "$(record_of debian)/base" && grep -q '^iso amd64 /data/iso/win.iso 0123' "$(record_of windows)/base"; then
+  if [ "$(cat "$(record_of freebsd)/base")" = "stage amd64 daily-v1" ] && grep -q '^image amd64 13 https://cloud.debian.org/x.qcow2 0123' "$(record_of debian)/base" && grep -q '^iso amd64 /data/iso/win.iso 0123' "$(record_of windows)/base"; then
     pass "base stage, image and iso record their variant"
   else
     fail "base variants: $(cat "$(record_of freebsd)/base" "$(record_of debian)/base" "$(record_of windows)/base" 2>&1)"
   fi
-  if run_vmbake template base image debian amd64 ftp://x 0123 | grep -q "invalid url" && run_vmbake template base iso windows amd64 relative/win.iso 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | grep -q "invalid path"; then
+  if run_vmbake template base image debian amd64 13 ftp://x 0123 | grep -q "invalid url" && run_vmbake template base iso windows amd64 relative/win.iso 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef | grep -q "invalid path"; then
     pass "url and path are validated"
   else
     fail "url/path guard"
@@ -535,7 +535,7 @@ image_chain() {
   run_vmbake template rc add freebsd-dev kern_securelevel 2 > /dev/null
   run_vmbake template user add freebsd-dev "$(id -un)" host > /dev/null
   run_vmbake template add freebsd-builder freebsd > /dev/null
-  run_vmbake template base image freebsd-builder amd64 https://download.freebsd.org/x/FreeBSD-15.1-RELEASE-amd64-ufs.raw.xz a8e2c0f8331be615ef008c167069076833a417e968ff6b7d8e83b4ac762e9409 > /dev/null
+  run_vmbake template base image freebsd-builder amd64 15.1-RELEASE https://download.freebsd.org/x/FreeBSD-15.1-RELEASE-amd64-ufs.raw.xz a8e2c0f8331be615ef008c167069076833a417e968ff6b7d8e83b4ac762e9409 > /dev/null
   run_vmbake template resource freebsd-builder 2 4G 16G > /dev/null
   run_vmbake template package add freebsd-builder doas > /dev/null
   run_vmbake template rc add freebsd-builder sshd_enable YES > /dev/null
