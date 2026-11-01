@@ -1,6 +1,0 @@
-# setintp / getintp / help intp: the interpreter token (case-insensitive) and the variable it names.
-# Any other token names the per-function pin VM_BAKE_INTERPRETER_<token>.
-terminal VM_BAKE_TERMINAL_INTERPRETER
-combinator VM_BAKE_COMBINATOR_INTERPRETER
-batch VM_BAKE_BATCH_COMBINATOR_INTERPRETER
-batch_combinator VM_BAKE_BATCH_COMBINATOR_INTERPRETER

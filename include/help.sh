@@ -373,7 +373,6 @@ complete_values() {
                         ls "$base/.env/local" 2>/dev/null
                 } | grep -v '^VM_BAKE_PROFILE_' ;;
         interpreter-fn)
-                printf '%s\n' terminal combinator batch
                 for f in $TERMINAL_FUNCTIONS $COMBINATOR_FUNCTIONS $BATCH_COMBINATOR_FUNCTIONS; do
                         f=${f#___}; f=${f#__}; f=${f#_}
                         printf '%s\n' "$f" "${f%[0-9]}"

@@ -84,7 +84,7 @@ test_setup() {
     sed 's/^/  /' "$bootstrap_log"
     exit 1
   fi
-  VM_BAKE_BASE="$TEST_DIR" "$TEST_SCRIPT" setintp terminal sh > /dev/null 2>&1
+  VM_BAKE_BASE="$TEST_DIR" "$TEST_SCRIPT" setenv VM_BAKE_TERMINAL_INTERPRETER sh > /dev/null 2>&1
 }
 
 # The output is captured before it is printed: a consumer that closes early
@@ -437,7 +437,7 @@ test_template_dump_restore() {
   local second="$TEST_BASE_DIR/test-$TESTS_RUN-second"
   mkdir -p "$second"
   VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" bootstrap "test-$TESTS_RUN-second" "$TEST_PROFILE" > /dev/null 2>&1
-  VM_BAKE_BASE="$second" "$TEST_SCRIPT" setintp terminal sh > /dev/null 2>&1
+  VM_BAKE_BASE="$second" "$TEST_SCRIPT" setenv VM_BAKE_TERMINAL_INTERPRETER sh > /dev/null 2>&1
   if VM_BAKE_BASE="$second" "$TEST_SCRIPT" template restore "$TEST_DIR/all.vmb" > "$TEST_DIR/restore.log" 2>&1; then
     pass "restore replays the dump"
   else
@@ -493,7 +493,7 @@ test_dispatch_and_help() {
 test_inspect_by_default() {
   test_header "inspect by default: the display terminals print under cat, the pinned acts still act"
   test_setup
-  VM_BAKE_BASE="$TEST_DIR" "$TEST_SCRIPT" setintp terminal cat > /dev/null 2>&1
+  VM_BAKE_BASE="$TEST_DIR" "$TEST_SCRIPT" setenv VM_BAKE_TERMINAL_INTERPRETER cat > /dev/null 2>&1
   run_vmbake template add freebsd > /dev/null
   if [ -L "$TEST_DIR/template/freebsd" ]; then
     pass "template add acts under the cat default (its terminals are pinned to sh)"
