@@ -252,7 +252,7 @@ _guest_conf_write1() {
 
 #@help _guest_network_write1
 # @command guest network write <guest>
-# @summary Act terminal (root): the clone's disk0.img attached as md, its root mounted by the image's label, hostname, the address on vtnet0 and the gateway VM_BAKE_GUEST_GATEWAY appended to rc.conf, resolv.conf pointing at the gateway, unmounted and detached -- the guest has no root, the host writes its network
+# @summary Act terminal (root): the clone's disk0.img attached as md, its root mounted by the image's label, hostname, the address on vtnet0 and the gateway VM_BAKE_GUEST_GATEWAY appended to rc.conf, resolv.conf pointing at the gateway, sshd bound to the address (ListenAddress), unmounted and detached -- the guest has no root, the host writes its network
 # @group   guest
 # @internal
 # @see     guest make
@@ -269,6 +269,7 @@ _guest_network_write1() {
 	printf '%s\n' "hostname=\"$1\"" "ifconfig_vtnet0=\"inet $addr\"" "defaultrouter=\"$VM_BAKE_GUEST_GATEWAY\""
 	printf '%s\n' "EOF_NET"
 	printf '%s\n' "printf 'nameserver %s\\n' '$VM_BAKE_GUEST_GATEWAY' > '$mnt/etc/resolv.conf'"
+	printf '%s\n' "test ! -f '$mnt/etc/ssh/sshd_config' || printf 'ListenAddress %s\\n' '${addr%/*}' >> '$mnt/etc/ssh/sshd_config'"
 	printf '%s\n' "umount '$mnt' && rmdir '$mnt' && mdconfig -d -u \"\${md#md}\" || exit 1"
 	printf '%s\n' "printf '# guest %s: %s on vtnet0, gateway %s\\n' '$1' '$addr' '$VM_BAKE_GUEST_GATEWAY' >&2"
 }

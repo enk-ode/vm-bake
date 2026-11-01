@@ -52,6 +52,7 @@
 #@end
 ___image_make_freebsd1() {
 	local name="$1-$(date -u '+%Y%m%d')"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image make freebsd: template $1 -> image $name (create, base, burn, close, seal)")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image create $(sq "$1") $(sq "$name")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image base $(sq "$name")"
