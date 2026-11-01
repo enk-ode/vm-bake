@@ -847,7 +847,7 @@ _image_disk_relabel1() {
 
 #@help _image_disk_mount1
 # @command image disk mount <image>
-# @summary Act terminal (root, host or builder): the root gpt/<image>-root at VM_BAKE_IMAGE_DIR/<image>/mnt, the system partition gpt/<image>-efi at mnt/boot/efi -- the same path wherever it runs
+# @summary Act terminal (root, host or builder): the root gpt/<image>-root at VM_BAKE_IMAGE_DIR/<image>/mnt, the system partition gpt/<image>-efi at mnt/boot/efi, devfs at mnt/dev (the package scripts run in a chroot and want /dev/null) -- the same path wherever it runs
 # @group   image
 # @internal
 # @see     image base
@@ -857,6 +857,7 @@ _image_disk_mount1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
 	printf '%s\n' "mkdir -p '$mnt' && mount '/dev/gpt/$1-root' '$mnt' || exit 1"
 	printf '%s\n' "mkdir -p '$mnt/boot/efi' && mount -t msdosfs '/dev/gpt/$1-efi' '$mnt/boot/efi' || exit 1"
+	printf '%s\n' "mount -t devfs devfs '$mnt/dev' || exit 1"
 	printf '%s\n' "printf '# image %s: mounted at %s\\n' '$1' '$mnt' >&2"
 }
 
@@ -933,7 +934,7 @@ _image_boot_write1() {
 
 #@help _image_pkg_install3
 # @command image pkg install <image> <abi> <osversion>
-# @summary Act terminal (root, host or builder): the template's resolved package list (read at generation time) installed with 'pkg -r <mnt>' under the pinned ABI and OSVERSION; an empty list is a note
+# @summary Act terminal (root, host or builder): the template's resolved package list (read at generation time) installed with 'pkg -c <mnt>' -- a chroot into the image, so the packages' scripts run with the image's own tools (indexinfo and the like) -- under the pinned ABI and OSVERSION, the resolver of the place copied in for the fetch, the image's package cache emptied afterwards; an empty list is a note
 # @group   image
 # @internal
 # @see     image burn
@@ -951,7 +952,8 @@ _image_pkg_install3() {
 	done
 	pkgs=$(awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | tr '\n' ' ')
 	if test -n "${pkgs% }"; then
-		printf '%s\n' "pkg -r '$mnt' -o ABI=$(sq "$2") -o OSVERSION=$(sq "$3") -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install $pkgs|| exit 1"
+		printf '%s\n' "cp /etc/resolv.conf '$mnt/etc/resolv.conf' || exit 1"
+		printf '%s\n' "pkg -c '$mnt' -o ABI=$(sq "$2") -o OSVERSION=$(sq "$3") -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install $pkgs&& pkg -c '$mnt' clean -ay > /dev/null || exit 1"
 		printf '%s\n' "printf '# image %s: packages %s\\n' '$1' $(sq "${pkgs% }") >&2"
 	else
 		emit_note "image $1: the template lists no packages"
@@ -1086,7 +1088,7 @@ _image_pkg_report1() {
 
 #@help _image_disk_unmount1
 # @command image disk unmount <image>
-# @summary Act terminal (root, host or builder): the system partition and the root unmounted
+# @summary Act terminal (root, host or builder): devfs, the system partition and the root unmounted
 # @group   image
 # @internal
 # @see     image close
@@ -1094,6 +1096,7 @@ _image_pkg_report1() {
 #@end
 _image_disk_unmount1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
+	printf '%s\n' "umount '$mnt/dev' || exit 1"
 	printf '%s\n' "umount '$mnt/boot/efi' || exit 1"
 	printf '%s\n' "umount '$mnt' || exit 1"
 	printf '%s\n' "printf '# image %s: unmounted\\n' '$1' >&2"
@@ -1124,7 +1127,7 @@ _image_disk_detach1() {
 #@end
 _image_disk_release1() {
 	local dir="$VM_BAKE_IMAGE_DIR/$1" img="$VM_BAKE_IMAGE_DIR/$1/disk0.img"
-	printf '%s\n' "umount '$dir/mnt/boot/efi' 2>/dev/null; umount '$dir/mnt' 2>/dev/null; true"
+	printf '%s\n' "umount '$dir/mnt/dev' 2>/dev/null; umount '$dir/mnt/boot/efi' 2>/dev/null; umount '$dir/mnt' 2>/dev/null; true"
 	printf '%s\n' "md=\$(mdconfig -lv | awk -v f='$img' '\$4 == f { print \$1; exit }'); test -z \"\$md\" || mdconfig -d -u \"\${md#md}\" || exit 1"
 	printf '%s\n' "printf '# image %s: released on the host\\n' '$1' >&2"
 }
