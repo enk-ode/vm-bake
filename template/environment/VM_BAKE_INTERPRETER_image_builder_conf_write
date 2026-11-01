@@ -1,2 +1,2 @@
-sudo sh
-# Act terminal of the image bake (image builder_conf conf_write), pinned to sudo sh: zfs, md, gpart or vm-bhyve's directory need root. Inspect first: vm-bake setintp image_builder_conf_write cat.
+sh
+# Act terminal of the image bake (image builder conf write), pinned to sh: the builder's configuration file lives in its clone, which is the invoking user's; it acts directly, cat shows it.

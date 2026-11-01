@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest link write), pinned to sudo sh: the link lives in vm-bhyve's root-owned vm_dir. Inspect first: vm-bake setintp guest_link_write cat.

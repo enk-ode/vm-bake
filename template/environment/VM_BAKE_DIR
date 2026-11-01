@@ -1,0 +1,2 @@
+/data/vm/vm-bake
+# @summary vm-bake's own dataset and directory: the datasets image/ (the sealed images) and guest/ (the clones) and the directory cache/ (the fetched VM images) live in it. Made once by root and delegated to the invoking user: zfs create <pool>/.../vm-bake, chown <user> on its mount point, zfs allow <user> create,mount,snapshot,clone,destroy,readonly on it, sysctl vfs.usermount=1 -- then every ZFS act of vm-bake runs without root. vm-bhyve keeps its own directory (VM_BAKE_VM_DIR).

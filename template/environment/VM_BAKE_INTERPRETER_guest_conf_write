@@ -1,2 +1,2 @@
-sudo sh
-# Act terminal of the guests (guest conf write), pinned to sudo sh: zfs, md, vm-bhyve need root. Inspect first: vm-bake setintp guest_conf_write cat.
+sh
+# Act terminal of the guests (guest conf write), pinned to sh: the configuration file lives in the clone, which is the invoking user's; it acts directly, cat shows it.

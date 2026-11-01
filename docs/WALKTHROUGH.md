@@ -105,7 +105,7 @@ and names the image `<template>-<yyyymmdd>`:
 
 The acts that need root (zfs, md, gpart, newfs, mount, pkg -r, pw) are
 pinned to `sudo sh`; sudo asks once per terminal within its timeout. Three
-variables shape the bake: `VM_BAKE_IMAGE_DIR` (default `/data/vm/.images`),
+variables shape the bake: `VM_BAKE_IMAGE_DIR` (default `/data/vm/vm-bake/image`; vm-bake's datasets live under `VM_BAKE_DIR`, vm-bhyve's vm_dir is `VM_BAKE_VM_DIR`, where every vm-bake guest appears as a link),
 `VM_BAKE_SSH_PORT` (default 2222, the port the host's pf passes into the
 guest network) and `VM_BAKE_HOST_KEY` (the public key every user of the
 image gets; the guests know no password). Each step shows its plan under

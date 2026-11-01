@@ -1,0 +1,2 @@
+/data/vm/vm-bhyve
+# @summary vm-bhyve's vm_dir (rc.conf: vm_dir=zfs:<dataset>): its own guests live there; a guest of vm-bake appears there as the link <name> -> VM_BAKE_GUEST_DIR/<name> (guest link write), so vm-bhyve finds it and the listing shows who manages what.

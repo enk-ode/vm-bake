@@ -1,2 +1,2 @@
-/data/vm
-# @summary Directory of the guests, vm-bhyve's vm_dir: a guest is the dataset <dir>/<guest> with disk0.img and <guest>.conf inside. Must be a ZFS mount point: guests are clones.
+/data/vm/vm-bake/guest
+# @summary Dataset of vm-bake's guests: a guest is the clone VM_BAKE_GUEST_DIR/<guest> with disk0.img and <guest>.conf inside, linked into vm-bhyve's vm_dir. Created by image tree ensure.

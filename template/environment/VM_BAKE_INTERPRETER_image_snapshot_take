@@ -1,2 +1,2 @@
-sudo sh
-# Act terminal of the image bake (image snapshot take), pinned to sudo sh: zfs, md, gpart, newfs, mount, pkg -r and pw need root; sudo asks once per terminal within its timeout. Inspect first: vm-bake setintp image_snapshot_take cat.
+sh
+# Act terminal of the image bake (image snapshot take), pinned to sh: a ZFS operation under VM_BAKE_DIR, delegated to the invoking user (zfs allow create,mount,snapshot,clone,destroy,readonly, vfs.usermount=1), it acts directly; cat shows it.

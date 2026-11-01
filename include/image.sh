@@ -105,6 +105,7 @@ ___image_create_release2() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check absent $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image lock take $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image record write $(sq "$1") $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image tree ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image dataset create $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk create $(sq "$2") $(sq "${size##* }")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk attach $(sq "$2")"
@@ -137,8 +138,8 @@ ___image_create_image2() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check absent $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image lock take $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image record write $(sq "$1") $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image tree ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image dataset create $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image cache ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image fetch $(sq "${6:-}")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image verify $(sq "${6:-}") $(sq "${7:-}")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk write $(sq "$2") $(sq "${6:-}") $(sq "${size##* }")"
@@ -657,26 +658,42 @@ _image_record_remove1() {
 	emit_note "image $1: record removed"
 }
 
-#@help _image_dataset_create1
-# @command image dataset create <image>
-# @summary Act terminal (root): the dataset of the image under the dataset mounted at the parent of VM_BAKE_IMAGE_DIR (zfs create -p, mountpoint inherited), its directory owned by the invoking user so the digest can be written without root
+#@help _image_tree_ensure0
+# @command image tree ensure
+# @summary Act terminal (the invoking user, delegated by zfs allow): vm-bake's datasets exist -- image and guest under the dataset mounted at VM_BAKE_DIR, which root made once and delegated, and the cache directory beside them -- idempotent, the first act of image create and guest make
 # @group   image
 # @internal
 # @see     image create
-# @env     VM_BAKE_IMAGE_DIR  the images' directory; its parent names the dataset to create under
+# @see     guest make
+# @env     VM_BAKE_DIR  vm-bake's dataset: image/, guest/ (datasets) and cache/ (a directory) live in it
+# @env     VM_BAKE_IMAGE_CACHE  the cache directory
+#@end
+_image_tree_ensure0() {
+	printf '%s\n' "ds=\$(zfs list -H -o name '$VM_BAKE_DIR') || { printf '# Error: %s is no dataset (root makes it once and delegates it: help env VM_BAKE_DIR)\\n' '$VM_BAKE_DIR' >&2; exit 1; }"
+	printf '%s\n' "zfs list -H -o name \"\$ds/image\" > /dev/null 2>&1 || zfs create \"\$ds/image\" || exit 1"
+	printf '%s\n' "zfs list -H -o name \"\$ds/guest\" > /dev/null 2>&1 || zfs create \"\$ds/guest\" || exit 1"
+	printf '%s\n' "install -d -m 755 '$VM_BAKE_IMAGE_CACHE' || exit 1"
+	printf '%s\n' "printf '# tree: %s/image, %s/guest, cache %s\\n' \"\$ds\" \"\$ds\" '$VM_BAKE_IMAGE_CACHE' >&2"
+}
+
+#@help _image_dataset_create1
+# @command image dataset create <image>
+# @summary Act terminal (the invoking user, delegated by zfs allow): the dataset of the image under the dataset mounted at VM_BAKE_IMAGE_DIR (mount point inherited, the directory the user's)
+# @group   image
+# @internal
+# @see     image create
+# @env     VM_BAKE_IMAGE_DIR  the images' dataset
 #@end
 _image_dataset_create1() {
-	local dir="$VM_BAKE_IMAGE_DIR/$1" parent="${VM_BAKE_IMAGE_DIR%/*}" sub="${VM_BAKE_IMAGE_DIR##*/}" uid="" gid=""
-	uid=$(id -u); gid=$(id -g)
-	printf '%s\n' "ds=\$(zfs list -H -o name '$parent') || exit 1"
-	printf '%s\n' "zfs create -p \"\$ds/$sub/$1\" || exit 1"
-	printf '%s\n' "chown $uid:$gid '$dir' || exit 1"
-	printf '%s\n' "printf '# image %s: dataset %s at %s\\n' '$1' \"\$ds/$sub/$1\" '$dir' >&2"
+	local dir="$VM_BAKE_IMAGE_DIR/$1"
+	printf '%s\n' "ds=\$(zfs list -H -o name '$VM_BAKE_IMAGE_DIR') || exit 1"
+	printf '%s\n' "zfs create \"\$ds/$1\" || exit 1"
+	printf '%s\n' "printf '# image %s: dataset %s at %s\\n' '$1' \"\$ds/$1\" '$dir' >&2"
 }
 
 #@help _image_dataset_destroy1
 # @command image dataset destroy <image>
-# @summary Act terminal (root): the image's dataset destroyed with its snapshots (zfs destroy -r; a clone of it makes zfs refuse); none is a note
+# @summary Act terminal (the invoking user, delegated by zfs allow): the image's dataset destroyed with its snapshots (zfs destroy -r; a clone of it makes zfs refuse); none is a note
 # @group   image
 # @internal
 # @see     image drop
@@ -687,21 +704,6 @@ _image_dataset_destroy1() {
 	printf '%s\n' "ds=\$(zfs list -H -o name '$dir' 2>/dev/null) || { printf '# image %s: no dataset at %s\\n' '$1' '$dir' >&2; exit 0; }"
 	printf '%s\n' "zfs destroy -r \"\$ds\" || exit 1"
 	printf '%s\n' "printf '# image %s: %s destroyed\\n' '$1' \"\$ds\" >&2"
-}
-
-#@help _image_cache_ensure0
-# @command image cache ensure
-# @summary Act terminal (root): the download cache VM_BAKE_IMAGE_CACHE exists and is the invoking user's (the fetch runs without root)
-# @group   image
-# @internal
-# @see     image create image
-# @env     VM_BAKE_IMAGE_CACHE  the directory the VM images are fetched into
-#@end
-_image_cache_ensure0() {
-	local uid="" gid=""
-	uid=$(id -u); gid=$(id -g)
-	printf '%s\n' "mkdir -p '$VM_BAKE_IMAGE_CACHE' && chown $uid:$gid '$VM_BAKE_IMAGE_CACHE' || exit 1"
-	printf '%s\n' "printf '# image cache %s ready\\n' '$VM_BAKE_IMAGE_CACHE' >&2"
 }
 
 #@help _image_fetch1
@@ -868,7 +870,7 @@ _image_disk_mount1() {
 #@end
 _image_keys_write1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
-	printf '%s\n' "mkdir -p '$mnt/usr/share/keys' || exit 1"
+	printf '%s\n' "install -d -m 755 '$mnt/usr/share/keys' || exit 1"
 	printf '%s\n' "for d in /usr/share/keys/*/; do test -d \"\$d\" && cp -R \"\${d%/}\" '$mnt/usr/share/keys/' || exit 1; done"
 	printf '%s\n' "printf '# image %s: signing keys %s\\n' '$1' \"\$(ls '$mnt/usr/share/keys' | tr '\\n' ' ')\" >&2"
 }
@@ -897,7 +899,7 @@ _image_pkg_base3() {
 #@end
 _image_repo_write1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" f=""
-	printf '%s\n' "mkdir -p '$mnt/usr/local/etc/pkg/repos' || exit 1"
+	printf '%s\n' "install -d -m 755 '$mnt/usr/local/etc/pkg/repos' || exit 1"
 	for f in /usr/local/etc/pkg/repos/*.conf; do
 		test -f "$f" || continue
 		printf '%s\n' "cat > '$mnt/usr/local/etc/pkg/repos/${f##*/}' <<'EOF_REPO'"
@@ -1011,7 +1013,7 @@ _image_user_make1() {
 		test "$s" != host || uid=$(id -u "$u" 2>/dev/null || true)
 		printf '%s\n' "pw -R '$mnt' usershow $(sq "$u") > /dev/null 2>&1 || pw -R '$mnt' useradd $(sq "$u") -u $(sq "$uid") -c $(sq "$u") -d '/home/$u' -s /bin/sh -w no || exit 1"
 		printf '%s\n' "g=\$(awk -F: -v u=$(sq "$u") '\$1 == u { print \$3 }' '$mnt/etc/group'); test -n \"\$g\" || { printf '# Error: no group %s in the image\\n' $(sq "$u") >&2; exit 1; }"
-		printf '%s\n' "mkdir -p '$mnt/home/$u/.ssh' || exit 1"
+		printf '%s\n' "install -d -m 755 '$mnt/home' && install -d -m 750 '$mnt/home/$u' && install -d -m 700 '$mnt/home/$u/.ssh' || exit 1"
 		printf '%s\n' "printf '%s\\n' $(sq "$keytext") > '$mnt/home/$u/.ssh/authorized_keys' || exit 1"
 		printf '%s\n' "chmod 700 '$mnt/home/$u/.ssh' && chmod 600 '$mnt/home/$u/.ssh/authorized_keys' && chown -R $(sq "$uid"):\"\$g\" '$mnt/home/$u' || exit 1"
 		printf '%s\n' "printf '# image %s: user %s (uid %s), key %s\\n' '$name' $(sq "$u") $(sq "$uid") $(sq "$key") >&2"
@@ -1040,7 +1042,7 @@ _image_doas_write1() {
 	pkgs=$(awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | awk '{ print "permit nopass " $1 }')
 	if printf '%s\n' "$pkgs" | grep -qx doas; then
-		printf '%s\n' "mkdir -p '$mnt/usr/local/etc' && cat > '$mnt/usr/local/etc/doas.conf' <<'EOF_DOAS'"
+		printf '%s\n' "install -d -m 755 '$mnt/usr/local/etc' && cat > '$mnt/usr/local/etc/doas.conf' <<'EOF_DOAS'"
 		printf '%s\n' "$users"
 		printf '%s\n' "EOF_DOAS"
 		printf '%s\n' "printf '# image %s: doas.conf: %s\\n' '$name' $(sq "$(printf '%s' "$users" | tr '\n' ';')") >&2"
@@ -1077,7 +1079,7 @@ _image_ssh_write1() {
 #@end
 _image_pkg_report1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
-	printf '%s\n' "mkdir -p '$mnt/var/log/vm-bake' || exit 1"
+	printf '%s\n' "install -d -m 755 '$mnt/var/log/vm-bake' || exit 1"
 	printf '%s\n' "pkg -r '$mnt' info > '$mnt/var/log/vm-bake/packages.txt' || exit 1"
 	printf '%s\n' "pkg -r '$mnt' audit -F > '$mnt/var/log/vm-bake/audit.txt' 2>&1; printf '# image %s: %s packages, audit exit %s (/var/log/vm-bake in the image)\\n' '$1' \"\$(grep -c . '$mnt/var/log/vm-bake/packages.txt')\" \"\$?\" >&2"
 }
@@ -1145,7 +1147,7 @@ _image_digest_write1() {
 
 #@help _image_snapshot_take1
 # @command image snapshot take <image>
-# @summary Act terminal (root): the snapshot @image of the image's dataset (found by its mount point)
+# @summary Act terminal (the invoking user, delegated by zfs allow): the snapshot @image of the image's dataset (found by its mount point)
 # @group   image
 # @internal
 # @see     image seal
@@ -1160,7 +1162,7 @@ _image_snapshot_take1() {
 
 #@help _image_readonly_set1
 # @command image readonly set <image>
-# @summary Act terminal (root): the image's dataset readonly -- the image is a product, guests are clones of its snapshot
+# @summary Act terminal (the invoking user, delegated by zfs allow): the image's dataset readonly -- the image is a product, guests are clones of its snapshot
 # @group   image
 # @internal
 # @see     image seal
@@ -1175,7 +1177,7 @@ _image_readonly_set1() {
 
 #@help _image_builder_conf_write1
 # @command image builder conf write <image>
-# @summary Act terminal (root): the builder guest's vm-bhyve configuration VM_BAKE_GUEST_DIR/<builder>/<builder>.conf: UEFI, cpu and memory from the builder's template (through its guest record, read at generation time), its own disk0.img, the switch, and the image's disk0.img as disk1 (custom path)
+# @summary Act terminal (the invoking user: the clone is theirs): the builder guest's vm-bhyve configuration VM_BAKE_GUEST_DIR/<builder>/<builder>.conf: UEFI, cpu and memory from the builder's template (through its guest record, read at generation time), its own disk0.img, the switch, and the image's disk0.img as disk1 (custom path)
 # @group   image
 # @internal
 # @see     image builder start

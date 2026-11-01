@@ -1,0 +1,2 @@
+sh
+# Act terminal of the image bake (image tree ensure), pinned to sh: a ZFS operation under VM_BAKE_DIR, delegated to the invoking user (zfs allow create,mount,snapshot,clone,destroy,readonly, vfs.usermount=1), it acts directly; cat shows it.

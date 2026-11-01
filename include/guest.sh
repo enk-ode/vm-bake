@@ -41,10 +41,12 @@ ___guest_make3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest name valid $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check absent $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest address valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image tree ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest switch ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record write $(sq "$1") $(sq "$2") $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest clone $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest conf write $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest network write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dns write"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest knownhosts drop $(sq "$2")"
@@ -85,6 +87,7 @@ ___guest_stop1() {
 #@end
 ___guest_drop1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link drop $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dataset destroy $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record remove $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dns write"
@@ -204,7 +207,7 @@ _guest_record_remove1() {
 
 #@help _guest_clone1
 # @command guest clone <guest>
-# @summary Act terminal (root): the image's snapshot @image (the image from the guest record) cloned to the guests' dataset as <guest>, writable; it mounts at VM_BAKE_GUEST_DIR/<guest> with disk0.img inside
+# @summary Act terminal (the invoking user, delegated by zfs allow): the image's snapshot @image (the image from the guest record) cloned to the guests' dataset as <guest>, writable; it mounts at VM_BAKE_GUEST_DIR/<guest> with disk0.img inside
 # @group   guest
 # @internal
 # @see     guest make
@@ -222,7 +225,7 @@ _guest_clone1() {
 
 #@help _guest_conf_write1
 # @command guest conf write <guest>
-# @summary Act terminal (root): the vm-bhyve configuration VM_BAKE_GUEST_DIR/<guest>/<guest>.conf: UEFI, cpu and memory from the image's template (read at generation time), disk0.img as virtio-blk, one virtio-net on VM_BAKE_GUEST_SWITCH
+# @summary Act terminal (the invoking user: the clone is theirs): the vm-bhyve configuration VM_BAKE_GUEST_DIR/<guest>/<guest>.conf: UEFI, cpu and memory from the image's template (read at generation time), disk0.img as virtio-blk, one virtio-net on VM_BAKE_GUEST_SWITCH
 # @group   guest
 # @internal
 # @see     guest make
@@ -296,6 +299,33 @@ _guest_dns_write0() {
 	printf '%s\n' "printf '# dns: %s guests in %s, unbound reloaded\\n' '$n' '$VM_BAKE_DNS_FILE' >&2"
 }
 
+#@help _guest_link_write1
+# @command guest link write <guest>
+# @summary Act terminal (root): the link VM_BAKE_VM_DIR/<guest> -> VM_BAKE_GUEST_DIR/<guest>, so vm-bhyve finds the guest in its vm_dir and the listing there shows which guests vm-bake manages
+# @group   guest
+# @internal
+# @see     guest make
+# @env     VM_BAKE_VM_DIR  vm-bhyve's vm_dir
+# @env     VM_BAKE_GUEST_DIR  the guests' dataset
+#@end
+_guest_link_write1() {
+	printf '%s\n' "ln -sfn '$VM_BAKE_GUEST_DIR/$1' '$VM_BAKE_VM_DIR/$1' || exit 1"
+	printf '%s\n' "printf '# guest %s: %s -> %s\\n' '$1' '$VM_BAKE_VM_DIR/$1' '$VM_BAKE_GUEST_DIR/$1' >&2"
+}
+
+#@help _guest_link_drop1
+# @command guest link drop <guest>
+# @summary Act terminal (root): the link in VM_BAKE_VM_DIR removed
+# @group   guest
+# @internal
+# @see     guest drop
+# @env     VM_BAKE_VM_DIR  vm-bhyve's vm_dir
+#@end
+_guest_link_drop1() {
+	printf '%s\n' "rm -f '$VM_BAKE_VM_DIR/$1'"
+	printf '%s\n' "printf '# guest %s: link in %s removed\\n' '$1' '$VM_BAKE_VM_DIR' >&2"
+}
+
 #@help _guest_knownhosts_drop1
 # @command guest knownhosts drop <guest>
 # @summary Act terminal: the ssh host key remembered for the guest (.tmp/known_hosts.<guest>) forgotten -- a new clone has a new key
@@ -334,7 +364,7 @@ _guest_halt1() {
 
 #@help _guest_dataset_destroy1
 # @command guest dataset destroy <guest>
-# @summary Act terminal (root): the guest's dataset (the clone) destroyed; none is a note
+# @summary Act terminal (the invoking user, delegated by zfs allow): the guest's dataset (the clone) destroyed; none is a note
 # @group   guest
 # @internal
 # @see     guest drop
