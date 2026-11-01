@@ -909,6 +909,7 @@ _image_repo_write1() {
 		cat "$f"
 		printf '%s\n' "EOF_REPO"
 	done
+	printf '%s\n' "chmod 644 '$mnt/usr/local/etc/pkg/repos/'*.conf 2>/dev/null; true"
 	printf '%s\n' "printf '# image %s: repository configuration of the host written\\n' '$1' >&2"
 }
 
@@ -1098,8 +1099,8 @@ _image_ssh_write1() {
 _image_pkg_report1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
 	printf '%s\n' "install -d -m 755 '$mnt/var/log/vm-bake' || exit 1"
-	printf '%s\n' "pkg -r '$mnt' info > '$mnt/var/log/vm-bake/packages.txt' || exit 1"
-	printf '%s\n' "pkg -r '$mnt' audit -F > '$mnt/var/log/vm-bake/audit.txt' 2>&1; printf '# image %s: %s packages, audit exit %s (/var/log/vm-bake in the image)\\n' '$1' \"\$(grep -c . '$mnt/var/log/vm-bake/packages.txt')\" \"\$?\" >&2"
+	printf '%s\n' "pkg -r '$mnt' info > '$mnt/var/log/vm-bake/packages.txt' && chmod 644 '$mnt/var/log/vm-bake/packages.txt' || exit 1"
+	printf '%s\n' "pkg -r '$mnt' audit -F > '$mnt/var/log/vm-bake/audit.txt' 2>&1; chmod 644 '$mnt/var/log/vm-bake/audit.txt'; printf '# image %s: %s packages, audit exit %s (/var/log/vm-bake in the image)\\n' '$1' \"\$(grep -c . '$mnt/var/log/vm-bake/packages.txt')\" \"\$?\" >&2"
 }
 
 #@help _image_disk_unmount1

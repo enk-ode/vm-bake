@@ -268,7 +268,7 @@ _guest_network_write1() {
 	printf '%s\n' "cat >> '$mnt/etc/rc.conf' <<'EOF_NET'"
 	printf '%s\n' "hostname=\"$1\"" "ifconfig_vtnet0=\"inet $addr\"" "defaultrouter=\"$VM_BAKE_GUEST_GATEWAY\""
 	printf '%s\n' "EOF_NET"
-	printf '%s\n' "printf 'nameserver %s\\n' '$VM_BAKE_GUEST_GATEWAY' > '$mnt/etc/resolv.conf'"
+	printf '%s\n' "printf 'nameserver %s\\n' '$VM_BAKE_GUEST_GATEWAY' > '$mnt/etc/resolv.conf' && chmod 644 '$mnt/etc/resolv.conf'"
 	printf '%s\n' "test ! -f '$mnt/etc/ssh/sshd_config' || printf 'ListenAddress %s\\n' '${addr%/*}' >> '$mnt/etc/ssh/sshd_config'"
 	printf '%s\n' "umount '$mnt' && rmdir '$mnt' && mdconfig -d -u \"\${md#md}\" || exit 1"
 	printf '%s\n' "printf '# guest %s: %s on vtnet0, gateway %s\\n' '$1' '$addr' '$VM_BAKE_GUEST_GATEWAY' >&2"
