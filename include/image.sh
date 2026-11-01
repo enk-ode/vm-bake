@@ -221,7 +221,7 @@ __image_base_content1() {
 
 #@help ___image_base_content_release1
 # @command image base content release <image>
-# @summary The pkgbase install: the signing keys into the image, 'pkg -r' with FreeBSD-set-minimal, the GENERIC kernel and pkg (ABI and OSVERSION from the template's release), the host's repository configuration, the EFI loader into the system partition, loader.conf and fstab
+# @summary The pkgbase install: the signing keys into the image, 'pkg -r' with FreeBSD-set-minimal, the GENERIC kernel, FreeBSD-ssh and pkg (ABI and OSVERSION from the template's release), the host's repository configuration, the EFI loader into the system partition, loader.conf and fstab
 # @group   image
 # @internal
 # @see     image base content
@@ -258,7 +258,7 @@ ___image_base_content_image1() {
 
 #@help ___image_burn1
 # @command image burn <image>
-# @summary Step 3, the template: the image has a record, every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its rc.conf lines, its users with the host key in authorized_keys, doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
+# @summary Step 3, the template: the image has a record, every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its rc.conf lines, its users with the host key in authorized_keys, root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
 # @group   image
 # @example vm-bake image burn freebsd-dev-20261101
 # @see     image base
@@ -281,6 +281,7 @@ ___image_burn1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkg install $(sq "$1") $(sq "$abi") $(sq "$osv")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image rc write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image user make $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image root lock $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image doas write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image ssh write $(sq "$1")"
 }
@@ -369,7 +370,7 @@ ___image_drop1() {
 
 #@help ___image_builder_use0
 # @command image builder use
-# @summary Bake in the builder guest from now on: VM_BAKE_BAKE_IN=builder, and the content terminals (disk mount, keys, pkg base, repo, boot, pkg install, rc, user, doas, ssh, pkg report, disk unmount) pinned to 'ssh -p VM_BAKE_SSH_PORT -i <key> VM_BAKE_BUILDER_USER@VM_BAKE_BUILDER_ADDRESS doas sh' -- one setintp line each, so the pins are seen
+# @summary Bake in the builder guest from now on: VM_BAKE_BAKE_IN=builder, and the content terminals (disk mount, keys, pkg base, repo, boot, pkg install, rc, user, root lock, doas, ssh, pkg report, disk unmount) pinned to 'ssh -p VM_BAKE_SSH_PORT -i <key> VM_BAKE_BUILDER_USER@VM_BAKE_BUILDER_ADDRESS doas sh' -- one setintp line each, so the pins are seen
 # @group   image
 # @example vm-bake image builder use
 # @see     image builder leave
@@ -385,7 +386,7 @@ ___image_builder_use0() {
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	ssh="ssh -p $VM_BAKE_SSH_PORT -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS doas sh"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN builder"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_rc_write image_user_make image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_rc_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setintp $f $(sq "$ssh")"
 	done
 }
@@ -400,7 +401,7 @@ ___image_builder_use0() {
 ___image_builder_leave0() {
 	local f=""
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN host"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_rc_write image_user_make image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_rc_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" unsetintp $f"
 	done
 }
@@ -878,7 +879,7 @@ _image_keys_write1() {
 
 #@help _image_pkg_base3
 # @command image pkg base <image> <abi> <osversion>
-# @summary Act terminal (root, host or builder): 'pkg -r <mnt>' installs FreeBSD-set-minimal, FreeBSD-kernel-generic and pkg from the repositories configured where it runs, the ABI and OSVERSION pinned to the template's release (IGNORE_OSVERSION, ASSUME_ALWAYS_YES); pkg refuses this at securelevel 1 or higher (pkgbase carries schg files), hence the builder
+# @summary Act terminal (root, host or builder): 'pkg -r <mnt>' installs FreeBSD-set-minimal, FreeBSD-kernel-generic, FreeBSD-ssh (sshd is not in the minimal set) and pkg from the repositories configured where it runs, the ABI and OSVERSION pinned to the template's release (IGNORE_OSVERSION, ASSUME_ALWAYS_YES); pkg refuses this at securelevel 1 or higher (pkgbase carries schg files), hence the builder
 # @group   image
 # @internal
 # @see     image base content release
@@ -886,7 +887,7 @@ _image_keys_write1() {
 #@end
 _image_pkg_base3() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
-	printf '%s\n' "pkg -r '$mnt' -o ABI=$(sq "$2") -o OSVERSION=$(sq "$3") -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install FreeBSD-set-minimal FreeBSD-kernel-generic pkg || exit 1"
+	printf '%s\n' "pkg -r '$mnt' -o ABI=$(sq "$2") -o OSVERSION=$(sq "$3") -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install FreeBSD-set-minimal FreeBSD-kernel-generic FreeBSD-ssh pkg || exit 1"
 	printf '%s\n' "printf '# image %s: base installed (%s, %s)\\n' '$1' $(sq "$2") $(sq "$3") >&2"
 }
 
@@ -1021,6 +1022,20 @@ _image_user_make1() {
 		printf '%s\n' "printf '# image %s: user %s (uid %s), key %s\\n' '$name' $(sq "$u") $(sq "$uid") $(sq "$key") >&2"
 	done
 	test -n "$lines" || emit_note "image $name: the template lists no users"
+}
+
+#@help _image_root_lock1
+# @command image root lock <image>
+# @summary Act terminal (root, host or builder): root of the image gets no password ('pw -R usermod root -w no', the field becomes *) -- pkgbase and the VM images ship root with an empty password, which would log in on the console; the host is the only way to root in a guest
+# @group   image
+# @internal
+# @see     image burn
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+#@end
+_image_root_lock1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
+	printf '%s\n' "pw -R '$mnt' usermod root -w no || exit 1"
+	printf '%s\n' "printf '# image %s: root locked\\n' '$1' >&2"
 }
 
 #@help _image_doas_write1

@@ -511,7 +511,7 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install rc_write user_make doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install rc_write user_make root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
 GUEST_ACTS="switch_ensure clone conf_write link_write link_drop network_write dns_write knownhosts_drop run halt dataset_destroy"
 pin_image_cat() {
   local f
@@ -594,8 +594,8 @@ test_image_plan() {
   fi
   printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   plan=$(run_vmbake image burn x)
-  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image doas write 'x'" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "7" ]; then
-    pass "burn: users checked, then packages, rc, users, doas, sshd"
+  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image root lock 'x'" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "8" ]; then
+    pass "burn: users checked, then packages, rc, users, root locked, doas, sshd"
   else
     fail "burn plan: $plan"
   fi
@@ -605,8 +605,8 @@ test_image_plan() {
     fail "close/seal/drop plan: $(run_vmbake image close x; run_vmbake image seal x; run_vmbake image drop x)"
   fi
   plan=$(run_vmbake image builder use)
-  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "12" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "12" ]; then
-    pass "builder use and leave: the place and twelve pins, each a setintp or unsetintp line"
+  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "13" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "13" ]; then
+    pass "builder use and leave: the place and thirteen pins, each a setintp or unsetintp line"
   else
     fail "builder use/leave: $plan"
   fi
@@ -693,7 +693,7 @@ test_image_emissions() {
     fail "image-kind emissions: $out"
   fi
   out=$(run_vmbake image keys write x; run_vmbake image pkg base x FreeBSD:15:amd64 1501000)
-  if printf '%s\n' "$out" | grep -q 'for d in /usr/share/keys/\*/; do' && printf '%s\n' "$out" | grep -q "pkg -r '$TEST_DIR/img/x/mnt' -o ABI='FreeBSD:15:amd64' -o OSVERSION='1501000' -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install FreeBSD-set-minimal FreeBSD-kernel-generic pkg"; then
+  if printf '%s\n' "$out" | grep -q 'for d in /usr/share/keys/\*/; do' && printf '%s\n' "$out" | grep -q "pkg -r '$TEST_DIR/img/x/mnt' -o ABI='FreeBSD:15:amd64' -o OSVERSION='1501000' -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install FreeBSD-set-minimal FreeBSD-kernel-generic FreeBSD-ssh pkg"; then
     pass "keys copied where it runs, then pkg -r with the pinned ABI and OSVERSION"
   else
     fail "keys/pkg base: $out"
@@ -710,8 +710,8 @@ test_image_emissions() {
   else
     fail "pkg install/rc: $out"
   fi
-  out=$(run_vmbake image user make x; run_vmbake image ssh write x; run_vmbake image doas write x; run_vmbake image doas write b)
-  if printf '%s\n' "$out" | grep -q "pw -R '$TEST_DIR/img/x/mnt' useradd '$(id -un)' -u '$(id -u)'" && printf '%s\n' "$out" | grep -q "ssh-ed25519 AAAATEST test@host" && printf '%s\n' "$out" | grep -q "^Port 2222$" && printf '%s\n' "$out" | grep -q "no doas in the template" && printf '%s\n' "$out" | grep -q "^permit nopass bake$"; then
+  out=$(run_vmbake image user make x; run_vmbake image root lock x; run_vmbake image ssh write x; run_vmbake image doas write x; run_vmbake image doas write b)
+  if printf '%s\n' "$out" | grep -q "pw -R '$TEST_DIR/img/x/mnt' useradd '$(id -un)' -u '$(id -u)'" && printf '%s\n' "$out" | grep -q "ssh-ed25519 AAAATEST test@host" && printf '%s\n' "$out" | grep -q "^Port 2222$" && printf '%s\n' "$out" | grep -q "no doas in the template" && printf '%s\n' "$out" | grep -q "^permit nopass bake$" && printf '%s\n' "$out" | grep -q "pw -R '$TEST_DIR/img/x/mnt' usermod root -w no"; then
     pass "user make resolves uid host and writes the key; sshd on 2222; doas only where the template lists it"
   else
     fail "user/ssh/doas: $out"
