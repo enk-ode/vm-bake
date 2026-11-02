@@ -848,7 +848,7 @@ test_session_plan() {
     fail "session x guard: $(run_vmbake session create x dalmatia idea)"
   fi
   out=$(run_vmbake session create x xenia idea)
-  if printf '%s\n' "$out" | grep -q "Xephyr :[0-9][0-9]* -screen '1600x1000' -dpi '96' -title 'xenia: idea' -resizeable -no-host-grab -nolisten tcp &$" && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9][0-9]* ssh -X -C -p 2222 -i '$TEST_DIR/key' .* '$(id -un)@xenia.local' 'idea' \"\$@\"$" && printf '%s\n' "$out" | grep -q '^wait "$xephyr"'; then
+  if printf '%s\n' "$out" | grep -q "Xephyr :[0-9][0-9]* -screen '1600x1000' -dpi '96' -title 'xenia: idea' -resizeable -no-host-grab -noreset -nolisten tcp &$" && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9][0-9]* ssh -X -C -p 2222 -i '$TEST_DIR/key' .* '$(id -un)@xenia.local' 'idea' \"\$@\"$" && printf '%s\n' "$out" | grep -q '^wait "$xephyr"'; then
     pass "session create x: Xephyr compartment, ssh -X into it, the compartment stays until closed"
   else
     fail "session x: $out"
