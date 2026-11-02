@@ -122,7 +122,7 @@ _session_script_ssh2() {
 
 #@help _session_script_x3
 # @command session script x <guest> <program> <display>
-# @summary Display terminal: the compartment script -- Xephyr on :<display> with VM_BAKE_XEPHYR_SCREEN and VM_BAKE_XEPHYR_DPI and the cursor theme VM_BAKE_XCURSOR_THEME, titled after guest and program, resizeable, never resetting when its last client leaves (xrdb loads and disconnects: without -noreset the server would drop the resources again), without grabbing mouse and keyboard (the pointer leaves the compartment freely, keys reach it while the pointer is inside); the resources Xcursor.theme, Xcursor.size (VM_BAKE_XCURSOR_SIZE) and Xft.dpi loaded into it with xrdb, which is where GTK and Electron programs read cursor and scale; the window manager VM_BAKE_XEPHYR_WM inside it (every window full size; none: no manager); then, once the server answers (xrdb -query), ssh -X -C into the guest with DISPLAY set to the compartment, running the program under the template's env variables (read at generation time) and staying until no process of the program's name is left in the guest (programs like code-oss detach at once); then the compartment closes with it
+# @summary Display terminal: the compartment script -- Xephyr on :<display> with VM_BAKE_XEPHYR_SCREEN and VM_BAKE_XEPHYR_DPI and the cursor theme VM_BAKE_XCURSOR_THEME, titled after guest and program, resizeable, never resetting when its last client leaves (xrdb loads and disconnects: without -noreset the server would drop the resources again), without grabbing mouse and keyboard (the pointer leaves the compartment freely, keys reach it while the pointer is inside); the resources Xcursor.theme, Xcursor.size (VM_BAKE_XCURSOR_SIZE) and Xft.dpi loaded into it with xrdb, which is where GTK and Electron programs read cursor and scale; the window manager VM_BAKE_XEPHYR_WM inside it (every window full size; none: no manager); then, once the server answers (xrdb -query), ssh -X -C into the guest with DISPLAY set to the compartment, running the program under the template's env variables (read at generation time) and staying until no process matching the program's name is left in the guest (programs like code-oss detach at once); then the compartment closes with it. Everything the script and its children say goes to .log/session-<guest>-<program>.log of the database
 # @group   session
 # @internal
 # @see     session create x
@@ -149,15 +149,16 @@ _session_script_x3() {
 		cur=$p; n=$((n + 1))
 	done
 	envs=$(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | tr '\n' ' ')
+	prog=${2%% *}; prog=${prog##*/}
 	printf '%s\n' '#!/bin/sh' "# vm-bake session x: guest $1, program $2 in the Xephyr compartment :$3 (session create x $1 $2)"
+	printf '%s\n' "log='$VM_BAKE_BASE/.log/session-$1-$prog.log'; exec > \"\$log\" 2>&1; printf '%s session x %s: %s on :%s\\n' \"\$(date '+%Y-%m-%d %H:%M:%S')\" $(sq "$1") $(sq "$2") '$3'"
 	printf '%s\n' "XCURSOR_THEME=$(sq "$VM_BAKE_XCURSOR_THEME") Xephyr :$3 -screen '$VM_BAKE_XEPHYR_SCREEN' -dpi '$VM_BAKE_XEPHYR_DPI' -title $(sq "$1: $2") -resizeable -no-host-grab -noreset -nolisten tcp &"
 	printf '%s\n' 'xephyr=$!'
-	printf '%s\n' "n=0; until xrdb -display :$3 -query > /dev/null 2>&1 || test \"\$n\" -ge 100; do n=\$((n + 1)); sleep 0.1; done"
-	printf '%s\n' "printf 'Xcursor.theme: %s\\nXcursor.size: %s\\nXft.dpi: %s\\n' $(sq "$VM_BAKE_XCURSOR_THEME") $(sq "$VM_BAKE_XCURSOR_SIZE") $(sq "$VM_BAKE_XEPHYR_DPI") | xrdb -display :$3 -"
-	test "$VM_BAKE_XEPHYR_WM" = none || printf '%s\n' "DISPLAY=:$3 $VM_BAKE_XEPHYR_WM > /dev/null 2>&1 &" 'wm=$!'
-	prog=${2%% *}; prog=${prog##*/}
-	printf '%s\n' "DISPLAY=:$3 ssh -X -C -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "${envs:+env $envs}$2") \"\$@\" $(sq "; sleep 2; while pgrep -qx '$prog'; do sleep 2; done")"
-	printf '%s\n' 'rc=$?'
+	printf '%s\n' "n=0; until xrdb -display :$3 -query > /dev/null 2>&1 || test \"\$n\" -ge 100; do n=\$((n + 1)); sleep 0.1; done; printf 'Xephyr pid %s answers after %s tries\\n' \"\$xephyr\" \"\$n\""
+	printf '%s\n' "printf 'Xcursor.theme: %s\\nXcursor.size: %s\\nXft.dpi: %s\\n' $(sq "$VM_BAKE_XCURSOR_THEME") $(sq "$VM_BAKE_XCURSOR_SIZE") $(sq "$VM_BAKE_XEPHYR_DPI") | xrdb -display :$3 - && xrdb -display :$3 -query"
+	test "$VM_BAKE_XEPHYR_WM" = none || printf '%s\n' "DISPLAY=:$3 $VM_BAKE_XEPHYR_WM &" 'wm=$!' "printf 'window manager $VM_BAKE_XEPHYR_WM pid %s\\n' \"\$wm\""
+	printf '%s\n' "DISPLAY=:$3 ssh -X -C -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "${envs:+env $envs}$2") \"\$@\" $(sq "; rc=\$?; echo \"program exit \$rc\"; sleep 2; while pgrep -qf '$prog'; do sleep 2; done; echo 'no $prog process left'")"
+	printf '%s\n' 'rc=$?' "printf '%s ssh exit %s, closing the compartment\\n' \"\$(date '+%H:%M:%S')\" \"\$rc\""
 	test "$VM_BAKE_XEPHYR_WM" = none || printf '%s\n' 'kill "$wm" 2>/dev/null'
 	printf '%s\n' 'kill "$xephyr" 2>/dev/null' 'wait "$xephyr" 2>/dev/null' 'exit "$rc"'
 }
