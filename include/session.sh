@@ -122,7 +122,7 @@ _session_script_ssh2() {
 
 #@help _session_script_x3
 # @command session script x <guest> <program> <display>
-# @summary Display terminal: the compartment script -- Xephyr on :<display> with VM_BAKE_XEPHYR_SCREEN and VM_BAKE_XEPHYR_DPI and the cursor theme VM_BAKE_XCURSOR_THEME, titled after guest and program, resizeable; the resources Xcursor.theme, Xcursor.size (VM_BAKE_XCURSOR_SIZE) and Xft.dpi loaded into it with xrdb, which is where GTK and Electron programs read cursor and scale; the window manager VM_BAKE_XEPHYR_WM inside it (every window full size; none: no manager); then ssh -X -C into the guest with DISPLAY set to the compartment, running the program under the template's env variables (read at generation time); the compartment stays until you close it (programs like code-oss detach and return at once), on an ssh error it is closed
+# @summary Display terminal: the compartment script -- Xephyr on :<display> with VM_BAKE_XEPHYR_SCREEN and VM_BAKE_XEPHYR_DPI and the cursor theme VM_BAKE_XCURSOR_THEME, titled after guest and program, resizeable, without grabbing mouse and keyboard (the pointer leaves the compartment freely, keys reach it while the pointer is inside); the resources Xcursor.theme, Xcursor.size (VM_BAKE_XCURSOR_SIZE) and Xft.dpi loaded into it with xrdb, which is where GTK and Electron programs read cursor and scale; the window manager VM_BAKE_XEPHYR_WM inside it (every window full size; none: no manager); then ssh -X -C into the guest with DISPLAY set to the compartment, running the program under the template's env variables (read at generation time); the compartment stays until you close it (programs like code-oss detach and return at once), on an ssh error it is closed
 # @group   session
 # @internal
 # @see     session create x
@@ -150,7 +150,7 @@ _session_script_x3() {
 	done
 	envs=$(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | tr '\n' ' ')
 	printf '%s\n' '#!/bin/sh' "# vm-bake session x: guest $1, program $2 in the Xephyr compartment :$3 (session create x $1 $2)"
-	printf '%s\n' "XCURSOR_THEME=$(sq "$VM_BAKE_XCURSOR_THEME") Xephyr :$3 -screen '$VM_BAKE_XEPHYR_SCREEN' -dpi '$VM_BAKE_XEPHYR_DPI' -title $(sq "$1: $2") -resizeable -nolisten tcp &"
+	printf '%s\n' "XCURSOR_THEME=$(sq "$VM_BAKE_XCURSOR_THEME") Xephyr :$3 -screen '$VM_BAKE_XEPHYR_SCREEN' -dpi '$VM_BAKE_XEPHYR_DPI' -title $(sq "$1: $2") -resizeable -no-host-grab -nolisten tcp &"
 	printf '%s\n' 'xephyr=$!'
 	printf '%s\n' "n=0; until test -e '/tmp/.X11-unix/X$3' || test \"\$n\" -ge 50; do n=\$((n + 1)); sleep 0.1; done"
 	printf '%s\n' "printf 'Xcursor.theme: %s\\nXcursor.size: %s\\nXft.dpi: %s\\n' $(sq "$VM_BAKE_XCURSOR_THEME") $(sq "$VM_BAKE_XCURSOR_SIZE") $(sq "$VM_BAKE_XEPHYR_DPI") | xrdb -display :$3 -"
