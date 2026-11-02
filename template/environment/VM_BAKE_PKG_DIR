@@ -1,2 +1,2 @@
-/data/vm/vm-bake/pkg
-# @summary Directory of package files a template may list with template pkgfile add: .pkg files of the host's ABI you put there yourself (a package another host fetched from the signed repository, a package you built), owned by the invoking user, made by image tree ensure. The bake stages them into the image and installs them with pkg add; their dependencies come from the repositories.
+/data/vm/vm-bake/distfiles/pkg
+# @summary Directory of package files a template may list with template pkgfile add: .pkg files of the host's ABI you put there yourself (a package another host fetched from the signed repository, a package you built), the invoking user's, made by image tree ensure. The bake stages them into the image and installs them with pkg add; their dependencies come from the repositories.

@@ -670,12 +670,12 @@ _image_record_remove1() {
 
 #@help _image_tree_ensure0
 # @command image tree ensure
-# @summary Act terminal (the invoking user, delegated by zfs allow): vm-bake's datasets exist -- image and guest under the dataset mounted at VM_BAKE_DIR, which root made once and delegated, and the cache directory beside them -- idempotent, the first act of image create and guest make
+# @summary Act terminal (the invoking user, delegated by zfs allow): vm-bake's datasets exist -- image and guest under the dataset mounted at VM_BAKE_DIR, which root made once and delegated, and the distfiles directories (VM images, package files) beside them -- idempotent, the first act of image create and guest make
 # @group   image
 # @internal
 # @see     image create
 # @see     guest make
-# @env     VM_BAKE_DIR  vm-bake's dataset: image/, guest/ (datasets) and cache/ (a directory) live in it
+# @env     VM_BAKE_DIR  vm-bake's dataset: image/, guest/ (datasets) and distfiles/ (directories) live in it
 # @env     VM_BAKE_IMAGE_CACHE  the cache directory
 # @env     VM_BAKE_PKG_DIR  the package-file directory
 #@end
@@ -1271,7 +1271,7 @@ _image_pkgfile_stage_builder1() {
 
 #@help _image_pkgfile_add1
 # @command image pkgfile add <image>
-# @summary Act terminal (root, host or builder): every staged package file installed into the image with 'pkg -c add' (a chroot; dependencies from the repositories), the staged copy removed
+# @summary Act terminal (root, host or builder): every staged package file: its dependencies read from the file (pkg query -F) and installed from the repositories, then the file itself with 'pkg -c add' (a chroot; pkg add alone fetches nothing), the staged copy removed
 # @group   image
 # @internal
 # @see     image burn
@@ -1289,6 +1289,7 @@ _image_pkgfile_add1() {
 	done
 	files=$(awk -v base="$VM_BAKE_BASE" -v family=pkgfile -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	for f in $files; do
+		printf '%s\n' "deps=\$(pkg -c '$mnt' query -F '/var/cache/vm-bake/$f' %dn | tr '\\n' ' '); test -z \"\$deps\" || pkg -c '$mnt' -o ASSUME_ALWAYS_YES=yes install \$deps || exit 1"
 		printf '%s\n' "pkg -c '$mnt' -o ASSUME_ALWAYS_YES=yes add '/var/cache/vm-bake/$f' && rm -f '$mnt/var/cache/vm-bake/$f' || exit 1"
 		printf '%s\n' "printf '# image %s: %s installed\\n' '$1' '$f' >&2"
 	done
