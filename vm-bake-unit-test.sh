@@ -848,8 +848,8 @@ test_session_plan() {
     fail "session x guard: $(run_vmbake session create x dalmatia idea)"
   fi
   out=$(run_vmbake session create x xenia idea)
-  if printf '%s\n' "$out" | grep -q "Xephyr :[0-9][0-9]* -screen '1600x1000' -dpi '96' -title 'xenia: idea' -resizeable -no-host-grab -noreset -nolisten tcp &$" && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9][0-9]* ssh -X -C -p 2222 -i '$TEST_DIR/key' .* '$(id -un)@xenia.local' 'idea' \"\$@\"$" && printf '%s\n' "$out" | grep -q '^wait "$xephyr"'; then
-    pass "session create x: Xephyr compartment, ssh -X into it, the compartment stays until closed"
+  if printf '%s\n' "$out" | grep -q "Xephyr :[0-9][0-9]* -screen '1600x1000' -dpi '96' -title 'xenia: idea' -resizeable -no-host-grab -noreset -nolisten tcp &$" && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9][0-9]* ssh -X -C -p 2222 -i '$TEST_DIR/key' .* '$(id -un)@xenia.local' 'idea' \"\$@\" '; sleep 2; while pgrep -qx " && printf '%s\n' "$out" | grep -q "idea.*; do sleep 2; done'$" && printf '%s\n' "$out" | grep -q '^kill "$xephyr"'; then
+    pass "session create x: Xephyr compartment, ssh -X into it, the compartment closes when the program is gone"
   else
     fail "session x: $out"
   fi
@@ -1076,7 +1076,7 @@ test_env_plan() {
     fail "env write: $out"
   fi
   out=$(run_vmbake session create x caledonia 'code-oss --disable-gpu')
-  if printf '%s\n' "$out" | grep -q "^XCURSOR_THEME='redglass' Xephyr :[0-9]* " && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9]* ratpoison > /dev/null 2>&1 &$" && printf '%s\n' "$out" | grep -q "ssh -X -C -p 2222 .* 'env LANG=C.UTF-8 XCURSOR_THEME=redglass code-oss --disable-gpu' \"\$@\"$" && printf '%s\n' "$out" | grep -q "Xcursor.theme: %s.* 'redglass' '24' '96' | xrdb -display :[0-9]* -$" && printf '%s\n' "$out" | grep -q '^kill "$wm"'; then
+  if printf '%s\n' "$out" | grep -q "^XCURSOR_THEME='redglass' Xephyr :[0-9]* " && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9]* ratpoison > /dev/null 2>&1 &$" && printf '%s\n' "$out" | grep -q "ssh -X -C -p 2222 .* 'env LANG=C.UTF-8 XCURSOR_THEME=redglass code-oss --disable-gpu' \"\$@\" '; sleep 2; while pgrep -qx " && printf '%s\n' "$out" | grep -q "code-oss.*; do sleep 2; done'$" && printf '%s\n' "$out" | grep -q "Xcursor.theme: %s.* 'redglass' '24' '96' | xrdb -display :[0-9]* -$" && printf '%s\n' "$out" | grep -q '^kill "$wm"'; then
     pass "session x: cursor theme for the server, the window manager in the compartment, ssh -C, the program under the template's env"
   else
     fail "session x env: $out"

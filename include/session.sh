@@ -122,7 +122,7 @@ _session_script_ssh2() {
 
 #@help _session_script_x3
 # @command session script x <guest> <program> <display>
-# @summary Display terminal: the compartment script -- Xephyr on :<display> with VM_BAKE_XEPHYR_SCREEN and VM_BAKE_XEPHYR_DPI and the cursor theme VM_BAKE_XCURSOR_THEME, titled after guest and program, resizeable, never resetting when its last client leaves (xrdb loads and disconnects: without -noreset the server would drop the resources again), without grabbing mouse and keyboard (the pointer leaves the compartment freely, keys reach it while the pointer is inside); the resources Xcursor.theme, Xcursor.size (VM_BAKE_XCURSOR_SIZE) and Xft.dpi loaded into it with xrdb, which is where GTK and Electron programs read cursor and scale; the window manager VM_BAKE_XEPHYR_WM inside it (every window full size; none: no manager); then, once the server answers (xrdb -query), ssh -X -C into the guest with DISPLAY set to the compartment, running the program under the template's env variables (read at generation time); the compartment stays until you close it (programs like code-oss detach and return at once), on an ssh error it is closed
+# @summary Display terminal: the compartment script -- Xephyr on :<display> with VM_BAKE_XEPHYR_SCREEN and VM_BAKE_XEPHYR_DPI and the cursor theme VM_BAKE_XCURSOR_THEME, titled after guest and program, resizeable, never resetting when its last client leaves (xrdb loads and disconnects: without -noreset the server would drop the resources again), without grabbing mouse and keyboard (the pointer leaves the compartment freely, keys reach it while the pointer is inside); the resources Xcursor.theme, Xcursor.size (VM_BAKE_XCURSOR_SIZE) and Xft.dpi loaded into it with xrdb, which is where GTK and Electron programs read cursor and scale; the window manager VM_BAKE_XEPHYR_WM inside it (every window full size; none: no manager); then, once the server answers (xrdb -query), ssh -X -C into the guest with DISPLAY set to the compartment, running the program under the template's env variables (read at generation time) and staying until no process of the program's name is left in the guest (programs like code-oss detach at once); then the compartment closes with it
 # @group   session
 # @internal
 # @see     session create x
@@ -138,7 +138,7 @@ _session_script_ssh2() {
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _session_script_x3() {
-	local key="$VM_BAKE_HOST_KEY" img="" t="" cur="" chain="" p="" n=0 envs=""
+	local key="$VM_BAKE_HOST_KEY" img="" t="" cur="" chain="" p="" n=0 envs="" prog=""
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
@@ -155,8 +155,9 @@ _session_script_x3() {
 	printf '%s\n' "n=0; until xrdb -display :$3 -query > /dev/null 2>&1 || test \"\$n\" -ge 100; do n=\$((n + 1)); sleep 0.1; done"
 	printf '%s\n' "printf 'Xcursor.theme: %s\\nXcursor.size: %s\\nXft.dpi: %s\\n' $(sq "$VM_BAKE_XCURSOR_THEME") $(sq "$VM_BAKE_XCURSOR_SIZE") $(sq "$VM_BAKE_XEPHYR_DPI") | xrdb -display :$3 -"
 	test "$VM_BAKE_XEPHYR_WM" = none || printf '%s\n' "DISPLAY=:$3 $VM_BAKE_XEPHYR_WM > /dev/null 2>&1 &" 'wm=$!'
-	printf '%s\n' "DISPLAY=:$3 ssh -X -C -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "${envs:+env $envs}$2") \"\$@\""
-	printf '%s\n' 'rc=$?' 'test "$rc" -eq 0 || kill "$xephyr" 2>/dev/null' 'wait "$xephyr"'
+	prog=${2%% *}; prog=${prog##*/}
+	printf '%s\n' "DISPLAY=:$3 ssh -X -C -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "${envs:+env $envs}$2") \"\$@\" $(sq "; sleep 2; while pgrep -qx '$prog'; do sleep 2; done")"
+	printf '%s\n' 'rc=$?'
 	test "$VM_BAKE_XEPHYR_WM" = none || printf '%s\n' 'kill "$wm" 2>/dev/null'
-	printf '%s\n' 'exit "$rc"'
+	printf '%s\n' 'kill "$xephyr" 2>/dev/null' 'wait "$xephyr" 2>/dev/null' 'exit "$rc"'
 }
