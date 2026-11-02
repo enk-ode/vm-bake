@@ -512,7 +512,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt dataset_destroy"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt dataset_destroy"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -786,8 +786,8 @@ test_guest_plan() {
   else
     fail "guest make plan: $plan"
   fi
-  if [ "$(run_vmbake guest start bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest stop bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "6" ]; then
-    pass "start and stop two lines, drop six"
+  if [ "$(run_vmbake guest start bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest stop bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "7" ]; then
+    pass "start and stop two lines, drop seven"
   else
     fail "guest start/stop/drop: $(run_vmbake guest drop bake)"
   fi

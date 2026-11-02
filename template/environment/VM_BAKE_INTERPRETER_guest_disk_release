@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest disk release), pinned to sudo sh: umount and mdconfig. Inspect first: vm-bake setintp guest_disk_release cat.

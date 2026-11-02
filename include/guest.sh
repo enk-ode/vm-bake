@@ -83,7 +83,7 @@ ___guest_stop1() {
 
 #@help ___guest_drop1
 # @command guest drop <guest>
-# @summary Remove the guest: it has a record; its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed, unbound told, its ssh host key forgotten
+# @summary Remove the guest: it has a record; whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed, unbound told, its ssh host key forgotten
 # @group   guest
 # @example vm-bake guest drop bake
 # @see     guest make
@@ -92,6 +92,7 @@ ___guest_stop1() {
 ___guest_drop1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link drop $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest disk release $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dataset destroy $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record remove $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dns write"
@@ -603,6 +604,21 @@ _guest_run1() {
 _guest_halt1() {
 	printf '%s\n' "vm stop $(sq "$1") || exit 1"
 	printf '%s\n' "printf '# guest %s: shutdown sent\\n' $(sq "$1") >&2"
+}
+
+#@help _guest_disk_release1
+# @command guest disk release <guest>
+# @summary Act terminal (root): whatever still holds the clone on this host let go -- its root unmounted from <guest>/mnt if mounted, an md attached to its disk0.img detached (a network or home write that died mid-way leaves both), nothing to do is a note
+# @group   guest
+# @internal
+# @see     guest drop
+# @env     VM_BAKE_GUEST_DIR  the guests' directory
+#@end
+_guest_disk_release1() {
+	local dir="$VM_BAKE_GUEST_DIR/$1" disk="$VM_BAKE_GUEST_DIR/$1/disk0.img"
+	printf '%s\n' "umount '$dir/mnt' 2>/dev/null; rmdir '$dir/mnt' 2>/dev/null; true"
+	printf '%s\n' "md=\$(mdconfig -lv | awk -v f='$disk' '\$4 == f { print \$1; exit }'); test -z \"\$md\" || mdconfig -d -u \"\${md#md}\" || exit 1"
+	printf '%s\n' "printf '# guest %s: released on the host%s\\n' '$1' \"\${md:+ (\$md detached)}\" >&2"
 }
 
 #@help _guest_dataset_destroy1
