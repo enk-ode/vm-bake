@@ -817,6 +817,60 @@ test_guest_plan() {
   fi
 }
 
+test_session_plan() {
+  test_header "sessions: ssh and x scripts rendered from the guest record and the template's display service; X11Forwarding follows the service"
+  test_setup
+  image_chain
+  run_vmbake template add freebsd-x freebsd-dev > /dev/null
+  run_vmbake template service add freebsd-x display x > /dev/null
+  run_vmbake template package add freebsd-x xauth > /dev/null
+  run_vmbake image record write freebsd-dev d > /dev/null
+  run_vmbake image record write freebsd-x x > /dev/null
+  run_vmbake guest record write d dalmatia 172.16.100.101/24 > /dev/null
+  run_vmbake guest record write x xenia 172.16.100.102/24 > /dev/null
+  printf 'ssh-ed25519 AAAATEST test@host\n' > "$TEST_DIR/key.pub"
+  run_vmbake setenv VM_BAKE_HOST_KEY "$TEST_DIR/key.pub" > /dev/null
+  local out
+  out=$(run_vmbake session create ssh dalmatia)
+  if printf '%s\n' "$out" | sed -n 1p | grep -q '^#!/bin/sh$' && printf '%s\n' "$out" | grep -q "^exec ssh -p 2222 -i '$TEST_DIR/key' .* '$(id -un)@dalmatia.local' \"\$@\"$"; then
+    pass "session create ssh: a script that execs ssh to <guest>.local on 2222 with the key"
+  else
+    fail "session ssh: $out"
+  fi
+  if run_vmbake session create ssh dalmatia 'claude --version' | grep -q "'$(id -un)@dalmatia.local' 'claude --version' \"\$@\"$"; then
+    pass "session create ssh with a program runs it in the guest"
+  else
+    fail "session ssh program: $(run_vmbake session create ssh dalmatia 'claude --version')"
+  fi
+  if run_vmbake session create x dalmatia idea | grep -q "lists no service 'display x'"; then
+    pass "session create x refuses a guest whose template lacks display x"
+  else
+    fail "session x guard: $(run_vmbake session create x dalmatia idea)"
+  fi
+  out=$(run_vmbake session create x xenia idea)
+  if printf '%s\n' "$out" | grep -q "^Xephyr :[0-9][0-9]* -screen '1600x1000' -dpi '96' -title 'xenia: idea' -resizeable -nolisten tcp &$" && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9][0-9]* ssh -X -p 2222 -i '$TEST_DIR/key' .* '$(id -un)@xenia.local' 'idea' \"\$@\"$" && printf '%s\n' "$out" | grep -q '^kill "$xephyr"'; then
+    pass "session create x: Xephyr compartment, ssh -X into it, Xephyr ends with the program"
+  else
+    fail "session x: $out"
+  fi
+  if run_vmbake session create x nobody idea | grep -q "unknown guest nobody"; then
+    pass "session create x refuses an unknown guest"
+  else
+    fail "session x unknown guest"
+  fi
+  if pin_image_cat; then
+    pass "image acts pinned to cat"
+  else
+    fail "acts not pinned -- not calling them"; return
+  fi
+  run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
+  if run_vmbake image ssh write x | grep -q '^X11Forwarding yes$' && ! run_vmbake image ssh write d | grep -q 'X11Forwarding'; then
+    pass "ssh write adds X11Forwarding only for a template with display x"
+  else
+    fail "ssh write x11: $(run_vmbake image ssh write x)"
+  fi
+}
+
 # ============================================================================
 
 parallel_main() {
@@ -883,6 +937,7 @@ main() {
   should_run_test test_image_emissions
   should_run_test test_image_record_lock_list
   should_run_test test_guest_plan
+  should_run_test test_session_plan
 
   test_summary
 }

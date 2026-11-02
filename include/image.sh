@@ -1072,20 +1072,31 @@ _image_doas_write1() {
 
 #@help _image_ssh_write1
 # @command image ssh write <image>
-# @summary Act terminal (root, host or builder): sshd_config of the image gets Port VM_BAKE_SSH_PORT, PermitRootLogin no, PasswordAuthentication no, KbdInteractiveAuthentication no (appended once; the host's pf passes that port into the guest network)
+# @summary Act terminal (root, host or builder): sshd_config of the image gets Port VM_BAKE_SSH_PORT, PermitRootLogin no, PasswordAuthentication no, KbdInteractiveAuthentication no, and X11Forwarding yes when the template's resolved services (read at generation time) list 'display x' (appended once; the host's pf passes that port into the guest network)
 # @group   image
 # @internal
 # @see     image burn
+# @see     session create x
 # @env     VM_BAKE_IMAGE_DIR  the image's directory
 # @env     VM_BAKE_SSH_PORT  the port sshd listens on in every guest of this image
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _image_ssh_write1() {
-	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" t="" cur="" chain="" p="" n=0 x11=no
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'display x' && x11=yes
 	printf '%s\n' "test -d '$mnt/etc/ssh' || { printf '# Error: no /etc/ssh in the image (image base first)\\n' >&2; exit 1; }"
 	printf '%s\n' "grep -q '^Port $VM_BAKE_SSH_PORT$' '$mnt/etc/ssh/sshd_config' || cat >> '$mnt/etc/ssh/sshd_config' <<'EOF_SSHD'"
 	printf '%s\n' "" "Port $VM_BAKE_SSH_PORT" "PermitRootLogin no" "PasswordAuthentication no" "KbdInteractiveAuthentication no"
+	test "$x11" = no || printf '%s\n' "X11Forwarding yes"
 	printf '%s\n' "EOF_SSHD"
-	printf '%s\n' "printf '# image %s: sshd on port %s, keys only, no root\\n' '$1' '$VM_BAKE_SSH_PORT' >&2"
+	printf '%s\n' "printf '# image %s: sshd on port %s, keys only, no root, X11 forwarding %s\\n' '$1' '$VM_BAKE_SSH_PORT' '$x11' >&2"
 }
 
 #@help _image_pkg_report1

@@ -1,4 +1,4 @@
-database.sh help.sh helpenv.sh intp.sh template.sh image.sh guest.sh
+database.sh help.sh helpenv.sh intp.sh template.sh image.sh guest.sh session.sh
 # @summary Modules preloaded at startup (engine.sh is always loaded first)
 # Without a database the built-in minimal default applies (database.sh
 # help.sh -- the no-DB commands bootstrap and help); every other module is

@@ -147,3 +147,28 @@ is how the builder's user escalates. `image builder use` sets
 `ssh ... doas sh`, one setintp line each; `image builder leave` takes them
 back. The emissions are the same on both sides: the interpreter decides
 where they run.
+
+## The session
+
+A session is a client script, printed by `session create`, kept wherever you
+like. `ssh` opens a terminal in the guest, `x` opens a Xephyr compartment on
+the host's display and runs one program of the guest inside it over
+`ssh -X`, so the program's windows never touch the host's own X server:
+
+    vm-bake template add freebsd-x freebsd-dev
+    vm-bake template service add freebsd-x display x
+    vm-bake template package add freebsd-x xauth
+    vm-bake template package add freebsd-x intellij
+    vm-bake image make freebsd freebsd-x
+    vm-bake guest make freebsd-x-20261102 xenia 172.16.100.102/24
+    vm-bake session create ssh xenia > ~/bin/xenia && chmod +x ~/bin/xenia
+    vm-bake session create x xenia idea > ~/bin/xenia-idea && chmod +x ~/bin/xenia-idea
+
+The service `display x` gives the image `X11Forwarding yes` in sshd at bake
+time; the template lists `xauth` itself. The host needs the package
+`xephyr`. The compartment takes `VM_BAKE_XEPHYR_SCREEN` and
+`VM_BAKE_XEPHYR_DPI`; its display number is the first free one from
+`VM_BAKE_XEPHYR_FIRST`, read when the script is made. A separate X server
+per compartment is the isolation: the guest's program sees only its
+Xephyr, and the clipboard between host and compartment is the broker
+service still to come.

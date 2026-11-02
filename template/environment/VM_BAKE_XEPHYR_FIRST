@@ -1,0 +1,2 @@
+10
+# @summary Lowest X display number a compartment may take; session create x reads /tmp/.X11-unix at generation time and takes the first free number from here.
