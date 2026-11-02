@@ -512,7 +512,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop network_write dns_write knownhosts_drop run halt dataset_destroy"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt dataset_destroy"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -781,8 +781,8 @@ test_guest_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake guest make b bake 172.16.100.250/24)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "14" ] && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest link write 'bake'" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 14p | grep -q "guest knownhosts drop 'bake'"; then
-    pass "guest make: image checked, name, free, address, tree, switch, record, clone, conf, link, network, dns, known hosts"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "18" ] && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest hostkey ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest hostkey write 'bake'" && printf '%s\n' "$plan" | grep -q "guest link write 'bake'" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 18p | grep -q "guest knownhosts drop 'bake'"; then
+    pass "guest make: image checked, name, free, address, homes, tree, switch, record, host key, clone, conf, link, network, home, host key, dns, known hosts"
   else
     fail "guest make plan: $plan"
   fi
@@ -1089,6 +1089,56 @@ test_env_plan() {
   fi
 }
 
+test_home_plan() {
+  test_header "home paths: the template family, checked and seeded into the clone at guest make"
+  test_setup
+  image_chain
+  run_vmbake template add freebsd-x freebsd-dev > /dev/null
+  if run_vmbake template home add freebsd-x .themes/NsCDE | grep -q "home + .themes/NsCDE" && run_vmbake template home add freebsd-x /etc/passwd | grep -q "invalid path" && run_vmbake template home add freebsd-x ../x | grep -q "invalid path" && run_vmbake template home show freebsd-x | grep -q "^#   freebsd-x  *.themes/NsCDE"; then
+    pass "template home add takes a plain relative path, show lists it"
+  else
+    fail "template home: $(run_vmbake template home show freebsd-x)"
+  fi
+  run_vmbake template home add freebsd-dev .config/gtk-3.0 > /dev/null
+  run_vmbake image record write freebsd-x x > /dev/null
+  run_vmbake image record write freebsd-builder b > /dev/null
+  run_vmbake guest record write x caledonia 172.16.100.102/24 > /dev/null
+  run_vmbake guest record write b bake 172.16.100.254/24 > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  local plan
+  plan=$(run_vmbake guest make x caledonia 172.16.100.102/24)
+  if printf '%s\n' "$plan" | grep -q "guest check homes 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest home write 'caledonia'" && printf '%s\n' "$plan" | grep -n "guest network write\|guest home write" | sed -n 2p | grep -q "home write"; then
+    pass "guest make checks the home paths and seeds them after the network"
+  else
+    fail "guest make plan: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake template home add freebsd-x .no-such-dir-vmbake/x > /dev/null
+  if run_vmbake guest check homes caledonia | grep -q "home path missing under $HOME: .no-such-dir-vmbake/x" && run_vmbake template home drop freebsd-x .no-such-dir-vmbake/x > /dev/null && [ -z "$(run_vmbake guest check homes caledonia | grep -v themes)" ]; then
+    pass "check homes names a path the host's home lacks"
+  else
+    fail "check homes: $(run_vmbake guest check homes caledonia)"
+  fi
+  if pin_image_cat; then
+    pass "guest acts pinned to cat"
+  else
+    fail "acts not pinned -- not calling them"; return
+  fi
+  local out
+  out=$(run_vmbake guest home write caledonia)
+  if printf '%s\n' "$out" | grep -q "mount '/dev/gpt/x-root' '/data/vm/vm-bake/guest/caledonia/mnt'" && printf '%s\n' "$out" | grep -q "cp -R '$HOME/.themes/NsCDE' '/data/vm/vm-bake/guest/caledonia/mnt/home/$(id -un)/.themes/NsCDE'" && printf '%s\n' "$out" | grep -q "cp -R '$HOME/.config/gtk-3.0' " && printf '%s\n' "$out" | grep -q "chown -R '$(id -u)':\"\$g\" '/data/vm/vm-bake/guest/caledonia/mnt/home/$(id -un)/.themes'" && printf '%s\n' "$out" | grep -q 'mdconfig -d -u'; then
+    pass "home write mounts the clone, copies every path into every user's home with the right owner, detaches"
+  else
+    fail "home write: $out"
+  fi
+  if run_vmbake guest home write bake | grep -q "nothing seeded"; then
+    pass "a template without home paths seeds nothing"
+  else
+    fail "home write empty: $(run_vmbake guest home write bake)"
+  fi
+}
+
 # ============================================================================
 
 parallel_main() {
@@ -1160,6 +1210,7 @@ main() {
   should_run_test test_pkgfile_plan
   should_run_test test_tag_plan
   should_run_test test_env_plan
+  should_run_test test_home_plan
 
   test_summary
 }

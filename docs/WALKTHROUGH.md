@@ -209,3 +209,17 @@ pattern over the resolved tags, from the records, without starting anything:
     vm-bake guest tag add caledonia owner JB
     vm-bake guest tag show caledonia
     vm-bake guest find can intellij
+
+## Homes and host keys
+
+What a guest carries in its users' homes is a list of the template:
+`template home add <template> <path>` names a path of your own home
+(relative: `.themes/NsCDE`, `.config/gtk-3.0`), and `guest make` copies it
+into the home of every user of the template, offline through the clone's
+disk, owned by that user. A rebuilt guest gets the files again. The guest's
+ssh host key is part of its record (`guest/<guest>/ssh_host_ed25519_key`,
+made once) and installed into every clone, so the host's known_hosts stays
+right across rebuilds.
+
+    vm-bake template home add freebsd-x .themes/NsCDE
+    vm-bake template home show freebsd-x

@@ -47,7 +47,7 @@
 #@end
 
 TEMPLATE_LAYOUT=""
-TEMPLATE_FAMILIES="package pkgfile port rc env user service forbid data session tag"
+TEMPLATE_FAMILIES="package pkgfile port rc env user home service forbid data session tag"
 TEMPLATE_LEAVES="base bake firmware resource"
 
 #@help _template_list0
@@ -943,6 +943,76 @@ ___template_env_mask3() {
 ___template_env_show1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") env"
+}
+
+#@help ___template_home_add2
+# @command template home add <template> <path>
+# @summary Add a path of the invoking user's home (its path from the user name, the batch environment carries no HOME; relative, e.g. .themes/NsCDE or .config/gtk-3.0) that every guest of this template gets copied into the home of each of its users at 'guest make': the template exists, the path is relative and plain; then 'template line append'
+# @group   template
+# @example vm-bake template home add freebsd-x .themes/NsCDE
+# @see     template home drop
+# @see     template home show
+# @see     guest make
+#@end
+___template_home_add2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") home $(sq "$2")"
+}
+
+#@help __template_home_valid1
+# @command template home valid <path>
+# @summary The path is relative to a home, plain ([A-Za-z0-9_.+/-]), without .. and not ending in a slash: a comment line, else an error line
+# @group   template
+# @internal
+# @see     template home add
+#@end
+__template_home_valid1() {
+	local ok=yes
+	case "$1" in ""|/*|*/|..|../*|*/..|*/../*|*[!A-Za-z0-9_.+/-]*) ok=no ;; esac
+	if test "$ok" = yes; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "home path $1 valid")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template home: invalid path $1 (relative to the home, plain, no ..)")"
+	fi
+}
+
+#@help ___template_home_drop2
+# @command template home drop <template> <path>
+# @summary Remove a home path from the template's own list: the template exists, the path is listed there; then 'template line remove'
+# @group   template
+# @example vm-bake template home drop freebsd-x .themes/NsCDE
+# @see     template home add
+#@end
+___template_home_drop2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") home $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") home $(sq "$2")"
+}
+
+#@help ___template_home_mask2
+# @command template home mask <template> <path>
+# @summary Hide an inherited home path in this template and below: the template exists, the path is valid; then 'template line mask'
+# @group   template
+# @example vm-bake template home mask freebsd-x .themes/NsCDE
+# @see     template home drop
+#@end
+___template_home_mask2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") home $(sq "$2")"
+}
+
+#@help ___template_home_show1
+# @command template home show <template>
+# @summary The home paths resolved over the chain, each with its origin template: the template exists; then 'template chain table'
+# @group   template
+# @example vm-bake template home show freebsd-x
+# @see     template show
+#@end
+___template_home_show1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") home"
 }
 
 #@help ___template_rc_add3

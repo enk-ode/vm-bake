@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest home write), pinned to sudo sh: md, mount and chown into the clone. Inspect first: vm-bake setintp guest_home_write cat.

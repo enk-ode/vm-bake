@@ -28,7 +28,7 @@
 
 #@help ___guest_make3
 # @command guest make <image> <guest> <address>
-# @summary Make a guest from a sealed image: the image has a record and a digest, the guest name is a record name and free; then the switch ensured, the record, the clone of @image, the configuration, the network written into the clone, the host's unbound told the name, the guest's old ssh host key forgotten
+# @summary Make a guest from a sealed image: the image has a record and a digest, the guest name is a record name and free; then the switch ensured, the record, the clone of @image, the configuration, the network written into the clone, the template's home paths seeded into the users' homes, the guest's own ssh host key (kept in its record across rebuilds) installed, the host's unbound told the name
 # @group   guest
 # @example vm-bake guest make freebsd-builder-20261101 bake 172.16.100.250/24
 # @see     guest start
@@ -41,13 +41,17 @@ ___guest_make3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest name valid $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check absent $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest address valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check homes $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image tree ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest switch ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record write $(sq "$1") $(sq "$2") $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey ensure $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest clone $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest conf write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest network write $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest home write $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dns write"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest knownhosts drop $(sq "$2")"
 }
@@ -461,6 +465,109 @@ _guest_find2() {
 		test -z "$hit" || { printf '%s\n' "$hit" | sed "s/^#   /#   $(printf '%-12s %-26s' "$g" "$img") /"; found=$((found + 1)); }
 	done
 	test "$found" -gt 0 || printf '%s\n' "#   (none)"
+}
+
+#@help __guest_check_homes1
+# @command guest check homes <guest>
+# @summary Every home path of the image's template (read at generation time over the chain) exists under the invoking user's home: a comment line, else an error line naming the missing one
+# @group   guest
+# @internal
+# @see     guest make
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+__guest_check_homes1() {
+	local img="" t="" cur="" chain="" p="" n=0 h="" paths="" missing="" home=""
+	eval "home=~$(id -un)"
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	paths=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	for h in $paths; do test -e "$home/$h" || missing="$missing $h"; done
+	if test -z "$missing"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1: home paths present ($(printf '%s' "$paths" | tr '\n' ' '))")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest make: home path missing under $home:$missing")"
+	fi
+}
+
+#@help _guest_home_write1
+# @command guest home write <guest>
+# @summary Act terminal (root): the clone's disk0.img attached as md, its root mounted by the image's label, then every home path of the template (read at generation time) copied from the invoking user's home into the home of every user of the template, owned by that user (uid from the template, host uid for 'host', gid from the image's group file), unmounted and detached -- the guest has no root, the host seeds its homes
+# @group   guest
+# @internal
+# @see     guest make
+# @see     template home add
+# @env     VM_BAKE_GUEST_DIR  the guests' directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_home_write1() {
+	local img="" t="" cur="" chain="" p="" n=0 paths="" users="" disk="$VM_BAKE_GUEST_DIR/$1/disk0.img" mnt="$VM_BAKE_GUEST_DIR/$1/mnt" h="" line="" u="" s="" uid="" home=""
+	eval "home=~$(id -un)"
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	paths=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -n "$paths" && test -n "$users" || { emit_note "guest $1: no home paths or no users in the template, nothing seeded"; return 0; }
+	printf '%s\n' "md=\$(mdconfig -a -t vnode -f '$disk') || exit 1"
+	printf '%s\n' "mkdir -p '$mnt' && mount '/dev/gpt/$img-root' '$mnt' || { mdconfig -d -u \"\${md#md}\"; exit 1; }"
+	IFS='
+'; set -- $users; IFS='
+'
+	for line; do
+		u=${line%% *}; s=${line#* }; uid=$s
+		test "$s" != host || uid=$(id -u "$u" 2>/dev/null || true)
+		printf '%s\n' "g=\$(awk -F: -v u=$(sq "$u") '\$1 == u { print \$3 }' '$mnt/etc/group'); test -n \"\$g\" || { printf '# Error: no group %s in the image\\n' $(sq "$u") >&2; exit 1; }"
+		for h in $paths; do
+			printf '%s\n' "mkdir -p \"\$(dirname '$mnt/home/$u/$h')\" && cp -R '$home/$h' '$mnt/home/$u/$h' && chown -R $(sq "$uid"):\"\$g\" '$mnt/home/$u/${h%%/*}' || exit 1"
+			printf '%s\n' "printf '# guest %s: %s -> home of %s\\n' '$1' '$h' $(sq "$u") >&2"
+		done
+	done
+	printf '%s\n' "umount '$mnt' && rmdir '$mnt' && mdconfig -d -u \"\${md#md}\" || exit 1"
+}
+
+#@help _guest_hostkey_ensure1
+# @command guest hostkey ensure <guest>
+# @summary Act terminal: the guest's ssh host key lives in its record (guest/<guest>/ssh_host_ed25519_key, made once with ssh-keygen, 0600) and survives every rebuild of the guest, so the host's known_hosts stays right; an existing key is kept
+# @group   guest
+# @internal
+# @see     guest make
+# @see     guest hostkey write
+#@end
+_guest_hostkey_ensure1() {
+	local k="$VM_BAKE_BASE/guest/$1/ssh_host_ed25519_key"
+	printf '%s\n' "test -f '$k' || ssh-keygen -q -t ed25519 -N '' -C 'vm-bake guest $1' -f '$k' || exit 1"
+	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$k' '$k.pub'"
+	printf '%s\n' "printf '# guest %s: host key %s\\n' '$1' \"\$(ssh-keygen -l -f '$k.pub' | cut -d' ' -f2)\" >&2"
+}
+
+#@help _guest_hostkey_write1
+# @command guest hostkey write <guest>
+# @summary Act terminal (root): the clone's disk0.img attached as md, its root mounted by the image's label, the guest's host key from the record written to /etc/ssh/ssh_host_ed25519_key (root, 0600; the public half 0644), unmounted and detached -- sshd in the guest uses it from the first boot, the other key types it makes itself
+# @group   guest
+# @internal
+# @see     guest make
+# @see     guest hostkey ensure
+# @env     VM_BAKE_GUEST_DIR  the guests' directory
+#@end
+_guest_hostkey_write1() {
+	local img="" k="$VM_BAKE_BASE/guest/$1/ssh_host_ed25519_key" disk="$VM_BAKE_GUEST_DIR/$1/disk0.img" mnt="$VM_BAKE_GUEST_DIR/$1/mnt"
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	printf '%s\n' "md=\$(mdconfig -a -t vnode -f '$disk') || exit 1"
+	printf '%s\n' "mkdir -p '$mnt' && mount '/dev/gpt/$img-root' '$mnt' || { mdconfig -d -u \"\${md#md}\"; exit 1; }"
+	printf '%s\n' "install -m 600 -o root -g wheel '$k' '$mnt/etc/ssh/ssh_host_ed25519_key' && install -m 644 -o root -g wheel '$k.pub' '$mnt/etc/ssh/ssh_host_ed25519_key.pub' || { umount '$mnt'; mdconfig -d -u \"\${md#md}\"; exit 1; }"
+	printf '%s\n' "umount '$mnt' && rmdir '$mnt' && mdconfig -d -u \"\${md#md}\" || exit 1"
+	printf '%s\n' "printf '# guest %s: host key installed\\n' '$1' >&2"
 }
 
 #@help _guest_knownhosts_drop1

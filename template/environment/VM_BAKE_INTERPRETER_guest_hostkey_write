@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest hostkey write), pinned to sudo sh: md, mount and install into the clone's /etc/ssh. Inspect first: vm-bake setintp guest_hostkey_write cat.
