@@ -418,7 +418,7 @@ ___image_builder_leave0() {
 
 #@help ___image_builder_start1
 # @command image builder start <image>
-# @summary Start the builder guest with the image's disk as its second disk: the builder guest has a record (guest make); its configuration written with the disk, 'vm start', then wait until it answers ssh
+# @summary Start the builder guest with the image's disk as its second disk: the builder guest has a record (guest make) and is not running; its configuration written with the disk, 'vm start', then wait until it answers ssh
 # @group   image
 # @example vm-bake image builder start freebsd-dev-20261101
 # @see     image builder stop
@@ -427,6 +427,7 @@ ___image_builder_leave0() {
 #@end
 ___image_builder_start1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$VM_BAKE_BUILDER")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check stopped $(sq "$VM_BAKE_BUILDER")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image builder conf write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest start $(sq "$VM_BAKE_BUILDER")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image builder wait"

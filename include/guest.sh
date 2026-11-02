@@ -83,7 +83,7 @@ ___guest_stop1() {
 
 #@help ___guest_drop1
 # @command guest drop <guest>
-# @summary Remove the guest: it has a record; whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed, unbound told, its ssh host key forgotten
+# @summary Remove the guest: it has a record and is not running (vm-bhyve's run.lock); whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed, unbound told, its ssh host key forgotten
 # @group   guest
 # @example vm-bake guest drop bake
 # @see     guest make
@@ -91,6 +91,7 @@ ___guest_stop1() {
 #@end
 ___guest_drop1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check stopped $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link drop $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest disk release $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dataset destroy $(sq "$1")"
@@ -148,6 +149,23 @@ __guest_check_absent1() {
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1 is free")"
 	else
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest make: $1 exists (record guest/$1 or $VM_BAKE_GUEST_DIR/$1); guest drop removes it")"
+	fi
+}
+
+#@help __guest_check_stopped1
+# @command guest check stopped <guest>
+# @summary The guest is not running by vm-bhyve's own mark, no run.lock in its directory (readable without root, where the bhyve process is not): a comment line, else an error line -- guest stop first
+# @group   guest
+# @internal
+# @see     guest drop
+# @see     guest stop
+# @env     VM_BAKE_GUEST_DIR  the guests' directory
+#@end
+__guest_check_stopped1() {
+	if test ! -e "$VM_BAKE_GUEST_DIR/$1/run.lock"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1 is not running")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest $1 is running (run.lock in $VM_BAKE_GUEST_DIR/$1): guest stop $1 first, then wait for bhyve to leave")"
 	fi
 }
 
