@@ -848,8 +848,8 @@ test_session_plan() {
     fail "session x guard: $(run_vmbake session create x dalmatia idea)"
   fi
   out=$(run_vmbake session create x xenia idea)
-  if printf '%s\n' "$out" | grep -q "^Xephyr :[0-9][0-9]* -screen '1600x1000' -dpi '96' -title 'xenia: idea' -resizeable -nolisten tcp &$" && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9][0-9]* ssh -X -p 2222 -i '$TEST_DIR/key' .* '$(id -un)@xenia.local' 'idea' \"\$@\"$" && printf '%s\n' "$out" | grep -q '^kill "$xephyr"'; then
-    pass "session create x: Xephyr compartment, ssh -X into it, Xephyr ends with the program"
+  if printf '%s\n' "$out" | grep -q "^Xephyr :[0-9][0-9]* -screen '1600x1000' -dpi '96' -title 'xenia: idea' -resizeable -nolisten tcp &$" && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9][0-9]* ssh -X -p 2222 -i '$TEST_DIR/key' .* '$(id -un)@xenia.local' 'idea' \"\$@\"$" && printf '%s\n' "$out" | grep -q '^wait "$xephyr"'; then
+    pass "session create x: Xephyr compartment, ssh -X into it, the compartment stays until closed"
   else
     fail "session x: $out"
   fi
@@ -980,6 +980,60 @@ test_pkgfile_plan() {
   fi
 }
 
+test_tag_plan() {
+  test_header "tags: the template family inherited and masked, the guest's own tags, find over both"
+  test_setup
+  image_chain
+  run_vmbake template tag add freebsd-dev purpose 'development on FreeBSD with Claude Code' > /dev/null
+  run_vmbake template tag add freebsd-dev can claude > /dev/null
+  run_vmbake template add freebsd-x freebsd-dev > /dev/null
+  run_vmbake template tag add freebsd-x can intellij > /dev/null
+  run_vmbake template tag add freebsd-x can vscode > /dev/null
+  if run_vmbake template tag show freebsd-x | grep -q "^#   freebsd-dev  *purpose development on FreeBSD with Claude Code" && run_vmbake template tag show freebsd-x | grep -q "^#   freebsd-x  *can intellij" && run_vmbake template tag add freebsd-x 'bad key' x | grep -q "not a plain word"; then
+    pass "template tag add stores key and text, show resolves the chain with origins, the key is a word"
+  else
+    fail "template tag show: $(run_vmbake template tag show freebsd-x)"
+  fi
+  run_vmbake template tag mask freebsd-x can claude > /dev/null
+  run_vmbake template tag drop freebsd-x can vscode > /dev/null
+  if ! run_vmbake template tag show freebsd-x | grep -q "can claude" && ! run_vmbake template tag show freebsd-x | grep -q "can vscode" && run_vmbake template tag show freebsd-dev | grep -q "can claude"; then
+    pass "mask hides the inherited tag below, drop removes the own one"
+  else
+    fail "tag mask/drop: $(run_vmbake template tag show freebsd-x)"
+  fi
+  if run_vmbake template find can intellij | grep -q "^#   freebsd-x  *freebsd-x  *can intellij" && run_vmbake template find can claude | grep -q "^#   freebsd-dev " && ! run_vmbake template find can claude | grep -q "^#   freebsd-x " && run_vmbake template find owner . | grep -q "(none)"; then
+    pass "template find matches key and pattern over the resolved tags, masks respected"
+  else
+    fail "template find: $(run_vmbake template find can intellij; run_vmbake template find can claude)"
+  fi
+  run_vmbake image record write freebsd-x x > /dev/null
+  run_vmbake image record write freebsd-dev d > /dev/null
+  run_vmbake guest record write x caledonia 172.16.100.102/24 > /dev/null
+  run_vmbake guest record write d dalmatia 172.16.100.101/24 > /dev/null
+  run_vmbake guest tag add caledonia owner JB > /dev/null
+  run_vmbake guest tag add caledonia note 'first X guest' > /dev/null
+  if run_vmbake guest tag show caledonia | grep -q "^#   caledonia  *owner JB" && run_vmbake guest tag show caledonia | grep -q "^#   freebsd-x  *can intellij" && run_vmbake guest tag show caledonia | grep -q "^#   freebsd-dev  *purpose "; then
+    pass "guest tag show lists own tags and the template's with origins"
+  else
+    fail "guest tag show: $(run_vmbake guest tag show caledonia)"
+  fi
+  if run_vmbake guest tag drop caledonia owner XX | grep -q "no own tag" && run_vmbake guest tag drop caledonia owner JB > /dev/null && ! run_vmbake guest tag show caledonia | grep -q "owner JB"; then
+    pass "guest tag drop removes an own tag and refuses an unknown one"
+  else
+    fail "guest tag drop: $(run_vmbake guest tag show caledonia)"
+  fi
+  if run_vmbake guest find can intellij | grep -q "^#   caledonia  *x  *freebsd-x  *can intellij" && ! run_vmbake guest find can intellij | grep -q dalmatia && run_vmbake guest find purpose claude | grep -q caledonia && run_vmbake guest find purpose claude | grep -q dalmatia && run_vmbake guest find note 'first' | grep -q "^#   caledonia  *x  *caledonia  *note first X guest"; then
+    pass "guest find answers from own and inherited tags, by key and pattern"
+  else
+    fail "guest find: $(run_vmbake guest find can intellij; run_vmbake guest find purpose claude)"
+  fi
+  if run_vmbake template dump freebsd-x | grep -q "template tag add 'freebsd-x' 'can' 'intellij'"; then
+    pass "the dump replays tag add with key and text"
+  else
+    fail "dump tags: $(run_vmbake template dump freebsd-x | grep tag)"
+  fi
+}
+
 # ============================================================================
 
 parallel_main() {
@@ -1049,6 +1103,7 @@ main() {
   should_run_test test_session_plan
   should_run_test test_port_plan
   should_run_test test_pkgfile_plan
+  should_run_test test_tag_plan
 
   test_summary
 }

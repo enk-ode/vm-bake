@@ -32,6 +32,8 @@
 # @defcompletion disk          none
 # @defcompletion package       none
 # @defcompletion origin       none
+# @defcompletion key          none
+# @defcompletion pattern      none
 # @defcompletion variable      none
 # @defcompletion variant       none
 # @defcompletion argument      none
@@ -45,7 +47,7 @@
 #@end
 
 TEMPLATE_LAYOUT=""
-TEMPLATE_FAMILIES="package pkgfile port rc user service forbid data session"
+TEMPLATE_FAMILIES="package pkgfile port rc user service forbid data session tag"
 TEMPLATE_LEAVES="base bake firmware resource"
 
 #@help _template_list0
@@ -807,6 +809,86 @@ ___template_pkgfile_mask2() {
 ___template_pkgfile_show1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") pkgfile"
+}
+
+#@help ___template_tag_add3
+# @command template tag add <template> <key> <text>
+# @summary Add a tag to the template's own list, a key and a text, inherited like every list (purpose, task, owner, can ... -- the keys are yours): the template exists, the key is a word; then 'template line append'. 'template find' and 'guest find' search them
+# @group   template
+# @example vm-bake template tag add freebsd-dev purpose 'development on FreeBSD with Claude Code'
+# @example vm-bake template tag add freebsd-x can intellij
+# @see     template tag drop
+# @see     template tag show
+# @see     template find
+#@end
+___template_tag_add3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") tag $(sq "$2 $3")"
+}
+
+#@help ___template_tag_drop3
+# @command template tag drop <template> <key> <text>
+# @summary Remove a tag from the template's own list: the template exists, the line is listed there; then 'template line remove'
+# @group   template
+# @example vm-bake template tag drop freebsd-x can intellij
+# @see     template tag add
+#@end
+___template_tag_drop3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") tag $(sq "$2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") tag $(sq "$2 $3")"
+}
+
+#@help ___template_tag_mask3
+# @command template tag mask <template> <key> <text>
+# @summary Hide an inherited tag in this template and below: the template exists, the key is a word; then 'template line mask'
+# @group   template
+# @example vm-bake template tag mask freebsd-x can emacs
+# @see     template tag drop
+#@end
+___template_tag_mask3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") tag $(sq "$2 $3")"
+}
+
+#@help ___template_tag_show1
+# @command template tag show <template>
+# @summary The tags resolved over the chain, each with its origin template: the template exists; then 'template chain table'
+# @group   template
+# @example vm-bake template tag show freebsd-x
+# @see     template show
+#@end
+___template_tag_show1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") tag"
+}
+
+#@help _template_find2
+# @command template find <key> <pattern>
+# @summary Display terminal: every template whose resolved tags (read over its chain) hold the key with a text matching the pattern (a case-insensitive grep pattern; '.' for any): one line per hit, template, origin of the tag, the tag
+# @group   template
+# @example vm-bake template find can intellij
+# @example vm-bake template find purpose .
+# @see     template tag add
+# @see     guest find
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_template_find2() {
+	local d="" t="" cur="" chain="" p="" n=0 hit="" found=0
+	printf '# templates with tag %s ~ %s (template  origin  tag)\n' "$1" "$2"
+	for d in "$VM_BAKE_BASE"/template/*/; do
+		t=$(basename "$d"); cur=$t; chain=""; n=0
+		while test "$cur" != empty && test "$n" -lt 32; do
+			chain="$cur${chain:+ $chain}"
+			IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+			cur=$p; n=$((n + 1))
+		done
+		hit=$(awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | awk -v k="$1" '$3 == k' | grep -i -- "$2" || true)
+		test -z "$hit" || { printf '%s\n' "$hit" | sed "s/^#   /#   $(printf '%-16s' "$t") /"; found=$((found + 1)); }
+	done
+	test "$found" -gt 0 || printf '%s\n' "#   (none)"
 }
 
 #@help ___template_rc_add3

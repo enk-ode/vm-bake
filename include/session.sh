@@ -122,7 +122,7 @@ _session_script_ssh2() {
 
 #@help _session_script_x3
 # @command session script x <guest> <program> <display>
-# @summary Display terminal: the compartment script -- Xephyr on :<display> with VM_BAKE_XEPHYR_SCREEN and VM_BAKE_XEPHYR_DPI, titled after guest and program, resizeable; then ssh -X into the guest with DISPLAY set to the compartment, running the program; Xephyr ends with the program
+# @summary Display terminal: the compartment script -- Xephyr on :<display> with VM_BAKE_XEPHYR_SCREEN and VM_BAKE_XEPHYR_DPI, titled after guest and program, resizeable; then ssh -X into the guest with DISPLAY set to the compartment, running the program; the compartment stays until you close it (programs like code-oss detach and return at once), on an ssh error it is closed
 # @group   session
 # @internal
 # @see     session create x
@@ -140,5 +140,5 @@ _session_script_x3() {
 	printf '%s\n' 'xephyr=$!'
 	printf '%s\n' "n=0; until test -e '/tmp/.X11-unix/X$3' || test \"\$n\" -ge 50; do n=\$((n + 1)); sleep 0.1; done"
 	printf '%s\n' "DISPLAY=:$3 ssh -X -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
-	printf '%s\n' 'rc=$?' 'kill "$xephyr" 2>/dev/null' 'exit "$rc"'
+	printf '%s\n' 'rc=$?' 'test "$rc" -eq 0 || kill "$xephyr" 2>/dev/null' 'wait "$xephyr"' 'exit "$rc"'
 }

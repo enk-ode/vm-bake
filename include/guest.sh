@@ -327,6 +327,142 @@ _guest_link_drop1() {
 	printf '%s\n' "printf '# guest %s: link in %s removed\\n' '$1' '$VM_BAKE_VM_DIR' >&2"
 }
 
+#@help ___guest_tag_add3
+# @command guest tag add <guest> <key> <text>
+# @summary Add a tag to the guest's own list (what belongs to this guest, not its template: owner, note, ...): the guest has a record, the key is a word; then 'guest tag append'. 'guest tag show' lists own and inherited tags, 'guest find' searches both
+# @group   guest
+# @example vm-bake guest tag add caledonia owner JB
+# @see     guest tag drop
+# @see     guest tag show
+# @see     guest find
+#@end
+___guest_tag_add3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest tag append $(sq "$1") $(sq "$2 $3")"
+}
+
+#@help ___guest_tag_drop3
+# @command guest tag drop <guest> <key> <text>
+# @summary Remove a tag from the guest's own list: the guest has a record, the line is listed; then 'guest tag remove'
+# @group   guest
+# @example vm-bake guest tag drop caledonia owner JB
+# @see     guest tag add
+#@end
+___guest_tag_drop3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest tag listed $(sq "$1") $(sq "$2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest tag remove $(sq "$1") $(sq "$2 $3")"
+}
+
+#@help ___guest_tag_show1
+# @command guest tag show <guest>
+# @summary The guest's own tags and the tags inherited from its image's template, each with its origin: the guest has a record; then 'guest tag table'
+# @group   guest
+# @example vm-bake guest tag show caledonia
+# @see     guest tag add
+#@end
+___guest_tag_show1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest tag table $(sq "$1")"
+}
+
+#@help __guest_tag_listed2
+# @command guest tag listed <guest> <line>
+# @summary The line is in the guest's own tag list: a comment line, else an error line (an inherited tag is the template's: template tag mask there)
+# @group   guest
+# @internal
+# @see     guest tag drop
+#@end
+__guest_tag_listed2() {
+	if grep -qxF "$2" "$VM_BAKE_BASE/guest/$1/tag" 2>/dev/null; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1: tag $2 listed")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest tag drop: $1 has no own tag '$2' (guest tag show $1; an inherited tag is masked in the template)")"
+	fi
+}
+
+#@help _guest_tag_append2
+# @command guest tag append <guest> <line>
+# @summary Act terminal: the line appended to guest/<guest>/tag unless listed (0600)
+# @group   guest
+# @internal
+# @see     guest tag add
+#@end
+_guest_tag_append2() {
+	local f="$VM_BAKE_BASE/guest/$1/tag"
+	printf '%s\n' "grep -qxF $(sq "$2") '$f' 2>/dev/null || printf '%s\\n' $(sq "$2") >> '$f'"
+	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$f'"
+	printf '%s\n' "printf '# guest %s: tag + %s\\n' '$1' $(sq "$2") >&2"
+}
+
+#@help _guest_tag_remove2
+# @command guest tag remove <guest> <line>
+# @summary Act terminal: the line removed from guest/<guest>/tag
+# @group   guest
+# @internal
+# @see     guest tag drop
+#@end
+_guest_tag_remove2() {
+	local f="$VM_BAKE_BASE/guest/$1/tag"
+	printf '%s\n' "{ grep -vxF $(sq "$2") '$f' > '$f.new' || true; } && mv -f '$f.new' '$f'"
+	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$f'"
+	printf '%s\n' "printf '# guest %s: tag - %s\\n' '$1' $(sq "$2") >&2"
+}
+
+#@help _guest_tag_table1
+# @command guest tag table <guest>
+# @summary Display terminal: the guest's own tags (origin: the guest) and the resolved tags of its image's template (origin: the template they come from)
+# @group   guest
+# @internal
+# @see     guest tag show
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_tag_table1() {
+	local img="" t="" cur="" chain="" p="" n=0 line=""
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	printf '# tags of guest %s (origin  tag)\n' "$1"
+	while IFS= read -r line; do test -z "$line" || printf '#   %-16s %s\n' "$1" "$line"; done < "$VM_BAKE_BASE/guest/$1/tag" 2>/dev/null
+	awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -v '(none)' || true
+}
+
+#@help _guest_find2
+# @command guest find <key> <pattern>
+# @summary Display terminal: every guest whose tags, own or inherited from its image's template, hold the key with a text matching the pattern (case-insensitive grep pattern; '.' for any): one line per hit, guest, image, origin, the tag -- answered from the records, no guest is started
+# @group   guest
+# @example vm-bake guest find can intellij
+# @example vm-bake guest find purpose .
+# @see     guest tag add
+# @see     template find
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_find2() {
+	local d="" g="" img="" t="" cur="" chain="" p="" n=0 own="" hit="" found=0
+	printf '# guests with tag %s ~ %s (guest  image  origin  tag)\n' "$1" "$2"
+	for d in "$VM_BAKE_BASE"/guest/*/; do
+		g=$(basename "$d"); test -f "$d/image" || continue
+		IFS= read -r img < "$d/image"
+		IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+		cur=$t; chain=""; n=0
+		while test "$cur" != empty && test "$n" -lt 32; do
+			chain="$cur${chain:+ $chain}"
+			IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+			cur=$p; n=$((n + 1))
+		done
+		own=$(awk -v g="$g" '{ printf "#   %-16s %s\n", g, $0 }' "$d/tag" 2>/dev/null || true)
+		hit=$( { printf '%s\n' "$own"; awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk"; } | awk -v k="$1" '$3 == k' | grep -i -- "$2" || true)
+		test -z "$hit" || { printf '%s\n' "$hit" | sed "s/^#   /#   $(printf '%-12s %-26s' "$g" "$img") /"; found=$((found + 1)); }
+	done
+	test "$found" -gt 0 || printf '%s\n' "#   (none)"
+}
+
 #@help _guest_knownhosts_drop1
 # @command guest knownhosts drop <guest>
 # @summary Act terminal: the ssh host key remembered for the guest (.tmp/known_hosts.<guest>) forgotten -- a new clone has a new key

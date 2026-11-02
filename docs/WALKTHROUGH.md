@@ -194,3 +194,18 @@ Two more lists of a template, both installed after its packages:
     scp /var/cache/pkg/vscode-1.130.0~*.pkg illyria:/data/vm/vm-bake/distfiles/pkg/vscode-1.130.0.pkg
     vm-bake template pkgfile add freebsd-x vscode-1.130.0.pkg
     vm-bake template port add freebsd-x editors/neovim
+
+## Tags
+
+Tags tell templates, images and guests apart and answer questions like
+"which guest can run IntelliJ": a key and a text, the keys are yours.
+`template tag` is a list family like the others, inherited down the chain
+and masked where a child disagrees; `guest tag` holds what belongs to one
+guest (owner, note). `template find` and `guest find` search by key and
+pattern over the resolved tags, from the records, without starting anything:
+
+    vm-bake template tag add freebsd-dev purpose 'development on FreeBSD with Claude Code'
+    vm-bake template tag add freebsd-x can intellij
+    vm-bake guest tag add caledonia owner JB
+    vm-bake guest tag show caledonia
+    vm-bake guest find can intellij
