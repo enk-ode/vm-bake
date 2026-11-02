@@ -1076,7 +1076,7 @@ test_env_plan() {
     fail "env write: $out"
   fi
   out=$(run_vmbake session create x caledonia 'code-oss --disable-gpu')
-  if printf '%s\n' "$out" | grep -q "^XCURSOR_THEME='redglass' Xephyr :[0-9]* " && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9]* ratpoison &$" && printf '%s\n' "$out" | grep -q "ssh -X -C -p 2222 .* 'env LANG=C.UTF-8 XCURSOR_THEME=redglass code-oss --disable-gpu' \"\$@\" '; rc=" && printf '%s\n' "$out" | grep -q "no code-oss process left" && printf '%s\n' "$out" | grep -q "Xcursor.theme: %s.* 'redglass' '24' '96' | xrdb -display :[0-9]* - &&" && printf '%s\n' "$out" | grep -q '^kill "$wm"'; then
+  if printf '%s\n' "$out" | grep -q "^XCURSOR_THEME='redglass' Xephyr :[0-9]* " && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9]* ratpoison &$" && printf '%s\n' "$out" | grep -q "ssh -X -C -p 2222 .* 'env LANG=C.UTF-8 XCURSOR_THEME=redglass code-oss --disable-gpu' \"\$@\" '; rc=" && printf '%s\n' "$out" | grep -q "no code-oss process left" && printf '%s\n' "$out" | grep -q "Xcursor.theme: %s.* 'redglass' '24' '96' | xrdb -display :[0-9]* -merge - &&" && printf '%s\n' "$out" | grep -q '^kill "$wm"'; then
     pass "session x: cursor theme for the server, the window manager in the compartment, ssh -C, the program under the template's env"
   else
     fail "session x env: $out"
