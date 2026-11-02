@@ -122,7 +122,7 @@ _session_script_ssh2() {
 
 #@help _session_script_x3
 # @command session script x <guest> <program> <display>
-# @summary Display terminal: the compartment script -- Xephyr on :<display> with VM_BAKE_XEPHYR_SCREEN and VM_BAKE_XEPHYR_DPI and the cursor theme VM_BAKE_XCURSOR_THEME, titled after guest and program, resizeable; the window manager VM_BAKE_XEPHYR_WM inside it (every window full size; none: no manager); then ssh -X -C into the guest with DISPLAY set to the compartment, running the program under the template's env variables (read at generation time); the compartment stays until you close it (programs like code-oss detach and return at once), on an ssh error it is closed
+# @summary Display terminal: the compartment script -- Xephyr on :<display> with VM_BAKE_XEPHYR_SCREEN and VM_BAKE_XEPHYR_DPI and the cursor theme VM_BAKE_XCURSOR_THEME, titled after guest and program, resizeable; the resources Xcursor.theme, Xcursor.size (VM_BAKE_XCURSOR_SIZE) and Xft.dpi loaded into it with xrdb, which is where GTK and Electron programs read cursor and scale; the window manager VM_BAKE_XEPHYR_WM inside it (every window full size; none: no manager); then ssh -X -C into the guest with DISPLAY set to the compartment, running the program under the template's env variables (read at generation time); the compartment stays until you close it (programs like code-oss detach and return at once), on an ssh error it is closed
 # @group   session
 # @internal
 # @see     session create x
@@ -133,7 +133,8 @@ _session_script_ssh2() {
 # @env     VM_BAKE_XEPHYR_SCREEN  the compartment's size
 # @env     VM_BAKE_XEPHYR_DPI  the compartment's dpi
 # @env     VM_BAKE_XEPHYR_WM  the window manager started inside the compartment, or none
-# @env     VM_BAKE_XCURSOR_THEME  the cursor theme the compartment's server draws
+# @env     VM_BAKE_XCURSOR_THEME  the cursor theme the compartment's server draws and its resources name
+# @env     VM_BAKE_XCURSOR_SIZE  the cursor size in the compartment's resources
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _session_script_x3() {
@@ -152,6 +153,7 @@ _session_script_x3() {
 	printf '%s\n' "XCURSOR_THEME=$(sq "$VM_BAKE_XCURSOR_THEME") Xephyr :$3 -screen '$VM_BAKE_XEPHYR_SCREEN' -dpi '$VM_BAKE_XEPHYR_DPI' -title $(sq "$1: $2") -resizeable -nolisten tcp &"
 	printf '%s\n' 'xephyr=$!'
 	printf '%s\n' "n=0; until test -e '/tmp/.X11-unix/X$3' || test \"\$n\" -ge 50; do n=\$((n + 1)); sleep 0.1; done"
+	printf '%s\n' "printf 'Xcursor.theme: %s\\nXcursor.size: %s\\nXft.dpi: %s\\n' $(sq "$VM_BAKE_XCURSOR_THEME") $(sq "$VM_BAKE_XCURSOR_SIZE") $(sq "$VM_BAKE_XEPHYR_DPI") | xrdb -display :$3 -"
 	test "$VM_BAKE_XEPHYR_WM" = none || printf '%s\n' "DISPLAY=:$3 $VM_BAKE_XEPHYR_WM > /dev/null 2>&1 &" 'wm=$!'
 	printf '%s\n' "DISPLAY=:$3 ssh -X -C -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "${envs:+env $envs}$2") \"\$@\""
 	printf '%s\n' 'rc=$?' 'test "$rc" -eq 0 || kill "$xephyr" 2>/dev/null' 'wait "$xephyr"'

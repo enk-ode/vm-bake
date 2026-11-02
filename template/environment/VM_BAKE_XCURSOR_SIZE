@@ -1,0 +1,2 @@
+24
+# @summary Cursor size in a Xephyr compartment, in pixels (Xcursor.size in the compartment's resources, read by GTK and Electron programs of the guest); 48 suits a 240 dpi compartment.
