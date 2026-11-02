@@ -511,7 +511,7 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install rc_write user_make root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write user_make root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
 GUEST_ACTS="switch_ensure clone conf_write link_write link_drop network_write dns_write knownhosts_drop run halt dataset_destroy"
 pin_image_cat() {
   local f
@@ -605,8 +605,8 @@ test_image_plan() {
     fail "close/seal/drop plan: $(run_vmbake image close x; run_vmbake image seal x; run_vmbake image drop x)"
   fi
   plan=$(run_vmbake image builder use)
-  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "13" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "13" ]; then
-    pass "builder use and leave: the place and thirteen pins, each a setintp or unsetintp line"
+  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "16" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "16" ]; then
+    pass "builder use and leave: the place and sixteen pins, each a setintp or unsetintp line"
   else
     fail "builder use/leave: $plan"
   fi
@@ -871,6 +871,115 @@ test_session_plan() {
   fi
 }
 
+test_port_plan() {
+  test_header "ports: the template family, burn builds and installs them in the builder only, the emissions"
+  test_setup
+  image_chain
+  run_vmbake template add freebsd-x freebsd-dev > /dev/null
+  if run_vmbake template port add freebsd-x editors/vscode | grep -q "port + editors/vscode" && run_vmbake template port add freebsd-x vscode | grep -q "invalid origin" && run_vmbake template port show freebsd-x | grep -q "^#   freebsd-x  *editors/vscode"; then
+    pass "template port add validates category/name and show lists it with its origin"
+  else
+    fail "template port: $(run_vmbake template port show freebsd-x)"
+  fi
+  run_vmbake template port add freebsd-x editors/neovim > /dev/null
+  run_vmbake template port drop freebsd-x editors/neovim > /dev/null
+  if ! run_vmbake template port show freebsd-x | grep -q neovim && run_vmbake template dump freebsd-x | grep -q "template port add 'freebsd-x' 'editors/vscode'"; then
+    pass "port drop removes the own line; the dump replays port add"
+  else
+    fail "port drop/dump: $(run_vmbake template dump freebsd-x | grep port)"
+  fi
+  run_vmbake image record write freebsd-x x > /dev/null
+  run_vmbake image record write freebsd-dev d > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  printf 'builder\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  local plan
+  plan=$(run_vmbake image burn x)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "10" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image port build 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image port install 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "8" ]; then
+    pass "burn in the builder: port build and install after the packages, only when ports are listed"
+  else
+    fail "burn ports plan: $plan"
+  fi
+  printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake image burn x | grep -q "ports build in the builder only" && [ "$(run_vmbake image burn d | grep -c .)" = "8" ]; then
+    pass "burn on the host refuses listed ports with an error line"
+  else
+    fail "burn host ports: $(run_vmbake image burn x)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if pin_image_cat; then
+    pass "image acts pinned to cat"
+  else
+    fail "acts not pinned -- not calling them"; return
+  fi
+  run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
+  local out
+  out=$(run_vmbake image port build x; run_vmbake image port install x)
+  if printf '%s\n' "$out" | grep -q "git clone -q --depth 1 -b 'main' https://git.FreeBSD.org/ports.git /usr/ports" && printf '%s\n' "$out" | grep -q "make -C '/usr/ports/editors/vscode' -V PKGNAME" && printf '%s\n' "$out" | grep -q "make -C '/usr/ports/editors/vscode' BATCH=yes package" && printf '%s\n' "$out" | grep -q "pkg -c '$TEST_DIR/img/x/mnt' -o ASSUME_ALWAYS_YES=yes add \"/var/cache/vm-bake/\$n.pkg\""; then
+    pass "port build clones the tree, builds missing packages; port install adds the package into the image"
+  else
+    fail "port emissions: $out"
+  fi
+  if run_vmbake image port build d | grep -q "lists no ports"; then
+    pass "a template without ports is a note"
+  else
+    fail "port build without ports: $(run_vmbake image port build d)"
+  fi
+}
+
+test_pkgfile_plan() {
+  test_header "package files: the template family, burn checks, stages and adds them by VM_BAKE_BAKE_IN, the emissions"
+  test_setup
+  image_chain
+  run_vmbake template add freebsd-x freebsd-dev > /dev/null
+  if run_vmbake template pkgfile add freebsd-x vscode-1.130.0.pkg | grep -q "pkgfile + vscode-1.130.0.pkg" && run_vmbake template pkgfile add freebsd-x /tmp/x.pkg | grep -q "invalid file name" && run_vmbake template pkgfile add freebsd-x vscode | grep -q "invalid file name" && run_vmbake template pkgfile show freebsd-x | grep -q "^#   freebsd-x  *vscode-1.130.0.pkg"; then
+    pass "template pkgfile add validates a bare .pkg name and show lists it"
+  else
+    fail "template pkgfile: $(run_vmbake template pkgfile show freebsd-x)"
+  fi
+  run_vmbake image record write freebsd-x x > /dev/null
+  run_vmbake image record write freebsd-dev d > /dev/null
+  run_vmbake setenv VM_BAKE_PKG_DIR "$TEST_DIR/pkg" > /dev/null
+  if pin_image_cat; then
+    pass "image acts pinned to cat"
+  else
+    fail "acts not pinned -- not calling them"; return
+  fi
+  if run_vmbake image check pkgfiles x | grep -q "package file missing in $TEST_DIR/pkg: vscode-1.130.0.pkg"; then
+    pass "check pkgfiles names a missing file"
+  else
+    fail "check pkgfiles: $(run_vmbake image check pkgfiles x)"
+  fi
+  mkdir -p "$TEST_DIR/pkg" && : > "$TEST_DIR/pkg/vscode-1.130.0.pkg"
+  if [ -z "$(run_vmbake image check pkgfiles x)" ]; then
+    pass "check pkgfiles passes once the file is there"
+  else
+    fail "check pkgfiles present: $(run_vmbake image check pkgfiles x)"
+  fi
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  printf 'builder\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  local plan
+  plan=$(run_vmbake image burn x)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image check pkgfiles 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image pkgfile stage 'x'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image pkgfile add 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "8" ] && run_vmbake image pkgfile stage x | grep -q "streamed into the builder"; then
+    pass "burn: check, stage and add after the packages, only when files are listed; stage chooses by the place"
+  else
+    fail "burn pkgfile plan: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
+  printf 'ssh-ed25519 AAAATEST test@host\n' > "$TEST_DIR/key.pub"
+  run_vmbake setenv VM_BAKE_HOST_KEY "$TEST_DIR/key.pub" > /dev/null
+  local out
+  out=$(run_vmbake image pkgfile stage host x; run_vmbake image pkgfile stage builder x; run_vmbake image pkgfile add x)
+  if printf '%s\n' "$out" | grep -q "cp '$TEST_DIR/pkg/vscode-1.130.0.pkg' '$TEST_DIR/img/x/mnt/var/cache/vm-bake/'" && printf '%s\n' "$out" | grep -q "ssh -p 2222 -i '$TEST_DIR/key' .* 'bake@172.16.100.250' \"doas sh -c .*cat > '$TEST_DIR/img/x/mnt/var/cache/vm-bake/vscode-1.130.0.pkg'.*\" < '$TEST_DIR/pkg/vscode-1.130.0.pkg'" && printf '%s\n' "$out" | grep -q "pkg -c '$TEST_DIR/img/x/mnt' -o ASSUME_ALWAYS_YES=yes add '/var/cache/vm-bake/vscode-1.130.0.pkg' && rm -f"; then
+    pass "stage host copies, stage builder streams over ssh into the builder's mount, add installs in the chroot and removes the copy"
+  else
+    fail "pkgfile emissions: $out"
+  fi
+}
+
 # ============================================================================
 
 parallel_main() {
@@ -938,6 +1047,8 @@ main() {
   should_run_test test_image_record_lock_list
   should_run_test test_guest_plan
   should_run_test test_session_plan
+  should_run_test test_port_plan
+  should_run_test test_pkgfile_plan
 
   test_summary
 }

@@ -172,3 +172,25 @@ time; the template lists `xauth` itself. The host needs the package
 per compartment is the isolation: the guest's program sees only its
 Xephyr, and the clipboard between host and compartment is the broker
 service still to come.
+
+## Package files and ports
+
+Two more lists of a template, both installed after its packages:
+
+- `template pkgfile add <template> <file>`: a .pkg file you keep under
+  `VM_BAKE_PKG_DIR` (default `/data/vm/vm-bake/pkg`), of the host's ABI, for
+  example the package another host fetched from the signed repository while
+  the cluster has not rebuilt it yet. The bake checks it is there, stages
+  it into the image (copied on the host, streamed over ssh into the
+  builder) and installs it with `pkg add`; the dependencies come from the
+  repositories.
+- `template port add <template> <origin>`: a port built from source in the
+  builder guest (`image port build`: the ports tree on
+  `VM_BAKE_PORTS_BRANCH`, the missing dependencies from the repositories,
+  `make package`), then installed into the image (`image port install`).
+  Built packages stay in the builder under `/usr/ports/packages`. Ports
+  build only in the builder; a bake on the host refuses them.
+
+    scp /var/cache/pkg/vscode-1.130.0~*.pkg illyria:/data/vm/vm-bake/pkg/vscode-1.130.0.pkg
+    vm-bake template pkgfile add freebsd-x vscode-1.130.0.pkg
+    vm-bake template port add freebsd-x editors/neovim

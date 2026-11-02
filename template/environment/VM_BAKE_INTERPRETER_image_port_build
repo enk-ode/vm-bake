@@ -1,0 +1,2 @@
+sudo sh
+# Content terminal of the image bake (image port build), pinned to sudo sh on the host by the profile; image builder use pins it to ssh into the builder, and only there do ports build.

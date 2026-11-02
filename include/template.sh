@@ -31,6 +31,7 @@
 # @defcompletion memory        none
 # @defcompletion disk          none
 # @defcompletion package       none
+# @defcompletion origin       none
 # @defcompletion variable      none
 # @defcompletion variant       none
 # @defcompletion argument      none
@@ -44,7 +45,7 @@
 #@end
 
 TEMPLATE_LAYOUT=""
-TEMPLATE_FAMILIES="package rc user service forbid data session"
+TEMPLATE_FAMILIES="package pkgfile port rc user service forbid data session"
 TEMPLATE_LEAVES="base bake firmware resource"
 
 #@help _template_list0
@@ -664,6 +665,148 @@ ___template_package_mask2() {
 ___template_package_show1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") package"
+}
+
+#@help ___template_port_add2
+# @command template port add <template> <origin>
+# @summary Add a port to build from source in the builder guest (category/name): the template exists, the origin is a port origin; then 'template line append' -- the bake builds it there and installs the package into the image after the packages
+# @group   template
+# @example vm-bake template port add freebsd-x editors/vscode
+# @see     template port drop
+# @see     template port show
+# @see     template package add
+#@end
+___template_port_add2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template port valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") port $(sq "$2")"
+}
+
+#@help __template_port_valid1
+# @command template port valid <origin>
+# @summary The origin is category/name of the ports tree ([a-z0-9-]+/[A-Za-z0-9_.+-]+): a comment line, else an error line
+# @group   template
+# @internal
+# @see     template port add
+#@end
+__template_port_valid1() {
+	local ok=no
+	case "$1" in [a-z0-9]*/[A-Za-z0-9]*) ok=yes ;; esac
+	case "$1" in *[!A-Za-z0-9_.+/-]*|*/*/*) ok=no ;; esac
+	if test "$ok" = yes; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'port $1 valid'"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template port: invalid origin $1 (category/name, e.g. editors/vscode)")"
+	fi
+}
+
+#@help ___template_port_drop2
+# @command template port drop <template> <origin>
+# @summary Remove a port from the template's own list: the template exists, the origin is listed there; then 'template line remove'
+# @group   template
+# @example vm-bake template port drop freebsd-x editors/vscode
+# @see     template port add
+#@end
+___template_port_drop2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") port $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") port $(sq "$2")"
+}
+
+#@help ___template_port_mask2
+# @command template port mask <template> <origin>
+# @summary Hide an inherited port in this template and below: the template exists, the origin is valid; then 'template line mask'
+# @group   template
+# @example vm-bake template port mask freebsd-x editors/vscode
+# @see     template port drop
+#@end
+___template_port_mask2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template port valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") port $(sq "$2")"
+}
+
+#@help ___template_port_show1
+# @command template port show <template>
+# @summary The ports resolved over the chain, each with its origin template: the template exists; then 'template chain table'
+# @group   template
+# @example vm-bake template port show freebsd-x
+# @see     template show
+#@end
+___template_port_show1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") port"
+}
+
+#@help ___template_pkgfile_add2
+# @command template pkgfile add <template> <file>
+# @summary Add a package file to install from VM_BAKE_PKG_DIR (a .pkg of the same ABI, kept there by you, e.g. from another host's package cache): the template exists, the name is a file name ending in .pkg; then 'template line append' -- the bake stages it into the image and installs it with 'pkg add', dependencies from the repositories
+# @group   template
+# @example vm-bake template pkgfile add freebsd-x vscode-1.130.0.pkg
+# @see     template pkgfile drop
+# @see     template pkgfile show
+# @see     template package add
+#@end
+___template_pkgfile_add2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template pkgfile valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") pkgfile $(sq "$2")"
+}
+
+#@help __template_pkgfile_valid1
+# @command template pkgfile valid <file>
+# @summary The name is a package file name: no slash, [A-Za-z0-9_.+~$-], ending in .pkg: a comment line, else an error line
+# @group   template
+# @internal
+# @see     template pkgfile add
+#@end
+__template_pkgfile_valid1() {
+	local ok=no
+	case "$1" in *.pkg) ok=yes ;; esac
+	case "$1" in .pkg|*/*|*[!A-Za-z0-9_.+~\$-]*) ok=no ;; esac
+	if test "$ok" = yes; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "pkgfile $1 valid")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template pkgfile: invalid file name $1 (a .pkg file name without a path)")"
+	fi
+}
+
+#@help ___template_pkgfile_drop2
+# @command template pkgfile drop <template> <file>
+# @summary Remove a package file from the template's own list: the template exists, the file is listed there; then 'template line remove'
+# @group   template
+# @example vm-bake template pkgfile drop freebsd-x vscode-1.130.0.pkg
+# @see     template pkgfile add
+#@end
+___template_pkgfile_drop2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") pkgfile $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") pkgfile $(sq "$2")"
+}
+
+#@help ___template_pkgfile_mask2
+# @command template pkgfile mask <template> <file>
+# @summary Hide an inherited package file in this template and below: the template exists, the name is valid; then 'template line mask'
+# @group   template
+# @example vm-bake template pkgfile mask freebsd-x vscode-1.130.0.pkg
+# @see     template pkgfile drop
+#@end
+___template_pkgfile_mask2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template pkgfile valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") pkgfile $(sq "$2")"
+}
+
+#@help ___template_pkgfile_show1
+# @command template pkgfile show <template>
+# @summary The package files resolved over the chain, each with its origin template: the template exists; then 'template chain table'
+# @group   template
+# @example vm-bake template pkgfile show freebsd-x
+# @see     template show
+#@end
+___template_pkgfile_show1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") pkgfile"
 }
 
 #@help ___template_rc_add3

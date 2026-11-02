@@ -1,0 +1,2 @@
+sh
+# Act terminal (image pkgfile stage builder), pinned to sh: the invoking user streams the files over ssh into the builder; it acts directly, cat shows it.

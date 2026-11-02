@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal (image pkgfile stage host), pinned to sudo sh: copies into the image mounted on the host. Inspect first: vm-bake setintp image_pkgfile_stage_host cat.

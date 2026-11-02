@@ -259,14 +259,17 @@ ___image_base_content_image1() {
 
 #@help ___image_burn1
 # @command image burn <image>
-# @summary Step 3, the template: the image has a record, every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its rc.conf lines, its users with the host key in authorized_keys, root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
+# @summary Step 3, the template: the image has a record, every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its package files from VM_BAKE_PKG_DIR staged and added, its ports built and installed in the builder (an error line when ports are listed and VM_BAKE_BAKE_IN is host), its rc.conf lines, its users with the host key in authorized_keys, root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
 # @group   image
 # @example vm-bake image burn freebsd-dev-20261101
 # @see     image base
 # @see     image close
+# @see     template port add
+# @env     VM_BAKE_BAKE_IN  host or builder: ports build only in the builder
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 ___image_burn1() {
-	local t="" cur="" chain="" p="" n=0 a="" base="" abi="" osv=""
+	local t="" cur="" chain="" p="" n=0 a="" base="" abi="" osv="" ports="" pkgfiles=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
 	cur=$t
 	while test "$cur" != empty && test "$n" -lt 32; do
@@ -280,6 +283,11 @@ ___image_burn1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check users $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkg install $(sq "$1") $(sq "$abi") $(sq "$osv")"
+	pkgfiles=$(awk -v base="$VM_BAKE_BASE" -v family=pkgfile -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -z "$pkgfiles" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pkgfiles $(sq "$1")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkgfile stage $(sq "$1")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkgfile add $(sq "$1")"
+	ports=$(awk -v base="$VM_BAKE_BASE" -v family=port -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -z "$ports" || test "$VM_BAKE_BAKE_IN" != builder || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image port build $(sq "$1")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" image port install $(sq "$1")"
+	test -z "$ports" || test "$VM_BAKE_BAKE_IN" = builder || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image burn: ports build in the builder only (image builder use): $(printf '%s' "$ports" | tr '\n' ' ')")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image rc write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image user make $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image root lock $(sq "$1")"
@@ -387,7 +395,7 @@ ___image_builder_use0() {
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	ssh="ssh -p $VM_BAKE_SSH_PORT -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS doas sh"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN builder"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_rc_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setintp $f $(sq "$ssh")"
 	done
 }
@@ -402,7 +410,7 @@ ___image_builder_use0() {
 ___image_builder_leave0() {
 	local f=""
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN host"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_rc_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" unsetintp $f"
 	done
 }
@@ -669,12 +677,13 @@ _image_record_remove1() {
 # @see     guest make
 # @env     VM_BAKE_DIR  vm-bake's dataset: image/, guest/ (datasets) and cache/ (a directory) live in it
 # @env     VM_BAKE_IMAGE_CACHE  the cache directory
+# @env     VM_BAKE_PKG_DIR  the package-file directory
 #@end
 _image_tree_ensure0() {
 	printf '%s\n' "ds=\$(zfs list -H -o name '$VM_BAKE_DIR') || { printf '# Error: %s is no dataset (root makes it once and delegates it: help env VM_BAKE_DIR)\\n' '$VM_BAKE_DIR' >&2; exit 1; }"
 	printf '%s\n' "zfs list -H -o name \"\$ds/image\" > /dev/null 2>&1 || zfs create \"\$ds/image\" || exit 1"
 	printf '%s\n' "zfs list -H -o name \"\$ds/guest\" > /dev/null 2>&1 || zfs create \"\$ds/guest\" || exit 1"
-	printf '%s\n' "install -d -m 755 '$VM_BAKE_IMAGE_CACHE' || exit 1"
+	printf '%s\n' "install -d -m 755 '$VM_BAKE_IMAGE_CACHE' '$VM_BAKE_PKG_DIR' || exit 1"
 	printf '%s\n' "printf '# tree: %s/image, %s/guest, cache %s\\n' \"\$ds\" \"\$ds\" '$VM_BAKE_IMAGE_CACHE' >&2"
 }
 
@@ -1097,6 +1106,193 @@ _image_ssh_write1() {
 	test "$x11" = no || printf '%s\n' "X11Forwarding yes"
 	printf '%s\n' "EOF_SSHD"
 	printf '%s\n' "printf '# image %s: sshd on port %s, keys only, no root, X11 forwarding %s\\n' '$1' '$VM_BAKE_SSH_PORT' '$x11' >&2"
+}
+
+#@help _image_port_build1
+# @command image port build <image>
+# @summary Act terminal (root, in the builder): the ports tree at /usr/ports (git, branch VM_BAKE_PORTS_BRANCH, cloned once), then for every port of the template's resolved list (read at generation time): the package name from the port, built already under /usr/ports/packages/All is kept, else the missing dependencies installed from the repositories ('make missing', pkg install by origin) and 'make package' with BATCH
+# @group   image
+# @internal
+# @see     image burn
+# @see     template port add
+# @env     VM_BAKE_PORTS_BRANCH  the branch of the ports tree (main for latest, a quarter for quarterly)
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_port_build1() {
+	local t="" cur="" chain="" p="" n=0 o="" origins=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	origins=$(awk -v base="$VM_BAKE_BASE" -v family=port -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	printf '%s\n' "test -d /usr/ports/.git || git clone -q --depth 1 -b $(sq "$VM_BAKE_PORTS_BRANCH") https://git.FreeBSD.org/ports.git /usr/ports || exit 1"
+	for o in $origins; do
+		printf '%s\n' "n=\$(make -C '/usr/ports/$o' -V PKGNAME) && test -n \"\$n\" || { printf '# Error: no port %s in the tree\\n' '$o' >&2; exit 1; }"
+		printf '%s\n' "if test -f \"/usr/ports/packages/All/\$n.pkg\"; then printf '# port %s: %s built already\\n' '$o' \"\$n\" >&2; else missing=\$(make -C '/usr/ports/$o' BATCH=yes missing) && { test -z \"\$missing\" || pkg install -y \$missing; } && make -C '/usr/ports/$o' BATCH=yes package > \"/usr/ports/packages/build-\$(echo '$o' | tr / -).log\" 2>&1 && printf '# port %s: %s built\\n' '$o' \"\$n\" >&2 || { printf '# Error: port %s failed, log /usr/ports/packages/build-%s.log in the builder\\n' '$o' \"\$(echo '$o' | tr / -)\" >&2; exit 1; }; fi"
+	done
+	test -n "$origins" || emit_note "image $1: the template lists no ports"
+}
+
+#@help _image_port_install1
+# @command image port install <image>
+# @summary Act terminal (root, in the builder): every built package of the template's ports copied into the image under /var/cache/vm-bake and installed there with 'pkg -c add' (dependencies from the repositories), the copy removed
+# @group   image
+# @internal
+# @see     image burn
+# @see     image port build
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_port_install1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" t="" cur="" chain="" p="" n=0 o="" origins=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	origins=$(awk -v base="$VM_BAKE_BASE" -v family=port -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	printf '%s\n' "install -d -m 755 '$mnt/var/cache/vm-bake' || exit 1"
+	for o in $origins; do
+		printf '%s\n' "n=\$(make -C '/usr/ports/$o' -V PKGNAME) && test -f \"/usr/ports/packages/All/\$n.pkg\" || { printf '# Error: port %s: no package built\\n' '$o' >&2; exit 1; }"
+		printf '%s\n' "cp \"/usr/ports/packages/All/\$n.pkg\" '$mnt/var/cache/vm-bake/' && pkg -c '$mnt' -o ASSUME_ALWAYS_YES=yes add \"/var/cache/vm-bake/\$n.pkg\" && rm -f '$mnt/var/cache/vm-bake/'\"\$n.pkg\" || exit 1"
+		printf '%s\n' "printf '# image %s: port %s installed (%s)\\n' '$1' '$o' \"\$n\" >&2"
+	done
+	test -n "$origins" || emit_note "image $1: the template lists no ports"
+}
+
+#@help __image_check_pkgfiles1
+# @command image check pkgfiles <image>
+# @summary Every package file of the image's template (read at generation time over the chain) lies in VM_BAKE_PKG_DIR: a comment line, else an error line naming the missing one
+# @group   image
+# @internal
+# @see     image burn
+# @env     VM_BAKE_PKG_DIR  the directory the package files are kept in
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+__image_check_pkgfiles1() {
+	local t="" cur="" chain="" p="" n=0 f="" files="" missing=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	files=$(awk -v base="$VM_BAKE_BASE" -v family=pkgfile -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	for f in $files; do test -f "$VM_BAKE_PKG_DIR/$f" || missing="$missing $f"; done
+	if test -z "$missing"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "image $1: package files present ($(printf '%s' "$files" | tr '\n' ' '))")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image burn: package file missing in $VM_BAKE_PKG_DIR:$missing (copy it there)")"
+	fi
+}
+
+#@help __image_pkgfile_stage1
+# @command image pkgfile stage <image>
+# @summary By VM_BAKE_BAKE_IN rewrite to 'image pkgfile stage host' (copied into the mounted image) or 'image pkgfile stage builder' (streamed over ssh into the image mounted in the builder); any other value is an error line
+# @group   image
+# @internal
+# @see     image burn
+# @env     VM_BAKE_BAKE_IN  host | builder
+#@end
+__image_pkgfile_stage1() {
+	case "$VM_BAKE_BAKE_IN" in
+		host|builder) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkgfile stage $VM_BAKE_BAKE_IN $(sq "$1")" ;;
+		*) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image pkgfile stage: VM_BAKE_BAKE_IN is '$VM_BAKE_BAKE_IN' (host | builder)")" ;;
+	esac
+}
+
+#@help _image_pkgfile_stage_host1
+# @command image pkgfile stage host <image>
+# @summary Act terminal (root, host): every package file of the template copied from VM_BAKE_PKG_DIR into the mounted image under /var/cache/vm-bake
+# @group   image
+# @internal
+# @see     image pkgfile stage
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_PKG_DIR  the directory the package files are kept in
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_pkgfile_stage_host1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" t="" cur="" chain="" p="" n=0 f="" files=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	files=$(awk -v base="$VM_BAKE_BASE" -v family=pkgfile -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	printf '%s\n' "install -d -m 755 '$mnt/var/cache/vm-bake' || exit 1"
+	for f in $files; do
+		printf '%s\n' "cp '$VM_BAKE_PKG_DIR/$f' '$mnt/var/cache/vm-bake/' || exit 1"
+		printf '%s\n' "printf '# image %s: %s staged\\n' '$1' '$f' >&2"
+	done
+	test -n "$files" || emit_note "image $1: the template lists no package files"
+}
+
+#@help _image_pkgfile_stage_builder1
+# @command image pkgfile stage builder <image>
+# @summary Act terminal (the invoking user, host side): every package file of the template streamed over ssh into the builder, where doas writes it into the mounted image under /var/cache/vm-bake
+# @group   image
+# @internal
+# @see     image pkgfile stage
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_PKG_DIR  the directory the package files are kept in
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the builder's sshd port
+# @env     VM_BAKE_BUILDER  the builder guest's name
+# @env     VM_BAKE_BUILDER_USER  the user ssh logs in as
+# @env     VM_BAKE_BUILDER_ADDRESS  the builder's address
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_pkgfile_stage_builder1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" key="$VM_BAKE_HOST_KEY" t="" cur="" chain="" p="" n=0 f="" files="" ssh=""
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	ssh="ssh -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER' -o StrictHostKeyChecking=accept-new -o BatchMode=yes '$VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS'"
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	files=$(awk -v base="$VM_BAKE_BASE" -v family=pkgfile -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	for f in $files; do
+		printf '%s\n' "$ssh \"doas sh -c \\\"install -d -m 755 '$mnt/var/cache/vm-bake' && cat > '$mnt/var/cache/vm-bake/$f'\\\"\" < '$VM_BAKE_PKG_DIR/$f' || exit 1"
+		printf '%s\n' "printf '# image %s: %s streamed into the builder\\n' '$1' '$f' >&2"
+	done
+	test -n "$files" || emit_note "image $1: the template lists no package files"
+}
+
+#@help _image_pkgfile_add1
+# @command image pkgfile add <image>
+# @summary Act terminal (root, host or builder): every staged package file installed into the image with 'pkg -c add' (a chroot; dependencies from the repositories), the staged copy removed
+# @group   image
+# @internal
+# @see     image burn
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_pkgfile_add1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" t="" cur="" chain="" p="" n=0 f="" files=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	files=$(awk -v base="$VM_BAKE_BASE" -v family=pkgfile -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	for f in $files; do
+		printf '%s\n' "pkg -c '$mnt' -o ASSUME_ALWAYS_YES=yes add '/var/cache/vm-bake/$f' && rm -f '$mnt/var/cache/vm-bake/$f' || exit 1"
+		printf '%s\n' "printf '# image %s: %s installed\\n' '$1' '$f' >&2"
+	done
+	test -n "$files" || emit_note "image $1: the template lists no package files"
 }
 
 #@help _image_pkg_report1

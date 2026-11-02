@@ -1,0 +1,2 @@
+main
+# @summary Branch of the ports tree the builder clones for image port build: main matches the repository branch latest, a quarter (2026Q4) matches quarterly; keep it in step with the host's repository configuration, the packages the ports pull as dependencies come from there.
