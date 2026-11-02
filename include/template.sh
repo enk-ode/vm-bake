@@ -47,7 +47,7 @@
 #@end
 
 TEMPLATE_LAYOUT=""
-TEMPLATE_FAMILIES="package pkgfile port rc user service forbid data session tag"
+TEMPLATE_FAMILIES="package pkgfile port rc env user service forbid data session tag"
 TEMPLATE_LEAVES="base bake firmware resource"
 
 #@help _template_list0
@@ -889,6 +889,60 @@ _template_find2() {
 		test -z "$hit" || { printf '%s\n' "$hit" | sed "s/^#   /#   $(printf '%-16s' "$t") /"; found=$((found + 1)); }
 	done
 	test "$found" -gt 0 || printf '%s\n' "#   (none)"
+}
+
+#@help ___template_env_add3
+# @command template env add <template> <variable> <value>
+# @summary Add an environment variable for the sessions of every guest of this template (XCURSOR_THEME, LANG, ...): the template exists, the variable is a name, the value a plain word; then 'template line append' -- the bake writes them into /etc/profile.d/vm-bake.sh of the image, and 'session create x' hands them to the program it runs
+# @group   template
+# @example vm-bake template env add freebsd-x XCURSOR_THEME redglass
+# @see     template env drop
+# @see     template env show
+# @see     session create x
+#@end
+___template_env_add3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template rc valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") env $(sq "$2=$3")"
+}
+
+#@help ___template_env_drop3
+# @command template env drop <template> <variable> <value>
+# @summary Remove an environment variable from the template's own list: the template exists, the line is listed there; then 'template line remove'
+# @group   template
+# @example vm-bake template env drop freebsd-x XCURSOR_THEME redglass
+# @see     template env add
+#@end
+___template_env_drop3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") env $(sq "$2=$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") env $(sq "$2=$3")"
+}
+
+#@help ___template_env_mask3
+# @command template env mask <template> <variable> <value>
+# @summary Hide an inherited environment variable in this template and below: the template exists, the variable is a name; then 'template line mask'
+# @group   template
+# @example vm-bake template env mask freebsd-x XCURSOR_THEME redglass
+# @see     template env drop
+#@end
+___template_env_mask3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template rc valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") env $(sq "$2=$3")"
+}
+
+#@help ___template_env_show1
+# @command template env show <template>
+# @summary The environment variables resolved over the chain, each with its origin template: the template exists; then 'template chain table'
+# @group   template
+# @example vm-bake template env show freebsd-x
+# @see     template show
+#@end
+___template_env_show1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") env"
 }
 
 #@help ___template_rc_add3

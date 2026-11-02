@@ -259,7 +259,7 @@ ___image_base_content_image1() {
 
 #@help ___image_burn1
 # @command image burn <image>
-# @summary Step 3, the template: the image has a record, every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its package files from VM_BAKE_PKG_DIR staged and added, its ports built and installed in the builder (an error line when ports are listed and VM_BAKE_BAKE_IN is host), its rc.conf lines, its users with the host key in authorized_keys, root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
+# @summary Step 3, the template: the image has a record, every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its package files from VM_BAKE_PKG_DIR staged and added, its ports built and installed in the builder (an error line when ports are listed and VM_BAKE_BAKE_IN is host), its rc.conf lines, its env variables as profile.d, its users with the host key in authorized_keys, root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
 # @group   image
 # @example vm-bake image burn freebsd-dev-20261101
 # @see     image base
@@ -289,6 +289,7 @@ ___image_burn1() {
 	test -z "$ports" || test "$VM_BAKE_BAKE_IN" != builder || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image port build $(sq "$1")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" image port install $(sq "$1")"
 	test -z "$ports" || test "$VM_BAKE_BAKE_IN" = builder || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image burn: ports build in the builder only (image builder use): $(printf '%s' "$ports" | tr '\n' ' ')")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image rc write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image env write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image user make $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image root lock $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image doas write $(sq "$1")"
@@ -395,7 +396,7 @@ ___image_builder_use0() {
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	ssh="ssh -p $VM_BAKE_SSH_PORT -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS doas sh"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN builder"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setintp $f $(sq "$ssh")"
 	done
 }
@@ -410,7 +411,7 @@ ___image_builder_use0() {
 ___image_builder_leave0() {
 	local f=""
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN host"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" unsetintp $f"
 	done
 }
@@ -995,6 +996,37 @@ _image_rc_write1() {
 	printf '%s\n' "$lines"
 	printf '%s\n' "EOF_RC"
 	printf '%s\n' "printf '# image %s: rc.conf, %s lines\\n' '$1' '$(printf '%s\n' "$lines" | grep -c .)' >&2"
+}
+
+#@help _image_env_write1
+# @command image env write <image>
+# @summary Act terminal (root, host or builder): /etc/profile.d/vm-bake.sh of the image from the template's resolved env lines (read at generation time), one export per line, so every login shell of a guest carries them; an empty list writes nothing
+# @group   image
+# @internal
+# @see     image burn
+# @see     template env add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_env_write1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" t="" cur="" chain="" p="" n=0 lines=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | sed 's/^\([^=]*\)=\(.*\)$/export \1="\2"/')
+	if test -n "$lines"; then
+		printf '%s\n' "install -d -m 755 '$mnt/etc/profile.d' && cat > '$mnt/etc/profile.d/vm-bake.sh' <<'EOF_ENV'"
+		printf '%s\n' "# written by vm-bake (template env) -- the sessions' environment"
+		printf '%s\n' "$lines"
+		printf '%s\n' "EOF_ENV"
+		printf '%s\n' "chmod 644 '$mnt/etc/profile.d/vm-bake.sh' && printf '# image %s: profile.d/vm-bake.sh, %s variables\\n' '$1' '$(printf '%s\n' "$lines" | grep -c .)' >&2"
+	else
+		emit_note "image $1: the template lists no environment variables"
+	fi
 }
 
 #@help _image_user_make1

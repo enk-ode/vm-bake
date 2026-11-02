@@ -511,7 +511,7 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write user_make root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
 GUEST_ACTS="switch_ensure clone conf_write link_write link_drop network_write dns_write knownhosts_drop run halt dataset_destroy"
 pin_image_cat() {
   local f
@@ -594,7 +594,7 @@ test_image_plan() {
   fi
   printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   plan=$(run_vmbake image burn x)
-  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image root lock 'x'" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "8" ]; then
+  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image root lock 'x'" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "9" ]; then
     pass "burn: users checked, then packages, rc, users, root locked, doas, sshd"
   else
     fail "burn plan: $plan"
@@ -605,8 +605,8 @@ test_image_plan() {
     fail "close/seal/drop plan: $(run_vmbake image close x; run_vmbake image seal x; run_vmbake image drop x)"
   fi
   plan=$(run_vmbake image builder use)
-  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "16" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "16" ]; then
-    pass "builder use and leave: the place and sixteen pins, each a setintp or unsetintp line"
+  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "17" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "17" ]; then
+    pass "builder use and leave: the place and seventeen pins, each a setintp or unsetintp line"
   else
     fail "builder use/leave: $plan"
   fi
@@ -848,7 +848,7 @@ test_session_plan() {
     fail "session x guard: $(run_vmbake session create x dalmatia idea)"
   fi
   out=$(run_vmbake session create x xenia idea)
-  if printf '%s\n' "$out" | grep -q "^Xephyr :[0-9][0-9]* -screen '1600x1000' -dpi '96' -title 'xenia: idea' -resizeable -nolisten tcp &$" && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9][0-9]* ssh -X -p 2222 -i '$TEST_DIR/key' .* '$(id -un)@xenia.local' 'idea' \"\$@\"$" && printf '%s\n' "$out" | grep -q '^wait "$xephyr"'; then
+  if printf '%s\n' "$out" | grep -q "Xephyr :[0-9][0-9]* -screen '1600x1000' -dpi '96' -title 'xenia: idea' -resizeable -nolisten tcp &$" && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9][0-9]* ssh -X -C -p 2222 -i '$TEST_DIR/key' .* '$(id -un)@xenia.local' 'idea' \"\$@\"$" && printf '%s\n' "$out" | grep -q '^wait "$xephyr"'; then
     pass "session create x: Xephyr compartment, ssh -X into it, the compartment stays until closed"
   else
     fail "session x: $out"
@@ -895,14 +895,14 @@ test_port_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake image burn x)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "10" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image port build 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image port install 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "8" ]; then
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image port build 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image port install 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "9" ]; then
     pass "burn in the builder: port build and install after the packages, only when ports are listed"
   else
     fail "burn ports plan: $plan"
   fi
   printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  if run_vmbake image burn x | grep -q "ports build in the builder only" && [ "$(run_vmbake image burn d | grep -c .)" = "8" ]; then
+  if run_vmbake image burn x | grep -q "ports build in the builder only" && [ "$(run_vmbake image burn d | grep -c .)" = "9" ]; then
     pass "burn on the host refuses listed ports with an error line"
   else
     fail "burn host ports: $(run_vmbake image burn x)"
@@ -962,7 +962,7 @@ test_pkgfile_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake image burn x)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image check pkgfiles 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image pkgfile stage 'x'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image pkgfile add 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "8" ] && run_vmbake image pkgfile stage x | grep -q "streamed into the builder"; then
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "12" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image check pkgfiles 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image pkgfile stage 'x'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image pkgfile add 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "9" ] && run_vmbake image pkgfile stage x | grep -q "streamed into the builder"; then
     pass "burn: check, stage and add after the packages, only when files are listed; stage chooses by the place"
   else
     fail "burn pkgfile plan: $plan"
@@ -1031,6 +1031,61 @@ test_tag_plan() {
     pass "the dump replays tag add with key and text"
   else
     fail "dump tags: $(run_vmbake template dump freebsd-x | grep tag)"
+  fi
+}
+
+test_env_plan() {
+  test_header "env: the template family, written into the image as profile.d, handed to the x session's program; the compartment's window manager and cursor"
+  test_setup
+  image_chain
+  run_vmbake template add freebsd-x freebsd-dev > /dev/null
+  run_vmbake template service add freebsd-x display x > /dev/null
+  run_vmbake template env add freebsd-dev LANG C.UTF-8 > /dev/null
+  run_vmbake template env add freebsd-x XCURSOR_THEME redglass > /dev/null
+  if run_vmbake template env show freebsd-x | grep -q "^#   freebsd-dev  *LANG=C.UTF-8" && run_vmbake template env show freebsd-x | grep -q "^#   freebsd-x  *XCURSOR_THEME=redglass" && run_vmbake template env add freebsd-x 'bad name' x | grep -q "invalid variable name"; then
+    pass "template env add stores VAR=value, show resolves the chain, the name is validated"
+  else
+    fail "template env show: $(run_vmbake template env show freebsd-x)"
+  fi
+  run_vmbake image record write freebsd-x x > /dev/null
+  run_vmbake image record write freebsd-dev d > /dev/null
+  run_vmbake image record write freebsd-builder b > /dev/null
+  run_vmbake guest record write x caledonia 172.16.100.102/24 > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake image burn x | grep -q "image env write 'x'"; then
+    pass "burn writes the env after rc"
+  else
+    fail "burn env: $(run_vmbake image burn x)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if pin_image_cat; then
+    pass "image acts pinned to cat"
+  else
+    fail "acts not pinned -- not calling them"; return
+  fi
+  run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
+  printf 'ssh-ed25519 AAAATEST test@host\n' > "$TEST_DIR/key.pub"
+  run_vmbake setenv VM_BAKE_HOST_KEY "$TEST_DIR/key.pub" > /dev/null
+  run_vmbake setenv VM_BAKE_XCURSOR_THEME redglass > /dev/null
+  local out
+  out=$(run_vmbake image env write x)
+  if printf '%s\n' "$out" | grep -q "cat > '$TEST_DIR/img/x/mnt/etc/profile.d/vm-bake.sh'" && printf '%s\n' "$out" | grep -q '^export LANG="C.UTF-8"$' && printf '%s\n' "$out" | grep -q '^export XCURSOR_THEME="redglass"$' && run_vmbake image env write b | grep -q "no environment variables"; then
+    pass "env write renders profile.d/vm-bake.sh with exports, nothing for an empty list"
+  else
+    fail "env write: $out"
+  fi
+  out=$(run_vmbake session create x caledonia 'code-oss --disable-gpu')
+  if printf '%s\n' "$out" | grep -q "^XCURSOR_THEME='redglass' Xephyr :[0-9]* " && printf '%s\n' "$out" | grep -q "^DISPLAY=:[0-9]* ratpoison > /dev/null 2>&1 &$" && printf '%s\n' "$out" | grep -q "ssh -X -C -p 2222 .* 'env LANG=C.UTF-8 XCURSOR_THEME=redglass code-oss --disable-gpu' \"\$@\"$" && printf '%s\n' "$out" | grep -q '^kill "$wm"'; then
+    pass "session x: cursor theme for the server, the window manager in the compartment, ssh -C, the program under the template's env"
+  else
+    fail "session x env: $out"
+  fi
+  run_vmbake setenv VM_BAKE_XEPHYR_WM none > /dev/null
+  if ! run_vmbake session create x caledonia idea | grep -q 'wm='; then
+    pass "VM_BAKE_XEPHYR_WM none starts no window manager"
+  else
+    fail "wm empty: $(run_vmbake session create x caledonia idea)"
   fi
 }
 
@@ -1104,6 +1159,7 @@ main() {
   should_run_test test_port_plan
   should_run_test test_pkgfile_plan
   should_run_test test_tag_plan
+  should_run_test test_env_plan
 
   test_summary
 }

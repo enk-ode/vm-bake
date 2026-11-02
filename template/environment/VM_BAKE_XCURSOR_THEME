@@ -1,0 +1,2 @@
+default
+# @summary Cursor theme the compartment's X server draws (XCURSOR_THEME for Xephyr; themes from the host's xcursor-themes: redglass, whiteglass, handhelds). The guest's programs name their theme through the template's env list (template env add <t> XCURSOR_THEME redglass) and the package xcursor-themes in the guest.

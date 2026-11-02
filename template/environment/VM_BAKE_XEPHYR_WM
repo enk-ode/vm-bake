@@ -1,0 +1,2 @@
+ratpoison
+# @summary Window manager started inside a Xephyr compartment (session create x), on the host, so the guest's program gets a manager that gives every window the whole compartment; ratpoison does exactly that (host package ratpoison). The word none: no window manager, programs keep their start size.
