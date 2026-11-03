@@ -21,11 +21,15 @@ the database carries its records with dump and restore. The combinator
 engine is vm-bake's own, forked from [elvboot](https://github.com/enk-ode/elvboot)
 and renamed, as elvboot's was forked from vpn-switch.
 
-Status: the template family is complete (add, drop, show, the scalars
-base/bake/firmware/resource, the lists package/rc/user/service/forbid/
-data/session with add/drop/mask/show, dump and restore). Images, guests,
-sessions and the witness module follow. `docs/WALKTHROUGH.md` walks the
-first chain, the FreeBSD development guest.
+Status: templates (add, drop, show, the scalars base/bake/firmware/
+resource, the lists package/pkgfile/port/rc/env/user/home/service/forbid/
+data/session/tag with add/drop/mask/show), images (`image make freebsd`,
+on the host or in a builder guest), guests (`guest make`, tags, host keys,
+home seeds), sessions (ssh, and X in a Xephyr compartment) and the pair
+that travels (`dump`/`restore` with the records as witnesses, `export`/
+`import` with the bundle of host keys, package files and home seeds, sealed
+to the dump). `docs/WALKTHROUGH.md` walks the first chain, the FreeBSD
+development guest.
 
     vm-bake bootstrap production minimal
     vm-bake template add freebsd

@@ -75,6 +75,46 @@ replay is idempotent, an existing template is never re-minted.
     vm-bake template dump all > templates.vmb
     vm-bake template restore templates.vmb
 
+The whole database is `dump`: a header (generator, format, date, profile,
+base), the environment the replay needs, every template, then the image
+and guest records as witnesses -- what was baked from which template, with
+which digest, which guest ran it at which address with which tags. A
+replay of those lines places the records only; the images and clones stay
+where they were made. On a host that has none, the records say what to
+bake: `image drop` lets a witness go, `image make <template> <image>` bakes
+it anew, `guest make` clones it.
+
+    vm-bake dump > vm-bake.dump
+    vm-bake restore vm-bake.dump
+
+## Export and import
+
+What the dump cannot carry travels in the bundle: the guest host keys (the
+guests keep their identity, known_hosts stays right), the package files of
+every `pkgfile` list, the home seeds of every `home` list. `export` writes
+the pair -- the dump to a path you commit, the bundle to a store of your
+own -- and seals the dump with the bundle's sha256. Nothing is signed or
+encrypted by vm-bake: the signed commit that carries the dump is the
+signature, and the bundle holds private keys, so it stays private.
+
+    vm-bake export ~/git/vm-bake-dump/illyria/production/dump.sh \
+        ~/Infrastruktur/vm-bake-export/illyria/production/20261103.tar.gz
+
+The bundle is built in the database under `export/`: `collection` lists
+the files, `tree/` is their copy with the `MANIFEST` (sha256 per file,
+symlinks by target), readable before it is packed. `import` checks the
+pair end to end before a byte lands: the seal, the MANIFEST against the
+unpacked tree under `~/.vm-bake/incoming/`, then every file against its
+place here -- absent or identical passes, a file that differs is refused
+by name and nothing is placed. Then the missing files land (keys in the
+database, packages in VM_BAKE_PKG_DIR, seeds in your home) and the dump
+replays. Bootstrap the database first; the dump's `# Profile:` header
+names the profile.
+
+    vm-bake bootstrap production minimal
+    vm-bake import ~/git/vm-bake-dump/illyria/production/dump.sh \
+        ~/Infrastruktur/vm-bake-export/illyria/production/20261103.tar.gz
+
 ## Inspect first
 
 The engine shows shell before it runs it. The bookkeeping terminals of the

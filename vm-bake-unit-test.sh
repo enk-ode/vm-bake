@@ -1182,6 +1182,112 @@ parallel_main() {
   return $rc
 }
 
+test_dump_witness() {
+  test_header "dump: header, image and guest records as witnesses, env and tag lines with their arity, a replay restores the records"
+  test_setup
+  run_vmbake template add freebsd > /dev/null
+  run_vmbake template env add freebsd LANG C.UTF-8 > /dev/null
+  run_vmbake template tag add freebsd purpose 'dev with spaces' > /dev/null
+  run_vmbake image record write freebsd img1 > /dev/null
+  printf '%s\n' 0123456789abcdef > "$TEST_DIR/image/img1/digest"
+  run_vmbake image record write freebsd img2 > /dev/null
+  run_vmbake guest record write img1 g1 172.16.100.5/24 > /dev/null
+  run_vmbake guest tag add g1 note 'two words' > /dev/null
+  run_vmbake dump > "$TEST_DIR/all.vmb" 2>/dev/null
+  if grep -q '^# vm-bake database dump$' "$TEST_DIR/all.vmb" && grep -q "^# Profile: $TEST_PROFILE$" "$TEST_DIR/all.vmb" && grep -q '^# Version: 1$' "$TEST_DIR/all.vmb"; then
+    pass "the dump opens with its header: generator, version, profile"
+  else
+    fail "header: $(head -8 "$TEST_DIR/all.vmb")"
+  fi
+  if grep -q "template env add 'freebsd' 'LANG' 'C.UTF-8'" "$TEST_DIR/all.vmb" && grep -q "template tag add 'freebsd' 'purpose' 'dev with spaces'" "$TEST_DIR/all.vmb"; then
+    pass "env and tag lines replay with the arity of their commands"
+  else
+    fail "env/tag lines: $(grep 'template env\|template tag' "$TEST_DIR/all.vmb")"
+  fi
+  if grep -q "image record restore 'img1' 'freebsd' '[0-9T:Z-]*' '0123456789abcdef'" "$TEST_DIR/all.vmb" && grep -q "image record restore 'img2' 'freebsd' '[0-9T:Z-]*' 'open'" "$TEST_DIR/all.vmb" && grep -q "guest record restore 'g1' 'img1' '172.16.100.5/24' '[0-9T:Z-]*'" "$TEST_DIR/all.vmb" && grep -q "guest tag add 'g1' 'note' 'two words'" "$TEST_DIR/all.vmb"; then
+    pass "image and guest records are witnesses in the dump, the guest with its own tags"
+  else
+    fail "witness lines: $(grep 'record restore\|guest tag' "$TEST_DIR/all.vmb")"
+  fi
+  local second="$TEST_BASE_DIR/test-$TESTS_RUN-second"
+  mkdir -p "$second"
+  VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" bootstrap "test-$TESTS_RUN-second" "$TEST_PROFILE" > /dev/null 2>&1
+  VM_BAKE_BASE="$second" "$TEST_SCRIPT" setenv VM_BAKE_TERMINAL_INTERPRETER sh > /dev/null 2>&1
+  VM_BAKE_BASE="$second" "$TEST_SCRIPT" restore "$TEST_DIR/all.vmb" > "$TEST_DIR/restore.log" 2>&1
+  if [ "$(cat "$second/image/img1/digest")" = "0123456789abcdef" ] && [ ! -e "$second/image/img2/digest" ] && [ "$(cat "$second/image/img1/dir")" = "/data/vm/vm-bake/image/img1" ] && [ "$(cat "$second/guest/g1/address")" = "172.16.100.5/24" ] && grep -qx 'note two words' "$second/guest/g1/tag"; then
+    pass "the replay places the records: digest or none, this host's dir, the guest's address and tags"
+  else
+    fail "restored records: $(tail -5 "$TEST_DIR/restore.log")"
+  fi
+  if VM_BAKE_BASE="$second" "$TEST_SCRIPT" restore "$TEST_DIR/all.vmb" > /dev/null 2>&1 && VM_BAKE_BASE="$second" "$TEST_SCRIPT" image record restore img1 other 2026-01-01T00:00:00Z open 2>&1 | grep -q "differs"; then
+    pass "a second replay keeps identical records (silently); a record that differs is refused"
+  else
+    fail "record compare: $(VM_BAKE_BASE="$second" "$TEST_SCRIPT" image record restore img1 other 2026-01-01T00:00:00Z open 2>&1)"
+  fi
+}
+
+test_archive_pair() {
+  test_header "export and import: the pair (dump sealed to the bundle, MANIFEST), files placed where their kind lives, identical files kept, a differing file or a wrong bundle refused"
+  test_setup
+  mkdir -p "$TEST_DIR/pkg" "$TEST_DIR/pair"
+  run_vmbake setenv VM_BAKE_PKG_DIR "$TEST_DIR/pkg" > /dev/null
+  run_vmbake template add freebsd > /dev/null
+  run_vmbake template pkgfile add freebsd foo-1.0.pkg > /dev/null
+  run_vmbake template pkgfile add freebsd gone-2.0.pkg > /dev/null
+  printf 'package\n' > "$TEST_DIR/pkg/foo-1.0.pkg"
+  run_vmbake image record write freebsd img1 > /dev/null
+  run_vmbake guest record write img1 g1 172.16.100.5/24 > /dev/null
+  run_vmbake guest hostkey ensure g1 > /dev/null 2>&1
+  if run_vmbake export pair/dump.sh "$TEST_DIR/pair/bundle.tar.gz" | grep -q "must be absolute"; then
+    pass "export refuses a relative path"
+  else
+    fail "relative path accepted"
+  fi
+  run_vmbake export "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" > "$TEST_DIR/export.log" 2>&1
+  if [ "$(tar tzf "$TEST_DIR/pair/bundle.tar.gz" | tr '\n' ' ')" = "guest/g1/ssh_host_ed25519_key guest/g1/ssh_host_ed25519_key.pub pkg/foo-1.0.pkg MANIFEST collection " ] && grep -q "not bundled: pkg/gone-2.0.pkg" "$TEST_DIR/export.log"; then
+    pass "the bundle carries the host key pair, the package file, MANIFEST and collection; a missing package file is noted"
+  else
+    fail "bundle: $(tar tzf "$TEST_DIR/pair/bundle.tar.gz" 2>&1 | tr '\n' ' '); $(cat "$TEST_DIR/export.log")"
+  fi
+  if grep -q "^pkg/foo-1.0.pkg sha256=$(sha256 -q "$TEST_DIR/pkg/foo-1.0.pkg")$" "$TEST_DIR/export/tree/MANIFEST" && [ "$(tail -1 "$TEST_DIR/pair/dump.sh")" = "# Bundle: sha256=$(sha256 -q "$TEST_DIR/pair/bundle.tar.gz") bytes=$(wc -c < "$TEST_DIR/pair/bundle.tar.gz" | tr -d ' ')" ] && grep -q "image record restore 'img1'" "$TEST_DIR/pair/dump.sh"; then
+    pass "the MANIFEST hashes the files, the dump ends with the seal of this bundle and carries the records"
+  else
+    fail "manifest/seal: $(cat "$TEST_DIR/export/tree/MANIFEST"); $(tail -2 "$TEST_DIR/pair/dump.sh")"
+  fi
+  local second="$TEST_BASE_DIR/test-$TESTS_RUN-second"
+  mkdir -p "$second" "$TEST_DIR/pkg2"
+  VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" bootstrap "test-$TESTS_RUN-second" "$TEST_PROFILE" > /dev/null 2>&1
+  VM_BAKE_BASE="$second" "$TEST_SCRIPT" setenv VM_BAKE_TERMINAL_INTERPRETER sh > /dev/null 2>&1
+  VM_BAKE_BASE="$second" "$TEST_SCRIPT" setenv VM_BAKE_PKG_DIR "$TEST_DIR/pkg2" > /dev/null 2>&1
+  if VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" import "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" > "$TEST_DIR/import.log" 2>&1 && grep -q "3 files placed, 0 already here" "$TEST_DIR/import.log" && cmp -s "$TEST_DIR/guest/g1/ssh_host_ed25519_key" "$second/guest/g1/ssh_host_ed25519_key" && cmp -s "$TEST_DIR/pkg/foo-1.0.pkg" "$TEST_DIR/pkg2/foo-1.0.pkg" && [ "$(stat -f %Lp "$second/guest/g1/ssh_host_ed25519_key")" = "600" ] && [ "$(cat "$second/guest/g1/image")" = "img1" ] && [ -d "$TEST_BASE_DIR/incoming/bundle" ]; then
+    pass "import verifies, unpacks into incoming, places the key (0600) and the package file, replays the records"
+  else
+    fail "import: $(grep -v '^$' "$TEST_DIR/import.log" | tail -8)"
+  fi
+  if VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" import "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" 2>&1 | grep -q "0 files placed, 3 already here"; then
+    pass "a second import keeps the identical files and replays idempotently"
+  else
+    fail "second import"
+  fi
+  printf 'changed\n' > "$TEST_DIR/pkg/foo-1.0.pkg"
+  if ! VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" import "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" > "$TEST_DIR/import3.log" 2>&1 && grep -q "DIFFERS pkg/foo-1.0.pkg" "$TEST_DIR/import3.log" && [ "$(cat "$TEST_DIR/pkg/foo-1.0.pkg")" = "changed" ]; then
+    pass "a file here that differs from the bundle's is refused and left alone"
+  else
+    fail "differs: $(tail -3 "$TEST_DIR/import3.log")"
+  fi
+  printf 'x' >> "$TEST_DIR/pair/bundle.tar.gz"
+  if VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" import "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" 2>&1 | grep -q "MISMATCHED PAIR"; then
+    pass "a bundle the dump does not name is refused before anything is unpacked"
+  else
+    fail "seal verify"
+  fi
+  if run_vmbake export "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" > /dev/null 2>&1 && [ "$(grep -c '^# Bundle:' "$TEST_DIR/pair/dump.sh")" = "1" ]; then
+    pass "export again writes a fresh pair with one seal"
+  else
+    fail "re-export: $(grep -c '^# Bundle:' "$TEST_DIR/pair/dump.sh") seals"
+  fi
+}
+
 main() {
   if [ "$MAXPROCS" -gt 1 ]; then
     parallel_main
@@ -1211,6 +1317,8 @@ main() {
   should_run_test test_tag_plan
   should_run_test test_env_plan
   should_run_test test_home_plan
+  should_run_test test_dump_witness
+  should_run_test test_archive_pair
 
   test_summary
 }

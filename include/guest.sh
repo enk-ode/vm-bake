@@ -673,3 +673,96 @@ _guest_list0() {
 	done
 	test "$n" -gt 0 || printf '%s\n' "#   (none)"
 }
+
+#@help ___guest_dump_all0
+# @command guest dump all
+# @summary Every guest record as replay lines, one 'guest dump record' per record, no records a comment -- the dump's witness of the guests (image, address, created, own tags); the clone never travels, 'guest make' makes it anew, the host key comes with the bundle
+# @group   guest
+# @see     dump all
+# @see     guest dump record
+#@end
+___guest_dump_all0() {
+	local d="" n=0
+	for d in "$VM_BAKE_BASE"/guest/*/; do
+		test -f "$d/image" || continue
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dump record $(sq "$(basename "$d")")"
+		n=$((n + 1))
+	done
+	test "$n" -gt 0 || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'no guest records to dump'"
+}
+
+#@help ___guest_dump_record1
+# @command guest dump record <guest>
+# @summary The replay lines of one guest record, a batch pinned to cat so it is shown rather than run: 'guest record restore <guest> <image> <address> <created>', then 'guest tag add' for every own tag
+# @group   guest
+# @internal
+# @see     guest dump all
+# @see     guest record restore
+#@end
+___guest_dump_record1() {
+	local d="$VM_BAKE_BASE/guest/$1" i="" a="" c="" l=""
+	IFS= read -r i 2>/dev/null < "$d/image" || i=-
+	IFS= read -r a 2>/dev/null < "$d/address" || a=-
+	IFS= read -r c 2>/dev/null < "$d/created" || c=-
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record restore $(sq "$1") $(sq "$i") $(sq "$a") $(sq "$c")"
+	test -f "$d/tag" && while IFS= read -r l; do
+		test -n "$l" || continue
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest tag add $(sq "$1") $(sq "${l%% *}") $(sq "${l#* }")"
+	done < "$d/tag"
+	return 0
+}
+
+#@help ___guest_record_restore4
+# @command guest record restore <guest> <image> <address> <created>
+# @summary A record from a dump, the witness of a guest made elsewhere or before: the name and the address valid; then 'guest record compare' -- no record of that name here: placed; the same record: a comment; one that differs: an error. The record stands for a clone that is NOT here: 'guest drop <guest>' lets it go, 'guest make <image> <guest> <address>' makes it anew; a host key placed by import keeps its identity
+# @group   guest
+# @example vm-bake guest record restore caledonia freebsd-x-20261102 172.16.100.102/24 2026-11-02T15:56:46Z
+# @see     guest dump all
+# @see     guest record compare
+# @see     guest make
+#@end
+___guest_record_restore4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest name valid $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest address valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record compare $(sq "$1") $(sq "$2") $(sq "$3") $(sq "$4")"
+}
+
+#@help __guest_record_compare4
+# @command guest record compare <guest> <image> <address> <created>
+# @summary The record here against the one from the dump, read at generation: none -> 'guest record place'; the same image, address and created -> a comment line; a record that differs -> an error line (guest drop <guest> first, or keep yours)
+# @group   guest
+# @internal
+# @see     guest record restore
+# @see     guest record place
+#@end
+__guest_record_compare4() {
+	local d="$VM_BAKE_BASE/guest/$1" i="" a="" c=""
+	IFS= read -r i 2>/dev/null < "$d/image" || i=""
+	IFS= read -r a 2>/dev/null < "$d/address" || a=""
+	IFS= read -r c 2>/dev/null < "$d/created" || c=""
+	if test ! -f "$d/image"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record place $(sq "$1") $(sq "$2") $(sq "$3") $(sq "$4")"
+	elif test "$i" = "$2" && test "$a" = "$3" && test "$c" = "$4"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1: record identical, kept")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest record restore: $1 has a record here that differs (image $i, address $a, created $c) -- guest drop $1 first, or keep yours")"
+	fi
+}
+
+#@help _guest_record_place4
+# @command guest record place <guest> <image> <address> <created>
+# @summary Act terminal: the record guest/<guest>/ written from a dump -- image, address and created as given; 0700 and 0600 (a host key import placed there before stays)
+# @group   guest
+# @internal
+# @see     guest record compare
+# @see     guest record write
+#@end
+_guest_record_place4() {
+	local rec="$VM_BAKE_BASE/guest/$1"
+	printf '%s\n' "$MODIFY_DIR_CREATE '$rec' && $MODIFY_FILE_PERMS 0700 '$rec'"
+	printf '%s\n' "printf '%s\\n' $(sq "$2") > '$rec/image'"
+	printf '%s\n' "printf '%s\\n' $(sq "$3") > '$rec/address'"
+	printf '%s\n' "printf '%s\\n' $(sq "$4") > '$rec/created'"
+	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$rec/image' '$rec/address' '$rec/created'"
+	emit_note "guest $1: record restored (image $2, address $3, created $4)"
+}

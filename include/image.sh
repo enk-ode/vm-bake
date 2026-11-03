@@ -1536,3 +1536,93 @@ _image_list0() {
 	done
 	test "$n" -gt 0 || printf '%s\n' "#   (none)"
 }
+
+#@help ___image_dump_all0
+# @command image dump all
+# @summary Every image record as replay lines, one 'image dump record' per record, no records a comment -- the dump's witness of what was baked (template, created, digest); the images themselves never travel, 'image make' bakes them anew
+# @group   image
+# @see     dump all
+# @see     image dump record
+#@end
+___image_dump_all0() {
+	local d="" n=0
+	for d in "$VM_BAKE_BASE"/image/*/; do
+		test -f "$d/template" || continue
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image dump record $(sq "$(basename "$d")")"
+		n=$((n + 1))
+	done
+	test "$n" -gt 0 || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'no image records to dump'"
+}
+
+#@help ___image_dump_record1
+# @command image dump record <image>
+# @summary The replay line of one image record, a batch pinned to cat so it is shown rather than run: 'image record restore <image> <template> <created> <digest>', the digest 'open' while the bake was not closed
+# @group   image
+# @internal
+# @see     image dump all
+# @see     image record restore
+#@end
+___image_dump_record1() {
+	local d="$VM_BAKE_BASE/image/$1" t="" c="" g=""
+	IFS= read -r t 2>/dev/null < "$d/template" || t=-
+	IFS= read -r c 2>/dev/null < "$d/created" || c=-
+	IFS= read -r g 2>/dev/null < "$d/digest" || g=open
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image record restore $(sq "$1") $(sq "$t") $(sq "$c") $(sq "$g")"
+}
+
+#@help ___image_record_restore4
+# @command image record restore <image> <template> <created> <digest>
+# @summary A record from a dump, the witness of an image baked elsewhere or before: the name valid; then 'image record compare' -- no record of that name here: placed; the same record: a comment; one that differs: an error. The record stands for an image that is NOT here (its dir is this host's VM_BAKE_IMAGE_DIR/<image>, empty until baked): 'image drop <image>' lets it go, 'image make <template> <image>' bakes it anew and the digest here says what it was
+# @group   image
+# @param   digest  the sha256 of the sealed image, or 'open' for a bake that was not closed
+# @example vm-bake image record restore freebsd-dev-20261101 freebsd-dev 2026-11-01T12:42:19Z d98439466dc8fd0bb129ec224f6201e5c849f0edca9fc29f02414142718ff17f
+# @see     image dump all
+# @see     image record compare
+# @see     image make freebsd
+#@end
+___image_record_restore4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image name valid $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image record compare $(sq "$1") $(sq "$2") $(sq "$3") $(sq "$4")"
+}
+
+#@help __image_record_compare4
+# @command image record compare <image> <template> <created> <digest>
+# @summary The record here against the one from the dump, read at generation: none -> 'image record place'; the same template, created and digest -> a comment line; a record that differs -> an error line (image drop <image> first, or keep yours)
+# @group   image
+# @internal
+# @see     image record restore
+# @see     image record place
+#@end
+__image_record_compare4() {
+	local d="$VM_BAKE_BASE/image/$1" t="" c="" g=""
+	IFS= read -r t 2>/dev/null < "$d/template" || t=""
+	IFS= read -r c 2>/dev/null < "$d/created" || c=""
+	IFS= read -r g 2>/dev/null < "$d/digest" || g=open
+	if test ! -f "$d/template"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image record place $(sq "$1") $(sq "$2") $(sq "$3") $(sq "$4")"
+	elif test "$t" = "$2" && test "$c" = "$3" && test "$g" = "$4"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "image $1: record identical, kept")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image record restore: $1 has a record here that differs (template $t, created $c, digest $g) -- image drop $1 first, or keep yours")"
+	fi
+}
+
+#@help _image_record_place4
+# @command image record place <image> <template> <created> <digest>
+# @summary Act terminal: the record image/<image>/ written from a dump -- template, created and digest as given (no digest file for 'open'), dir as THIS host's VM_BAKE_IMAGE_DIR/<image>; 0700 and 0600
+# @group   image
+# @internal
+# @env     VM_BAKE_IMAGE_DIR  the images' directory on this host
+# @see     image record compare
+# @see     image record write
+#@end
+_image_record_place4() {
+	local rec="$VM_BAKE_BASE/image/$1"
+	printf '%s\n' "$MODIFY_DIR_CREATE '$rec' && $MODIFY_FILE_PERMS 0700 '$rec'"
+	printf '%s\n' "printf '%s\\n' $(sq "$2") > '$rec/template'"
+	printf '%s\n' "printf '%s\\n' $(sq "$3") > '$rec/created'"
+	printf '%s\n' "printf '%s\\n' $(sq "$VM_BAKE_IMAGE_DIR/$1") > '$rec/dir'"
+	test "$4" = open || printf '%s\n' "printf '%s\\n' $(sq "$4") > '$rec/digest'"
+	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$rec'/*"
+	emit_note "image $1: record restored (template $2, created $3, digest $4)"
+}

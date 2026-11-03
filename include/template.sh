@@ -1715,7 +1715,7 @@ empty
 # @see     template dump
 #@end
 ___template_dump_record1() {
-	local d="$VM_BAKE_BASE/template/$1" p=empty v="" rest="" f="" l=""
+	local d="$VM_BAKE_BASE/template/$1" p=empty v="" rest="" f="" l="" a=""
 	IFS= read -r p 2>/dev/null < "$d/parent" || p=empty
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template add '$1' '$p'"
 	if test -f "$d/base"; then
@@ -1734,13 +1734,21 @@ ___template_dump_record1() {
 	for f in $TEMPLATE_FAMILIES; do
 		test -f "$d/$f" && while IFS= read -r l; do
 			test -n "$l" || continue
-			case "$f" in rc) l="${l%%=*} ${l#*=}" ;; esac
-			printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template $f add '$1' $(printf '%s\n' "$l" | sed "s/[^ ]*/'&'/g")"
+			case "$f" in
+			rc|env) a="$(sq "${l%%=*}") $(sq "${l#*=}")" ;;
+			tag) a="$(sq "${l%% *}") $(sq "${l#* }")" ;;
+			*) a=$(printf '%s\n' "$l" | sed "s/[^ ]*/'&'/g") ;;
+			esac
+			printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template $f add '$1' $a"
 		done < "$d/$f"
 		test -f "$d/$f.mask" && while IFS= read -r l; do
 			test -n "$l" || continue
-			case "$f" in rc) l="${l%%=*} ${l#*=}" ;; esac
-			printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template $f mask '$1' $(printf '%s\n' "$l" | sed "s/[^ ]*/'&'/g")"
+			case "$f" in
+			rc|env) a="$(sq "${l%%=*}") $(sq "${l#*=}")" ;;
+			tag) a="$(sq "${l%% *}") $(sq "${l#* }")" ;;
+			*) a=$(printf '%s\n' "$l" | sed "s/[^ ]*/'&'/g") ;;
+			esac
+			printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template $f mask '$1' $a"
 		done < "$d/$f.mask"
 	done
 	return 0

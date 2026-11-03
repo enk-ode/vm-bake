@@ -4,8 +4,8 @@
 #
 # Copyright (c) 2026 Dr. Johannes Brügmann
 # vm-bake database - the database itself: bootstrap, environment, dump and
-# restore, the archive pipeline (collect, filter, bundle, seal, export,
-# import), batch execution and destroy.
+# restore, batch execution and destroy. The pair that travels (export,
+# bundle, seal, import) lives in archive.sh.
 
 #@help __bootstrap1
 # @command bootstrap <name> <profile>
@@ -1096,16 +1096,40 @@ __dump0() {
 
 #@help ___dump_all0
 # @command dump all
-# @summary Every template as replay lines, framed by the environment: the prologue (the overrides the replay depends on), the templates parents first, the epilogue (every override, the pins included)
+# @summary The database as replay lines: the header (generator, format, date, profile, base), the prologue (the overrides the replay depends on), the templates parents first, the image and guest records as witnesses, the epilogue (every override, the pins included)
 # @group   database
+# @see     dump header
 # @see     dump env prologue
 # @see     template dump all
+# @see     image dump all
+# @see     guest dump all
 # @see     dump env epilogue
+# @see     export
 #@end
 ___dump_all0() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" dump header"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" dump env prologue"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template dump all"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image dump all"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dump all"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" dump env epilogue"
+}
+
+#@help _dump_header0
+# @command dump header
+# @summary Display terminal, pinned to cat: the header of a dump as comment lines -- the generator ('vm-bake <format> <commit>', what 'version' prints), the format as '# Version:', the date, the profile of this database (the suffix of the VM_BAKE_PROFILE_ marker in .env/default, '# Profile:', what import names when there is no database yet) and the base
+# @group   database
+# @internal
+# @env     VM_BAKE_FORMAT  the dump format major version
+# @see     dump all
+# @see     version
+#@end
+_dump_header0() {
+	local commit=""
+	commit=$(git -C "$VM_BAKE_LIBDIR" rev-parse --short HEAD 2>/dev/null)
+	test -n "$commit" || commit=$(head -n1 "$VM_BAKE_LIBDIR/VERSION" 2>/dev/null)
+	printf '# vm-bake database dump\n# Generator: vm-bake %s %s\n# Version: %s\n' "$VM_BAKE_FORMAT" "${commit:-unknown}" "$VM_BAKE_FORMAT"
+	printf '# Generated: %s\n# Profile: %s\n# Base: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$(ls "$VM_BAKE_BASE/.env/default" 2>/dev/null | sed -n 's/^VM_BAKE_PROFILE_//p' | head -n1 | tr '[:upper:]' '[:lower:]')" "$VM_BAKE_BASE"
 }
 
 #@help __dump1

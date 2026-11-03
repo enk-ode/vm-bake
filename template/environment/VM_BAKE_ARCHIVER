@@ -1,0 +1,2 @@
+tar --uid 0 --gid 0 --uname root --gname wheel -cf - -C "$b" -T - | gzip -n > "$a"
+# @summary The packing template for bundle: $a is the archive, $b the base directory (export/tree), the file list arrives on stdin as the collection wrote it. Byte-stable by construction: no ownership, no gzip timestamp (-n), the member order is the collection order. Alternative: (cd "$b" && zip -q -X "$a" -@)
