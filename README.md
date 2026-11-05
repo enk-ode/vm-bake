@@ -27,7 +27,7 @@ and renamed, as elvboot's was forked from vpn-switch.
 
 Status: templates (add, drop, show, the scalars base/bake/firmware/
 resource, the lists package/pkgfile/port/rc/env/user/home/service/forbid/
-data/session/tag with add/drop/mask/show), images (`image make freebsd`,
+data/session/tag with add/drop/mask/unmask/show), images (`image make freebsd`,
 on the host or in a builder guest), guests (`guest make`, tags, host keys,
 home seeds, the view with its overlays and the guest's own repository
 clones), sessions (ssh, and X in a Xephyr compartment) and the pair

@@ -329,6 +329,13 @@ test_template_lists() {
   else
     fail "mask: $(run_vmbake template package show freebsd-dev)"
   fi
+  run_vmbake template package unmask freebsd-dev emacs > /dev/null
+  if run_vmbake template package show freebsd-dev | grep -q emacs && run_vmbake template package unmask freebsd-dev emacs | grep -q "does not mask emacs"; then
+    pass "unmask takes the mask back, and without a mask it is an error"
+  else
+    fail "unmask: $(run_vmbake template package show freebsd-dev)"
+  fi
+  run_vmbake template package mask freebsd-dev emacs > /dev/null
   run_vmbake template package drop freebsd-dev claude-code > /dev/null
   if ! grep -q claude-code "$(record_of freebsd-dev)/package" && grep -q vscode "$(record_of freebsd-dev)/package"; then
     pass "drop removes exactly the own line"
@@ -357,6 +364,27 @@ test_template_lists() {
     pass "every family validates its entry"
   else
     fail "family guards"
+  fi
+  run_vmbake template add freebsd-y freebsd-dev > /dev/null
+  run_vmbake template rc mask freebsd-y linux_enable YES > /dev/null
+  run_vmbake template user mask freebsd-y brj host > /dev/null
+  run_vmbake template service mask freebsd-y display x > /dev/null
+  run_vmbake template forbid mask freebsd-y usb > /dev/null
+  run_vmbake template forbid mask freebsd-y net 192.168.1.0/24 > /dev/null
+  run_vmbake template data mask freebsd-y home 64G proton > /dev/null
+  run_vmbake template session mask freebsd-y ssh > /dev/null
+  run_vmbake template rc unmask freebsd-y linux_enable YES > /dev/null
+  run_vmbake template user unmask freebsd-y brj host > /dev/null
+  run_vmbake template service unmask freebsd-y display x > /dev/null
+  run_vmbake template forbid unmask freebsd-y usb > /dev/null
+  run_vmbake template forbid unmask freebsd-y net 192.168.1.0/24 > /dev/null
+  run_vmbake template data unmask freebsd-y home 64G proton > /dev/null
+  run_vmbake template session unmask freebsd-y ssh > /dev/null
+  local y; y=$(record_of freebsd-y)
+  if [ -z "$(cd "$y" && cat rc.mask user.mask service.mask forbid.mask data.mask session.mask 2>/dev/null)" ] && run_vmbake template dump record freebsd-y | grep -vq mask; then
+    pass "every family takes its mask back, with and without an argument, and the dump holds none"
+  else
+    fail "unmask over the families: $(cd "$y" && grep . ./*.mask 2>&1)"
   fi
   run_vmbake template rc drop freebsd-dev linux_enable YES > /dev/null
   if [ ! -s "$d/rc" ]; then

@@ -1,0 +1,2 @@
+sh
+# Bookkeeping terminal of the templates (template line unmask), pinned to sh: it takes a line out of the template s own mask list, like line remove does for the own list.

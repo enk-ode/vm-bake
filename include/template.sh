@@ -1544,6 +1544,218 @@ _template_line_remove3() {
 	printf '%s\n' "printf '# template %s: %s - %s\\n' '$1' '$2' $(sq "$3") >&2"
 }
 
+#@help ___template_package_unmask2
+# @command template package unmask <template> <package>
+# @summary Take a mask back: the template exists, the name is a package name, the line is masked here; then 'template line unmask' -- what the chain inherits is visible again
+# @group   template
+# @example vm-bake template package unmask freebsd-dev emacs
+# @see     template package mask
+#@end
+___template_package_unmask2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template package valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") package $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") package $(sq "$2")"
+}
+
+#@help ___template_port_unmask2
+# @command template port unmask <template> <origin>
+# @summary Take a mask back: the template exists, the origin is valid, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template port mask
+#@end
+___template_port_unmask2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template port valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") port $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") port $(sq "$2")"
+}
+
+#@help ___template_pkgfile_unmask2
+# @command template pkgfile unmask <template> <file>
+# @summary Take a mask back: the template exists, the name is valid, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template pkgfile mask
+#@end
+___template_pkgfile_unmask2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template pkgfile valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") pkgfile $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") pkgfile $(sq "$2")"
+}
+
+#@help ___template_tag_unmask3
+# @command template tag unmask <template> <key> <text>
+# @summary Take a mask back: the template exists, the key is a word, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template tag mask
+#@end
+___template_tag_unmask3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") tag $(sq "$2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") tag $(sq "$2 $3")"
+}
+
+#@help ___template_env_unmask3
+# @command template env unmask <template> <variable> <value>
+# @summary Take a mask back: the template exists, the name is a variable name, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template env mask
+#@end
+___template_env_unmask3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template rc valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") env $(sq "$2=$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") env $(sq "$2=$3")"
+}
+
+#@help ___template_rc_unmask3
+# @command template rc unmask <template> <variable> <value>
+# @summary Take a mask back: the template exists, the name is a variable name and the value a word, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template rc mask
+#@end
+___template_rc_unmask3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template rc valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") rc $(sq "$2=$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") rc $(sq "$2=$3")"
+}
+
+#@help ___template_user_unmask3
+# @command template user unmask <template> <name> <uid>|host
+# @summary Take a mask back: the template exists, name and uid are valid, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template user mask
+#@end
+___template_user_unmask3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template user valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template uid valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") user $(sq "$2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") user $(sq "$2 $3")"
+}
+
+#@help __template_home_unmask2
+# @command template home unmask <template> <path> [<mode>]
+# @summary Take a mask back, the line being '<path> <mode>' with ro as the default: rewrite to 'template home unmask <template> <path> ro'
+# @group   template
+# @param   mode  ro (the default) or rw, as the masked line reads
+# @example vm-bake template home unmask freebsd-x .themes/NsCDE
+# @see     template home mask
+#@end
+__template_home_unmask2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home unmask $(sq "$1") $(sq "$2") ro"
+}
+
+#@help ___template_home_unmask3
+# @internal arity-3 sibling of 'template home unmask' (template home unmask <template> <path> <mode>): the template exists, the path and the mode are valid, the line '<path> <mode>' is masked here; then 'template line unmask'
+#@end
+___template_home_unmask3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home mode valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") home $(sq "$2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") home $(sq "$2 $3")"
+}
+
+#@help ___template_service_unmask3
+# @command template service unmask <template> <kind> <variant>
+# @summary Take a mask back: the template exists, kind and variant are valid, the line is masked here; then 'template line unmask'
+# @group   template
+# @example vm-bake template service unmask freebsd-x files view
+# @see     template service mask
+#@end
+___template_service_unmask3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template service valid $(sq "$2") $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") service $(sq "$2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") service $(sq "$2 $3")"
+}
+
+#@help ___template_forbid_unmask2
+# @internal arity-2 sibling of 'template forbid unmask' (a kind without argument): the template exists, the kind is valid, the line is masked here; then 'template line unmask'
+#@end
+___template_forbid_unmask2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template forbid valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") forbid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") forbid $(sq "$2")"
+}
+
+#@help ___template_forbid_unmask3
+# @command template forbid unmask <template> <kind> [<argument>]
+# @summary Take a mask back: the template exists, kind and argument are valid, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template forbid mask
+#@end
+___template_forbid_unmask3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template forbid valid $(sq "$2") $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") forbid $(sq "$2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") forbid $(sq "$2 $3")"
+}
+
+#@help ___template_data_unmask4
+# @command template data unmask <template> <name> <size> <class>
+# @summary Take a mask back: the template exists, the entry is valid, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template data mask
+#@end
+___template_data_unmask4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template size valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") data $(sq "$2 $3 $4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") data $(sq "$2 $3 $4")"
+}
+
+#@help ___template_session_unmask2
+# @command template session unmask <template> <protocol>
+# @summary Take a mask back: the template exists, the protocol is valid, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template session mask
+#@end
+___template_session_unmask2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template protocol valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") session $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") session $(sq "$2")"
+}
+
+#@help __template_line_masked3
+# @command template line masked <template> <family> <line>
+# @summary The line is masked in this template's own mask list (<family>.mask): a comment line, else an error line -- the guard of every unmask
+# @group   template
+# @internal
+# @see     template line unmask
+#@end
+__template_line_masked3() {
+	if grep -qxF "$3" "$VM_BAKE_BASE/template/$1/$2.mask" 2>/dev/null; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "template $1: $2 mask $3 is there")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template $1: $2 does not mask $3 here (template $2 show $1 names what the chain gives, template dump record $1 the masks)")"
+	fi
+}
+
+#@help _template_line_unmask3
+# @command template line unmask <template> <family> <line>
+# @summary Act terminal: the line removed from the template's own mask list (<family>.mask, 0600) -- the counterpart of 'template line mask'; what the chain inherits reaches this template and everything below it again
+# @group   template
+# @internal
+# @see     template line mask
+# @see     template line masked
+#@end
+_template_line_unmask3() {
+	local f="$VM_BAKE_BASE/template/$1/$2.mask"
+	printf '%s\n' "{ grep -vxF $(sq "$3") '$f' > '$f.new' || true; } && mv -f '$f.new' '$f'"
+	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$f'"
+	printf '%s\n' "printf '# template %s: %s unmask %s\\n' '$1' '$2' $(sq "$3") >&2"
+}
+
 #@help _template_line_mask3
 # @command template line mask <template> <family> <line>
 # @summary Act terminal: append the line to the template's mask of <family> unless listed (0600) and say so -- 'template show' hides what ancestors contributed under that line

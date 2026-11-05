@@ -60,12 +60,20 @@ Records are immutable: a differing scalar is refused, drop it first.
     vm-bake template base drop freebsd-16.0
     vm-bake template base release freebsd-16.0 amd64 16.0-RC1
 
-An inherited list entry is not dropped in the child, it is masked there:
+An inherited list entry is not dropped in the child, it is masked there --
+and `unmask` takes that back, so a mask is as reversible as everything else:
 
     vm-bake template package add freebsd emacs
     vm-bake template package show freebsd-dev
     vm-bake template package mask freebsd-dev emacs
     vm-bake template package show freebsd-dev
+    vm-bake template package unmask freebsd-dev emacs
+    vm-bake template package show freebsd-dev
+
+Every list family has the same five verbs: `add`, `drop`, `mask`, `unmask`,
+`show`. `drop` works on the template's own list, `mask` and `unmask` on
+what the chain hands down; `template dump record <template>` shows both
+lists as replay lines, which is also where you see the masks.
 
 ## Dump and restore
 
