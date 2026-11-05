@@ -673,7 +673,7 @@ _guest_view_ensure1() {
 
 #@help _guest_view_mount1
 # @command guest view mount <guest>
-# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first; a line already hung in stays. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
+# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first; a line already hung in stays, a line from before the modes (a bare path) counts as ro. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
 # @group   guest
 # @internal
 # @see     guest start
@@ -703,7 +703,8 @@ _guest_view_mount1() {
 '; set -- $lines; IFS='
 '
 	for l; do
-		path=${l%% *}; mode=${l##* }
+		path=${l%% *}; mode=ro
+		case "$l" in *" "*) mode=${l##* } ;; esac
 		test -d "$home/$path" || { generate_error "guest view mount: $home/$path is no directory, and an overlay of a view is one"; return 0; }
 		printf '%s\n' "install -d -o $(sq "$u") -g $(sq "$g") -m 755 '$dir/$name/$path' || exit 1"
 		printf '%s\n' "mount | grep -q \" on $dir/$name/$path (\" || mount -t nullfs -o $mode '$home/$path' '$dir/$name/$path' || exit 1"

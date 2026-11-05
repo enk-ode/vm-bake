@@ -1242,6 +1242,14 @@ test_view_acts() {
     fail "view mount with a missing path: $(run_vmbake guest view mount caledonia)"
   fi
   run_vmbake template home drop freebsd-dev .no-such-dir-vmbake > /dev/null
+  printf '%s\n' .ssh >> "$(record_of freebsd-dev)/home"
+  if run_vmbake guest view mount caledonia | grep -q "mount -t nullfs -o ro '$HOME/.ssh' '$view/caledonia/.ssh'"; then
+    pass "a home line from before the modes (a bare path) counts as ro"
+  else
+    fail "view mount of a bare path: $(run_vmbake guest view mount caledonia)"
+  fi
+  run_vmbake template home drop freebsd-dev .ssh > /dev/null 2>&1
+  printf '%s\n' "$(grep -v '^.ssh$' "$(record_of freebsd-dev)/home")" > "$(record_of freebsd-dev)/home"
   if run_vmbake guest view unmount caledonia | grep -q "nothing hung into its view" && run_vmbake guest view destroy caledonia | grep -q "zfs destroy -r"; then
     pass "view unmount reads the mount table, view destroy destroys the dataset"
   else
