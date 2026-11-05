@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest repo refs), pinned to sh: git fetch as the invoking user, from the guest's clone into the refs of their own repository.

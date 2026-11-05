@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest view tree ensure), pinned to sudo sh: zfs create with a mountpoint in the home and the chown that hands the dataset of the views to the invoking user need root, once per host. Inspect first: vm-bake setintp guest_view_tree_ensure cat.

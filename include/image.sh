@@ -259,7 +259,7 @@ ___image_base_content_image1() {
 
 #@help ___image_burn1
 # @command image burn <image>
-# @summary Step 3, the template: the image has a record, every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its package files from VM_BAKE_PKG_DIR staged and added, its ports built and installed in the builder (an error line when ports are listed and VM_BAKE_BAKE_IN is host), its rc.conf lines, its env variables as profile.d, its users with the host key in authorized_keys, root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
+# @summary Step 3, the template: the image has a record, every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its package files from VM_BAKE_PKG_DIR staged and added, its ports built and installed in the builder (an error line when ports are listed and VM_BAKE_BAKE_IN is host), its rc.conf lines, its env variables as profile.d, its users with the host key in authorized_keys, the view of the host's home when the template says 'service files view', root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
 # @group   image
 # @example vm-bake image burn freebsd-dev-20261101
 # @see     image base
@@ -291,6 +291,7 @@ ___image_burn1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image rc write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image env write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image user make $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image view write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image root lock $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image doas write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image ssh write $(sq "$1")"
@@ -380,7 +381,7 @@ ___image_drop1() {
 
 #@help ___image_builder_use0
 # @command image builder use
-# @summary Bake in the builder guest from now on: VM_BAKE_BAKE_IN=builder, and the content terminals (disk mount, keys, pkg base, repo, boot, pkg install, rc, user, root lock, doas, ssh, pkg report, disk unmount) pinned to 'ssh -p VM_BAKE_SSH_PORT -i <key> VM_BAKE_BUILDER_USER@VM_BAKE_BUILDER_ADDRESS doas sh' -- one setintp line each, so the pins are seen
+# @summary Bake in the builder guest from now on: VM_BAKE_BAKE_IN=builder, and the content terminals (disk mount, keys, pkg base, repo, boot, pkg install, rc, user, view, root lock, doas, ssh, pkg report, disk unmount) pinned to 'ssh -p VM_BAKE_SSH_PORT -i <key> VM_BAKE_BUILDER_USER@VM_BAKE_BUILDER_ADDRESS doas sh' -- one setintp line each, so the pins are seen
 # @group   image
 # @example vm-bake image builder use
 # @see     image builder leave
@@ -396,7 +397,7 @@ ___image_builder_use0() {
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	ssh="ssh -p $VM_BAKE_SSH_PORT -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS doas sh"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN builder"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setintp $f $(sq "$ssh")"
 	done
 }
@@ -411,7 +412,7 @@ ___image_builder_use0() {
 ___image_builder_leave0() {
 	local f=""
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN host"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_user_make image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" unsetintp $f"
 	done
 }
@@ -1032,7 +1033,7 @@ _image_env_write1() {
 
 #@help _image_user_make1
 # @command image user make <image>
-# @summary Act terminal (root, host or builder): every user of the template's resolved user list (read at generation time) created in the image with 'pw -R' -- uid 'host' is the uid of that user on this host -- without a password, with the public key VM_BAKE_HOST_KEY in authorized_keys
+# @summary Act terminal (root, host or builder): every user of the template's resolved user list (read at generation time) created in the image with 'pw -R' -- uid 'host' is the uid of that user on this host -- without a password, with the public key VM_BAKE_HOST_KEY in their authorized_keys and in /etc/ssh/authorized_keys/<user>, where sshd reads it without the home (a view arrives only after the mount, image ssh write names both places)
 # @group   image
 # @internal
 # @see     image burn
@@ -1063,9 +1064,41 @@ _image_user_make1() {
 		printf '%s\n' "install -d -m 755 '$mnt/home' && install -d -m 750 '$mnt/home/$u' && install -d -m 700 '$mnt/home/$u/.ssh' || exit 1"
 		printf '%s\n' "printf '%s\\n' $(sq "$keytext") > '$mnt/home/$u/.ssh/authorized_keys' || exit 1"
 		printf '%s\n' "chmod 700 '$mnt/home/$u/.ssh' && chmod 600 '$mnt/home/$u/.ssh/authorized_keys' && chown -R $(sq "$uid"):\"\$g\" '$mnt/home/$u' || exit 1"
+		printf '%s\n' "install -d -m 755 '$mnt/etc/ssh/authorized_keys' && printf '%s\\n' $(sq "$keytext") > '$mnt/etc/ssh/authorized_keys/$u' && chmod 644 '$mnt/etc/ssh/authorized_keys/$u' || exit 1"
 		printf '%s\n' "printf '# image %s: user %s (uid %s), key %s\\n' '$name' $(sq "$u") $(sq "$uid") $(sq "$key") >&2"
 	done
 	test -n "$lines" || emit_note "image $name: the template lists no users"
+}
+
+#@help _image_view_write1
+# @command image view write <image>
+# @summary Act terminal (root, host or builder): when the template's resolved services (read at generation time) say 'files view', the image learns to take its home from the host -- the module virtio_p9fs appended to rc.conf as kld_list (the template's own kld_list value kept in front of it) and the share home mounted on the home of the template's host-uid user by a p9fs line in fstab; no view in the template is a note
+# @group   image
+# @internal
+# @see     image burn
+# @see     template service add
+# @see     guest view ensure
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_view_write1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" t="" cur="" chain="" p="" n=0 u="" kld="" seen=0
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' || { emit_note "image $1: no view in the template, the home of its guests stays on their disk"; return 0; }
+	u=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | awk '$2 == "host" { print $1 }')
+	seen=$(printf '%s\n' "$u" | grep -c . || true)
+	test "$seen" -eq 1 || { generate_error "image view write: the view is the home of the template's host-uid user, and $t has $seen of them (template user add <template> <name> host)"; return 0; }
+	kld=$(awk -v base="$VM_BAKE_BASE" -v family=rc -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | sed -n 's/^kld_list=//p' | tail -1)
+	printf '%s\n' "test -d '$mnt/home/$u' || { printf '# Error: no home of %s in the image (image user make first)\\n' $(sq "$u") >&2; exit 1; }"
+	printf '%s\n' "printf '%s\\n' $(sq "kld_list=\"${kld:+$kld }virtio_p9fs\"") >> '$mnt/etc/rc.conf' || exit 1"
+	printf '%s\n' "printf '%s\\t%s\\tp9fs\\trw\\t0 0\\n' home '/home/$u' >> '$mnt/etc/fstab' || exit 1"
+	printf '%s\n' "printf '# image %s: the share home as the home of %s (p9fs), module virtio_p9fs\\n' '$1' $(sq "$u") >&2"
 }
 
 #@help _image_root_lock1
@@ -1114,7 +1147,7 @@ _image_doas_write1() {
 
 #@help _image_ssh_write1
 # @command image ssh write <image>
-# @summary Act terminal (root, host or builder): sshd_config of the image gets Port VM_BAKE_SSH_PORT, PermitRootLogin no, PasswordAuthentication no, KbdInteractiveAuthentication no, and X11Forwarding yes when the template's resolved services (read at generation time) list 'display x' (appended once; the host's pf passes that port into the guest network)
+# @summary Act terminal (root, host or builder): sshd_config of the image gets Port VM_BAKE_SSH_PORT, PermitRootLogin no, PasswordAuthentication no, KbdInteractiveAuthentication no, AuthorizedKeysFile '/etc/ssh/authorized_keys/%u .ssh/authorized_keys' (the login must not hang on a mount: a view arrives only after the home is mounted), and X11Forwarding yes when the template's resolved services (read at generation time) list 'display x' (appended once; the host's pf passes that port into the guest network)
 # @group   image
 # @internal
 # @see     image burn
@@ -1135,7 +1168,7 @@ _image_ssh_write1() {
 	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'display x' && x11=yes
 	printf '%s\n' "test -d '$mnt/etc/ssh' || { printf '# Error: no /etc/ssh in the image (image base first)\\n' >&2; exit 1; }"
 	printf '%s\n' "grep -q '^Port $VM_BAKE_SSH_PORT$' '$mnt/etc/ssh/sshd_config' || cat >> '$mnt/etc/ssh/sshd_config' <<'EOF_SSHD'"
-	printf '%s\n' "" "Port $VM_BAKE_SSH_PORT" "PermitRootLogin no" "PasswordAuthentication no" "KbdInteractiveAuthentication no"
+	printf '%s\n' "" "Port $VM_BAKE_SSH_PORT" "PermitRootLogin no" "PasswordAuthentication no" "KbdInteractiveAuthentication no" "AuthorizedKeysFile /etc/ssh/authorized_keys/%u .ssh/authorized_keys"
 	test "$x11" = no || printf '%s\n' "X11Forwarding yes"
 	printf '%s\n' "EOF_SSHD"
 	printf '%s\n' "printf '# image %s: sshd on port %s, keys only, no root, X11 forwarding %s\\n' '$1' '$VM_BAKE_SSH_PORT' '$x11' >&2"

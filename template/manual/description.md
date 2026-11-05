@@ -7,7 +7,10 @@ services a guest may use, resources, lifetime; templates inherit from a
 parent down to the root `empty`. An *image* is what baking a template
 yields, a *guest* a clone of an image with its rendered vm.conf, a
 *session* the client script that brings one application of the guest onto
-the host desktop. Starting and stopping guests stays with vm-bhyve.
+the host desktop. There is one home, the host's: a guest whose template
+says `service files view` mounts a *view* of it over virtio-9p, sees of the
+rest what the template's home lines allow, and works in its own clones of
+the host's repositories. Starting and stopping guests stays with vm-bhyve.
 
 Every command GENERATES shell text; an interpreter the user pins decides
 whether that text is displayed (the default, `cat`) or executed. The

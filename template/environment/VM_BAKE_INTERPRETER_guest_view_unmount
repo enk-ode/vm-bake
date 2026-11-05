@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest view unmount), pinned to sudo sh: unmounting the overlays of the view needs root. Inspect first: vm-bake setintp guest_view_unmount cat.

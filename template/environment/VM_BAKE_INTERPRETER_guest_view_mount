@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest view mount), pinned to sudo sh: nullfs mounts into the view need root. Inspect first: vm-bake setintp guest_view_mount cat.

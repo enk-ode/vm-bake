@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest repo clone), pinned to sh: git clone as the invoking user, from their own repository into the view.

@@ -11,3 +11,6 @@
 
 `.tmp`, `.log`
 :   scratch of the batch runner, traces and logs (retention in days)
+
+`~/vm-bake/guest/<guest>`
+:   the view: one dataset per guest, the home it sees (VM_BAKE_VIEW_DIR)

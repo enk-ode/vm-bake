@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest view ensure), pinned to sudo sh: zfs create under the view parent and the chown that hands the new dataset to the invoking user need root. Inspect first: vm-bake setintp guest_view_ensure cat.

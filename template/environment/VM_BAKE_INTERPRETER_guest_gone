@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest gone), pinned to sh: pgrep and sleep, the wait for the bhyve process of the guest to leave; no root.

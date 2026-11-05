@@ -1,0 +1,2 @@
+30
+# @summary PCI slot of the virtio-9p device a guest with a view carries: 'guest conf write' writes bhyve_options="-s <slot>,virtio-9p,home=VM_BAKE_VIEW_DIR/<guest>" and vm-bhyve hands that option to bhyve raw. High, so it stays clear of the slots vm-bhyve assigns to disks and interfaces itself. The share is called home on both sides: in this option and in the fstab line of the image (image view write).

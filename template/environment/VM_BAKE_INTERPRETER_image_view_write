@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the image bake (image view write), pinned to sudo sh: the module line in rc.conf and the mount line in fstab of the image are written as root, like the other content terminals. Inspect first: vm-bake setintp image_view_write cat.

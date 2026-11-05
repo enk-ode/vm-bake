@@ -108,6 +108,7 @@ pkg/$f"; else missing="$missing pkg/$f"; fi
 		done < "$l/pkgfile"
 		test -f "$l/home" && while IFS= read -r f; do
 			test -n "$f" || continue
+			f=${f%% *}
 			if test -e "$home/$f" || test -L "$home/$f"; then lines="$lines
 $(find "$home/$f" \( -type f -o -type l \) | sed "s|^$home/|home/|")"; else missing="$missing home/$f"; fi
 		done < "$l/home"

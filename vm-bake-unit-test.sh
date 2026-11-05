@@ -511,8 +511,8 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt dataset_destroy"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -594,8 +594,8 @@ test_image_plan() {
   fi
   printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   plan=$(run_vmbake image burn x)
-  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image root lock 'x'" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "9" ]; then
-    pass "burn: users checked, then packages, rc, users, root locked, doas, sshd"
+  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image root lock 'x'" && printf '%s\n' "$plan" | grep -q "image view write 'x'" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "10" ]; then
+    pass "burn: users checked, then packages, rc, users, the view, root locked, doas, sshd"
   else
     fail "burn plan: $plan"
   fi
@@ -605,8 +605,8 @@ test_image_plan() {
     fail "close/seal/drop plan: $(run_vmbake image close x; run_vmbake image seal x; run_vmbake image drop x)"
   fi
   plan=$(run_vmbake image builder use)
-  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "17" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "17" ]; then
-    pass "builder use and leave: the place and seventeen pins, each a setintp or unsetintp line"
+  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "18" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "18" ]; then
+    pass "builder use and leave: the place and eighteen pins, each a setintp or unsetintp line"
   else
     fail "builder use/leave: $plan"
   fi
@@ -781,13 +781,13 @@ test_guest_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake guest make b bake 172.16.100.250/24)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "18" ] && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest hostkey ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest hostkey write 'bake'" && printf '%s\n' "$plan" | grep -q "guest link write 'bake'" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 18p | grep -q "guest knownhosts drop 'bake'"; then
-    pass "guest make: image checked, name, free, address, homes, tree, switch, record, host key, clone, conf, link, network, home, host key, dns, known hosts"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "19" ] && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest hostkey ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest view ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest hostkey write 'bake'" && printf '%s\n' "$plan" | grep -q "guest link write 'bake'" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 19p | grep -q "guest knownhosts drop 'bake'"; then
+    pass "guest make: image checked, name, free, address, homes, tree, switch, record, host key, view, clone, conf, link, network, home, host key, dns, known hosts"
   else
     fail "guest make plan: $plan"
   fi
-  if [ "$(run_vmbake guest start bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest stop bake | grep -c .)" = "2" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "8" ]; then
-    pass "start and stop two lines, drop eight"
+  if [ "$(run_vmbake guest start bake | grep -c .)" = "4" ] && [ "$(run_vmbake guest stop bake | grep -c .)" = "4" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "9" ]; then
+    pass "start and stop four lines each (the view hung in and let go), drop nine"
   else
     fail "guest start/stop/drop: $(run_vmbake guest drop bake)"
   fi
@@ -895,14 +895,14 @@ test_port_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake image burn x)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image port build 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image port install 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "9" ]; then
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "12" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image port build 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image port install 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "10" ]; then
     pass "burn in the builder: port build and install after the packages, only when ports are listed"
   else
     fail "burn ports plan: $plan"
   fi
   printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  if run_vmbake image burn x | grep -q "ports build in the builder only" && [ "$(run_vmbake image burn d | grep -c .)" = "9" ]; then
+  if run_vmbake image burn x | grep -q "ports build in the builder only" && [ "$(run_vmbake image burn d | grep -c .)" = "10" ]; then
     pass "burn on the host refuses listed ports with an error line"
   else
     fail "burn host ports: $(run_vmbake image burn x)"
@@ -962,7 +962,7 @@ test_pkgfile_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake image burn x)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "12" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image check pkgfiles 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image pkgfile stage 'x'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image pkgfile add 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "9" ] && run_vmbake image pkgfile stage x | grep -q "streamed into the builder"; then
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "13" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image check pkgfiles 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image pkgfile stage 'x'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image pkgfile add 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "10" ] && run_vmbake image pkgfile stage x | grep -q "streamed into the builder"; then
     pass "burn: check, stage and add after the packages, only when files are listed; stage chooses by the place"
   else
     fail "burn pkgfile plan: $plan"
@@ -1094,10 +1094,15 @@ test_home_plan() {
   test_setup
   image_chain
   run_vmbake template add freebsd-x freebsd-dev > /dev/null
-  if run_vmbake template home add freebsd-x .themes/NsCDE | grep -q "home + .themes/NsCDE" && run_vmbake template home add freebsd-x /etc/passwd | grep -q "invalid path" && run_vmbake template home add freebsd-x ../x | grep -q "invalid path" && run_vmbake template home show freebsd-x | grep -q "^#   freebsd-x  *.themes/NsCDE"; then
-    pass "template home add takes a plain relative path, show lists it"
+  if run_vmbake template home add freebsd-x .themes/NsCDE | grep -q "home + .themes/NsCDE ro" && run_vmbake template home add freebsd-x /etc/passwd | grep -q "invalid path" && run_vmbake template home add freebsd-x ../x | grep -q "invalid path" && run_vmbake template home show freebsd-x | grep -q "^#   freebsd-x  *.themes/NsCDE ro"; then
+    pass "template home add takes a plain relative path, ro by default, show lists it"
   else
     fail "template home: $(run_vmbake template home show freebsd-x)"
+  fi
+  if run_vmbake template home add freebsd-x .themes/NsCDE rw | grep -q "home + .themes/NsCDE rw" && run_vmbake template home add freebsd-x .themes/NsCDE xx | grep -q "ro or rw" && run_vmbake template home drop freebsd-x .themes/NsCDE rw > /dev/null && [ "$(run_vmbake template home show freebsd-x | grep -c NsCDE)" = "1" ]; then
+    pass "the mode rw is a line of its own, another word is refused, drop names the mode"
+  else
+    fail "home mode: $(run_vmbake template home show freebsd-x)"
   fi
   run_vmbake template home add freebsd-dev .config/gtk-3.0 > /dev/null
   run_vmbake image record write freebsd-x x > /dev/null
@@ -1136,6 +1141,212 @@ test_home_plan() {
     pass "a template without home paths seeds nothing"
   else
     fail "home write empty: $(run_vmbake guest home write bake)"
+  fi
+}
+
+
+
+# view_chain - freebsd-dev gets a view and two home lines, freebsd-builder none
+view_chain() {
+  run_vmbake template service add freebsd-dev files view > /dev/null
+  run_vmbake template rc add freebsd-dev kld_list nvidia > /dev/null
+  run_vmbake template home add freebsd-dev .config > /dev/null
+  run_vmbake template home add freebsd-dev .cache rw > /dev/null
+  run_vmbake image record write freebsd-dev x > /dev/null
+  run_vmbake image record write freebsd-builder b > /dev/null
+  run_vmbake guest record write x caledonia 172.16.100.102/24 > /dev/null
+  run_vmbake guest record write b bake 172.16.100.254/24 > /dev/null
+  run_vmbake setenv VM_BAKE_VIEW_DIR "$TEST_DIR/view" > /dev/null
+}
+
+test_view_plan() {
+  test_header "view: 'service files view' puts the share into the guest's configuration and the mount into the image"
+  test_setup
+  image_chain
+  view_chain
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  local plan
+  plan=$(run_vmbake guest make x caledonia 172.16.100.102/24)
+  if printf '%s\n' "$plan" | grep -q "guest view ensure 'caledonia'" && printf '%s\n' "$plan" | grep -n "guest hostkey ensure\|guest view ensure\|guest clone" | sed -n 2p | grep -q "view ensure"; then
+    pass "guest make ensures the view between the host key and the clone"
+  else
+    fail "guest make plan: $plan"
+  fi
+  plan=$(run_vmbake guest start caledonia)
+  if printf '%s\n' "$plan" | grep -q "guest check homes 'caledonia'" && printf '%s\n' "$plan" | grep -n "guest view mount\|guest run" | sed -n 1p | grep -q "view mount"; then
+    pass "guest start hangs the overlays in before vm start"
+  else
+    fail "guest start plan: $plan"
+  fi
+  plan=$(run_vmbake guest stop caledonia)
+  if printf '%s\n' "$plan" | grep -n "guest halt\|guest gone\|guest view unmount" | sed -n 3p | grep -q "view unmount"; then
+    pass "guest stop lets the overlays go after the guest is gone"
+  else
+    fail "guest stop plan: $plan"
+  fi
+  plan=$(run_vmbake guest drop caledonia)
+  if printf '%s\n' "$plan" | grep -q "guest view unmount 'caledonia'" && ! printf '%s\n' "$plan" | grep -q "guest view destroy"; then
+    pass "guest drop lets the overlays go and keeps the view"
+  else
+    fail "guest drop plan: $plan"
+  fi
+  plan=$(run_vmbake guest view drop caledonia)
+  if printf '%s\n' "$plan" | grep -q "guest check stopped 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest view unmount 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest view destroy 'caledonia'"; then
+    pass "guest view drop lets go and destroys, the guest stopped"
+  else
+    fail "guest view drop plan: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake guest check view caledonia | grep -q "has no view"; then
+    pass "check view refuses a guest whose view directory is not there"
+  else
+    fail "check view: $(run_vmbake guest check view caledonia)"
+  fi
+}
+
+test_view_acts() {
+  test_header "view: the acts -- the dataset, the overlays by their mode, the module and the fstab line of the image"
+  test_setup
+  image_chain
+  view_chain
+  if pin_image_cat; then
+    pass "image and guest acts pinned to cat"
+  else
+    fail "acts not pinned -- not calling them"; return
+  fi
+  local out view
+  view="$TEST_DIR/view"
+  mkdir -p "$view/caledonia"
+  out=$(run_vmbake guest view ensure caledonia)
+  if printf '%s\n' "$out" | grep -q "zfs list -H -o name '$view'" && printf '%s\n' "$out" | grep -q "zfs create \"\$parent/caledonia\"" && printf '%s\n' "$out" | grep -q "chown '$(id -un)':'$(id -gn)' '$view/caledonia'"; then
+    pass "view ensure creates the dataset under the view directory and hands it to the invoking user"
+  else
+    fail "view ensure: $out"
+  fi
+  if run_vmbake guest view ensure bake | grep -q "no view in the template freebsd-builder"; then
+    pass "a template without the service gets no view"
+  else
+    fail "view ensure without the service: $(run_vmbake guest view ensure bake)"
+  fi
+  out=$(run_vmbake guest view mount caledonia)
+  if printf '%s\n' "$out" | grep -q "mount -t nullfs -o ro '$HOME/.config' '$view/caledonia/.config'" && printf '%s\n' "$out" | grep -q "mount -t nullfs -o rw '$HOME/.cache' '$view/caledonia/.cache'" && printf '%s\n' "$out" | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 755 '$view/caledonia/.config'"; then
+    pass "view mount hangs every home line in with its own mode, the directory made first"
+  else
+    fail "view mount: $out"
+  fi
+  run_vmbake template home add freebsd-dev .no-such-dir-vmbake > /dev/null
+  if run_vmbake guest view mount caledonia | grep -q "no-such-dir-vmbake is no directory"; then
+    pass "a home line that is no directory on the host stops the mount at generation time"
+  else
+    fail "view mount with a missing path: $(run_vmbake guest view mount caledonia)"
+  fi
+  run_vmbake template home drop freebsd-dev .no-such-dir-vmbake > /dev/null
+  if run_vmbake guest view unmount caledonia | grep -q "nothing hung into its view" && run_vmbake guest view destroy caledonia | grep -q "zfs destroy -r"; then
+    pass "view unmount reads the mount table, view destroy destroys the dataset"
+  else
+    fail "view unmount/destroy: $(run_vmbake guest view unmount caledonia) $(run_vmbake guest view destroy caledonia)"
+  fi
+  out=$(run_vmbake guest conf write caledonia)
+  if printf '%s\n' "$out" | grep -q "bhyve_options=\"-s 30,virtio-9p,home=$view/caledonia\"" && ! run_vmbake guest conf write bake | grep -q bhyve_options; then
+    pass "the configuration of a guest with a view carries the share, the one without does not"
+  else
+    fail "conf write: $out"
+  fi
+  if run_vmbake guest home write caledonia | grep -q "comes from the host through its view"; then
+    pass "a guest with a view is seeded with nothing"
+  else
+    fail "home write with a view: $(run_vmbake guest home write caledonia)"
+  fi
+  out=$(run_vmbake image view write x)
+  if printf '%s\n' "$out" | grep -q "kld_list=\"nvidia virtio_p9fs\"" && printf '%s\n' "$out" | grep -q "p9fs" && printf '%s\n' "$out" | grep -q "'/home/$(id -un)' >> '/data/vm/vm-bake/image/x/mnt/etc/fstab'"; then
+    pass "image view write keeps the template's own kld_list and mounts the share on the host-uid user's home"
+  else
+    fail "image view write: $out"
+  fi
+  if run_vmbake image view write b | grep -q "no view in the template"; then
+    pass "an image of a template without the service learns nothing about p9fs"
+  else
+    fail "image view write without the service: $(run_vmbake image view write b)"
+  fi
+  out=$(run_vmbake image ssh write x)
+  if printf '%s\n' "$out" | grep -q "AuthorizedKeysFile /etc/ssh/authorized_keys/%u .ssh/authorized_keys" && run_vmbake image user make x | grep -q "/etc/ssh/authorized_keys/$(id -un)"; then
+    pass "sshd reads the keys outside the home as well, and image user make puts them there"
+  else
+    fail "ssh write: $out"
+  fi
+  local carrier
+  carrier=$(df "$HOME" 2>/dev/null | awk 'NR == 2 { print $1 }')
+  run_vmbake setenv VM_BAKE_VIEW_DIR "$HOME/.vm-bake-view-test/guest" > /dev/null
+  out=$(run_vmbake guest view tree ensure)
+  if printf '%s\n' "$out" | grep -q "zfs create -o mountpoint='$HOME/.vm-bake-view-test/guest' '$carrier/.vm-bake-view-test-guest'" && printf '%s\n' "$out" | grep -q "chown '$(id -un)':'$(id -gn)' '$HOME/.vm-bake-view-test/guest'" && printf '%s\n' "$out" | grep -q "zfs list -H -o name '$HOME/.vm-bake-view-test/guest' > /dev/null 2>&1 &&"; then
+    pass "view tree ensure names the dataset after the path below the home, on the dataset that carries it, and keeps an existing one"
+  else
+    fail "view tree ensure: $out"
+  fi
+  run_vmbake setenv VM_BAKE_VIEW_DIR "$TEST_DIR/view" > /dev/null
+  if run_vmbake guest view tree ensure | grep -q "lies outside the home"; then
+    pass "a view directory outside the home is refused: a view is a part of that home"
+  else
+    fail "view tree ensure outside the home: $(run_vmbake guest view tree ensure)"
+  fi
+}
+
+test_repo_plan() {
+  test_header "repo: the guest's own clones in its view, fetched back into the host's repository"
+  test_setup
+  image_chain
+  view_chain
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  local plan out view
+  view="$TEST_DIR/view"
+  mkdir -p "$view/caledonia"
+  plan=$(run_vmbake guest repo add caledonia git/Infrastruktur)
+  if printf '%s\n' "$plan" | grep -q "guest check view 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo valid 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo clone 'caledonia' 'git/Infrastruktur'"; then
+    pass "repo add checks the record, the view and the path, then clones"
+  else
+    fail "repo add plan: $plan"
+  fi
+  plan=$(run_vmbake guest repo fetch caledonia git/Infrastruktur)
+  if printf '%s\n' "$plan" | grep -q "guest repo refs 'caledonia' 'git/Infrastruktur'"; then
+    pass "repo fetch ends in the refs of the host's repository"
+  else
+    fail "repo fetch plan: $plan"
+  fi
+  plan=$(run_vmbake guest repo drop caledonia git/Infrastruktur)
+  if printf '%s\n' "$plan" | grep -q "guest repo remove 'caledonia' 'git/Infrastruktur'"; then
+    pass "repo drop removes the clone"
+  else
+    fail "repo drop plan: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if [ -z "$(run_vmbake guest repo valid git/Infrastruktur)" ] && run_vmbake guest repo valid ../x | grep -q "invalid repository" && run_vmbake guest repo valid /etc | grep -q "invalid repository"; then
+    pass "a repository is a plain path relative to the home"
+  else
+    fail "repo valid: $(run_vmbake guest repo valid ../x)"
+  fi
+  if pin_image_cat; then
+    pass "guest acts pinned to cat"
+  else
+    fail "acts not pinned -- not calling them"; return
+  fi
+  out=$(run_vmbake guest repo clone caledonia git/Infrastruktur)
+  if printf '%s\n' "$out" | grep -q "git clone --no-hardlinks '$HOME/git/Infrastruktur' '$view/caledonia/git/Infrastruktur'" && printf '%s\n' "$out" | grep -q "remote remove origin" && printf '%s\n' "$out" | grep -q "test ! -e '$view/caledonia/git/Infrastruktur'"; then
+    pass "the clone is made without hardlinks and without a remote, an existing path refused"
+  else
+    fail "repo clone: $out"
+  fi
+  out=$(run_vmbake guest repo refs caledonia git/Infrastruktur)
+  if printf '%s\n' "$out" | grep -q "git -C '$HOME/git/Infrastruktur' fetch --no-tags --prune '$view/caledonia/git/Infrastruktur'" && printf '%s\n' "$out" | grep -q "refs/remotes/caledonia/"; then
+    pass "the host fetches in its OWN repository, into refs/remotes/<guest>/"
+  else
+    fail "repo refs: $out"
+  fi
+  if run_vmbake guest repo remove caledonia git/Infrastruktur | grep -q "rm -rf '$view/caledonia/git/Infrastruktur'" && run_vmbake guest repo show caledonia | grep -q "(none)"; then
+    pass "remove takes the clone out, show lists an empty view"
+  else
+    fail "repo remove/show: $(run_vmbake guest repo show caledonia)"
   fi
 }
 
@@ -1317,6 +1528,9 @@ main() {
   should_run_test test_tag_plan
   should_run_test test_env_plan
   should_run_test test_home_plan
+  should_run_test test_view_plan
+  should_run_test test_view_acts
+  should_run_test test_repo_plan
   should_run_test test_dump_witness
   should_run_test test_archive_pair
 

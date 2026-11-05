@@ -19,16 +19,26 @@
 #   host, because no one is root inside. The switch is created on the
 #   bridge VM_BAKE_GUEST_BRIDGE when it is missing. 'guest start' and
 #   'guest stop' wrap vm-bhyve; 'guest drop' destroys the clone.
+#
+#   A guest whose template says 'service files view' has a view: the ZFS
+#   dataset VM_BAKE_VIEW_DIR/<guest> in the invoking user's home, which
+#   the guest mounts over virtio-9p as its whole home. There is one home,
+#   the host's; the guest writes its own things into its view, sees of the
+#   rest what the template's home lines allow ('guest start' hangs them in
+#   as nullfs overlays, ro or rw), and has its own clones of the host's
+#   repositories ('guest repo add'), which the host fetches back. The view
+#   survives the guest: 'guest drop' keeps it, 'guest view drop' removes it.
 #@end
 
 #@help
 # @defcompletion guest      guest
 # @defcompletion address    none
+# @defcompletion repo       none
 #@end
 
 #@help ___guest_make3
 # @command guest make <image> <guest> <address>
-# @summary Make a guest from a sealed image: the image has a record and a digest, the guest name is a record name and free; then the switch ensured, the record, the clone of @image, the configuration, the network written into the clone, the template's home paths seeded into the users' homes, the guest's own ssh host key (kept in its record across rebuilds) installed, the host's unbound told the name
+# @summary Make a guest from a sealed image: the image has a record and a digest, the guest name is a record name and free; then the switch ensured, the record, the view of the host's home when the template says so (kept across rebuilds), the clone of @image, the configuration, the network written into the clone, the template's home paths seeded into the users' homes (a guest with a view takes them as overlays at 'guest start' instead), the guest's own ssh host key (kept in its record across rebuilds) installed, the host's unbound told the name
 # @group   guest
 # @example vm-bake guest make freebsd-builder-20261101 bake 172.16.100.250/24
 # @see     guest start
@@ -46,6 +56,7 @@ ___guest_make3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest switch ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record write $(sq "$1") $(sq "$2") $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey ensure $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view ensure $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest clone $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest conf write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link write $(sq "$2")"
@@ -58,40 +69,48 @@ ___guest_make3() {
 
 #@help ___guest_start1
 # @command guest start <guest>
-# @summary Start the guest: it has a record; then 'vm start'
+# @summary Start the guest: it has a record and every home path of its template is there; then the overlays of the template hung into its view (a guest without a view: a note) and 'vm start'
 # @group   guest
 # @example vm-bake guest start bake
 # @see     guest stop
 # @see     guest make
+# @see     guest view mount
 #@end
 ___guest_start1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check homes $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view mount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest run $(sq "$1")"
 }
 
 #@help ___guest_stop1
 # @command guest stop <guest>
-# @summary Stop the guest: it has a record; then 'vm stop' (ACPI shutdown)
+# @summary Stop the guest: it has a record; then 'vm stop' (ACPI shutdown), the wait until its bhyve process is gone, and the overlays of its view let go
 # @group   guest
 # @example vm-bake guest stop bake
 # @see     guest start
+# @see     guest view unmount
 #@end
 ___guest_stop1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest halt $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest gone $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view unmount $(sq "$1")"
 }
 
 #@help ___guest_drop1
 # @command guest drop <guest>
-# @summary Remove the guest: it has a record and is not running (vm-bhyve's run.lock); whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed, unbound told, its ssh host key forgotten
+# @summary Remove the guest: it has a record and is not running (vm-bhyve's run.lock); the overlays of its view let go, whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed, unbound told, its ssh host key forgotten. The view itself stays -- a new image replaces the guest, not what it wrote; 'guest view drop' removes that too
 # @group   guest
 # @example vm-bake guest drop bake
 # @see     guest make
 # @see     guest stop
+# @see     guest view drop
 #@end
 ___guest_drop1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check stopped $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view unmount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link drop $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest disk release $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dataset destroy $(sq "$1")"
@@ -248,15 +267,20 @@ _guest_clone1() {
 
 #@help _guest_conf_write1
 # @command guest conf write <guest>
-# @summary Act terminal (the invoking user: the clone is theirs): the vm-bhyve configuration VM_BAKE_GUEST_DIR/<guest>/<guest>.conf: UEFI, cpu and memory from the image's template (read at generation time), disk0.img as virtio-blk, one virtio-net on VM_BAKE_GUEST_SWITCH
+# @summary Act terminal (the invoking user: the clone is theirs): the vm-bhyve configuration VM_BAKE_GUEST_DIR/<guest>/<guest>.conf: UEFI, cpu and memory from the image's template (read at generation time), disk0.img as virtio-blk, one virtio-net on VM_BAKE_GUEST_SWITCH, and when the template says 'service files view' the share home on VM_BAKE_VIEW_SLOT as bhyve_options (vm-bhyve hands that option to bhyve raw), which the image mounts as its home
 # @group   guest
 # @internal
 # @see     guest make
+# @see     guest view ensure
 # @env     VM_BAKE_GUEST_DIR  the guests' directory
 # @env     VM_BAKE_GUEST_SWITCH  the switch the guest hangs on
+# @env     VM_BAKE_VIEW_DIR  the views' directory, the share's path on the host
+# @env     VM_BAKE_VIEW_SLOT  the PCI slot of the virtio-9p device
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _guest_conf_write1() {
-	local conf="$VM_BAKE_GUEST_DIR/$1/$1.conf" img="" t="" cur="" chain="" p="" n=0 a="" res=""
+	local conf="$VM_BAKE_GUEST_DIR/$1/$1.conf" img="" t="" cur="" chain="" p="" n=0 a="" res="" dir="$VM_BAKE_VIEW_DIR" view=no
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
 	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
 	cur=$t
@@ -266,11 +290,13 @@ _guest_conf_write1() {
 		cur=$p; n=$((n + 1))
 	done
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/resource" && IFS= read -r res < "$VM_BAKE_BASE/template/$a/resource"; done
+	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' && view=yes
 	set -- "$1" ${res:-1 1G 0}
 	printf '%s\n' "cat > '$conf' <<'EOF_CONF'"
 	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" 'disk0_type="virtio-blk"' 'disk0_name="disk0.img"'
+	test "$view" = no || printf '%s\n' "bhyve_options=\"-s $VM_BAKE_VIEW_SLOT,virtio-9p,home=$dir/$1\""
 	printf '%s\n' "EOF_CONF"
-	printf '%s\n' "printf '# guest %s: %s (cpu %s, memory %s)\\n' '$1' '$conf' '$2' '$3' >&2"
+	printf '%s\n' "printf '# guest %s: %s (cpu %s, memory %s, view $view)\\n' '$1' '$conf' '$2' '$3' >&2"
 }
 
 #@help _guest_network_write1
@@ -505,7 +531,7 @@ __guest_check_homes1() {
 		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
 		cur=$p; n=$((n + 1))
 	done
-	paths=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	paths=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | cut -d' ' -f1)
 	for h in $paths; do test -e "$home/$h" || missing="$missing $h"; done
 	if test -z "$missing"; then
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1: home paths present ($(printf '%s' "$paths" | tr '\n' ' '))")"
@@ -516,16 +542,17 @@ __guest_check_homes1() {
 
 #@help _guest_home_write1
 # @command guest home write <guest>
-# @summary Act terminal (root): the clone's disk0.img attached as md, its root mounted by the image's label, then every home path of the template (read at generation time) copied from the invoking user's home into the home of every user of the template, owned by that user (uid from the template, host uid for 'host', gid from the image's group file), unmounted and detached -- the guest has no root, the host seeds its homes
+# @summary Act terminal (root): the clone's disk0.img attached as md, its root mounted by the image's label, then every home path of the template (read at generation time) copied from the invoking user's home into the home of every user of the template, owned by that user (uid from the template, host uid for 'host', gid from the image's group file), unmounted and detached -- the guest has no root, the host seeds its homes. A guest with a view ('service files view') is seeded with nothing: its home is the host's, and the paths are hung in at 'guest start'
 # @group   guest
 # @internal
 # @see     guest make
+# @see     guest view mount
 # @see     template home add
 # @env     VM_BAKE_GUEST_DIR  the guests' directory
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _guest_home_write1() {
-	local img="" t="" cur="" chain="" p="" n=0 paths="" users="" disk="$VM_BAKE_GUEST_DIR/$1/disk0.img" mnt="$VM_BAKE_GUEST_DIR/$1/mnt" h="" line="" u="" s="" uid="" home=""
+	local name="$1" img="" t="" cur="" chain="" p="" n=0 paths="" users="" disk="$VM_BAKE_GUEST_DIR/$1/disk0.img" mnt="$VM_BAKE_GUEST_DIR/$1/mnt" h="" line="" u="" s="" uid="" home=""
 	eval "home=~$(id -un)"
 	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
@@ -535,7 +562,8 @@ _guest_home_write1() {
 		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
 		cur=$p; n=$((n + 1))
 	done
-	paths=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' && { emit_note "guest $1: its home comes from the host through its view, the paths are hung in at guest start, nothing seeded"; return 0; }
+	paths=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | cut -d' ' -f1)
 	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	test -n "$paths" && test -n "$users" || { emit_note "guest $1: no home paths or no users in the template, nothing seeded"; return 0; }
 	printf '%s\n' "md=\$(mdconfig -a -t vnode -f '$disk') || exit 1"
@@ -549,10 +577,336 @@ _guest_home_write1() {
 		printf '%s\n' "g=\$(awk -F: -v u=$(sq "$u") '\$1 == u { print \$3 }' '$mnt/etc/group'); test -n \"\$g\" || { printf '# Error: no group %s in the image\\n' $(sq "$u") >&2; exit 1; }"
 		for h in $paths; do
 			printf '%s\n' "mkdir -p \"\$(dirname '$mnt/home/$u/$h')\" && cp -R '$home/$h' '$mnt/home/$u/$h' && chown -R $(sq "$uid"):\"\$g\" '$mnt/home/$u/${h%%/*}' || exit 1"
-			printf '%s\n' "printf '# guest %s: %s -> home of %s\\n' '$1' '$h' $(sq "$u") >&2"
+			printf '%s\n' "printf '# guest %s: %s -> home of %s\\n' '$name' '$h' $(sq "$u") >&2"
 		done
 	done
 	printf '%s\n' "umount '$mnt' && rmdir '$mnt' && mdconfig -d -u \"\${md#md}\" || exit 1"
+}
+
+#@help __guest_check_view1
+# @command guest check view <guest>
+# @summary The guest has a view: its image's template says 'service files view' (read at generation time over the chain) and the view directory VM_BAKE_VIEW_DIR/<guest> is there: a comment line, else an error line
+# @group   guest
+# @internal
+# @see     guest repo add
+# @see     guest view ensure
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+__guest_check_view1() {
+	local dir="$VM_BAKE_VIEW_DIR" img="" t="" cur="" chain="" p="" n=0 ok=no
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' && test -d "$dir/$1" && ok=yes
+	if test "$ok" = yes; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1 has the view $dir/$1")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest $1 has no view (its template needs 'service files view', then guest make or guest view ensure $1)")"
+	fi
+}
+
+#@help _guest_view_tree_ensure0
+# @command guest view tree ensure
+# @summary Act terminal (root, once per host): the dataset that carries the views -- a child of the dataset that carries the invoking user's home, named after the path of VM_BAKE_VIEW_DIR below that home (its slashes become dashes) and mounted on it, then handed to that user, 0700. Every view 'guest view ensure' makes below it inherits that mount point and needs no further right. An existing one is a note
+# @group   guest
+# @example vm-bake guest view tree ensure
+# @see     guest view ensure
+# @see     guest make
+# @env     VM_BAKE_VIEW_DIR  the views' directory, the mount point of this dataset
+#@end
+_guest_view_tree_ensure0() {
+	local dir="$VM_BAKE_VIEW_DIR" home="" u="" g="" rel="" parent="" name=""
+	eval "home=~$(id -un)"
+	case "$dir" in "~/"*) dir="$home${dir#\~}" ;; esac
+	u=$(id -un); g=$(id -gn)
+	case "$dir" in "$home/"*) rel=${dir#"$home/"} ;; *) rel="" ;; esac
+	test -n "$rel" || { generate_error "guest view tree ensure: VM_BAKE_VIEW_DIR ($dir) lies outside the home of $u ($home), and a view is a part of that home"; return 0; }
+	parent=$(df "$home" 2>/dev/null | awk 'NR == 2 { print $1 }')
+	case "$parent" in */*) ;; *) parent="" ;; esac
+	test -n "$parent" || { generate_error "guest view tree ensure: no ZFS dataset carries $home (df says $(df "$home" 2>/dev/null | awk 'NR == 2 { print $1 }')), and a view is a dataset"; return 0; }
+	name=$(printf '%s' "$rel" | tr '/' '-')
+	printf '%s\n' "zfs list -H -o name '$dir' > /dev/null 2>&1 && { printf '# the views already live in %s\\n' '$dir' >&2; exit 0; }"
+	printf '%s\n' "install -d -o $(sq "$u") -g $(sq "$g") -m 755 $(sq "$(dirname "$dir")") || exit 1"
+	printf '%s\n' "zfs create -o mountpoint='$dir' '$parent/$name' || exit 1"
+	printf '%s\n' "chown $(sq "$u"):$(sq "$g") '$dir' && chmod 0700 '$dir' || exit 1"
+	printf '%s\n' "printf '# %s: the dataset of the views, mounted on %s\\n' '$parent/$name' '$dir' >&2"
+}
+
+#@help _guest_view_ensure1
+# @command guest view ensure <guest>
+# @summary Act terminal (root): when the image's template says 'service files view' (read at generation time), the guest's view exists -- the ZFS dataset VM_BAKE_VIEW_DIR/<guest> under the view directory's own dataset ('guest view tree ensure' makes that one once), made once and owned by the invoking user, 0700; it is the whole home the guest sees and it survives every rebuild of the guest, so what the guest wrote is still there. No view in the template is a note
+# @group   guest
+# @internal
+# @see     guest make
+# @see     guest view tree ensure
+# @see     guest view drop
+# @see     image view write
+# @env     VM_BAKE_VIEW_DIR  the views' directory, its dataset the parent of each view
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_view_ensure1() {
+	local dir="$VM_BAKE_VIEW_DIR" img="" t="" cur="" chain="" p="" n=0 u="" g=""
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	u=$(id -un); g=$(id -gn)
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' || { emit_note "guest $1: no view in the template $t, its home stays on its disk"; return 0; }
+	printf '%s\n' "parent=\$(zfs list -H -o name '$dir') || { printf '# Error: %s is no dataset (vm-bake guest view tree ensure makes it once)\\n' '$dir' >&2; exit 1; }"
+	printf '%s\n' "zfs list -H -o name '$dir/$1' > /dev/null 2>&1 || zfs create \"\$parent/$1\" || exit 1"
+	printf '%s\n' "chown $(sq "$u"):$(sq "$g") '$dir/$1' && chmod 0700 '$dir/$1' || exit 1"
+	printf '%s\n' "printf '# guest %s: view %s\\n' '$1' '$dir/$1' >&2"
+}
+
+#@help _guest_view_mount1
+# @command guest view mount <guest>
+# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first; a line already hung in stays. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
+# @group   guest
+# @internal
+# @see     guest start
+# @see     guest view unmount
+# @see     template home add
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_view_mount1() {
+	local name="$1" dir="$VM_BAKE_VIEW_DIR" home="" img="" t="" cur="" chain="" p="" n=0 lines="" l="" path="" mode="" u="" g=""
+	eval "home=~$(id -un)"
+	case "$dir" in "~/"*) dir="$home${dir#\~}" ;; esac
+	u=$(id -un); g=$(id -gn)
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' || { emit_note "guest $1: no view in the template $t, nothing to hang in"; return 0; }
+	test -d "$dir/$1" || { generate_error "guest view mount: $dir/$1 is not there -- the view is the home of this guest (guest view ensure $1)"; return 0; }
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | sort)
+	test -n "$lines" || { emit_note "guest $1: the template $t hangs nothing into the view"; return 0; }
+	IFS='
+'; set -- $lines; IFS='
+'
+	for l; do
+		path=${l%% *}; mode=${l##* }
+		test -d "$home/$path" || { generate_error "guest view mount: $home/$path is no directory, and an overlay of a view is one"; return 0; }
+		printf '%s\n' "install -d -o $(sq "$u") -g $(sq "$g") -m 755 '$dir/$name/$path' || exit 1"
+		printf '%s\n' "mount | grep -q \" on $dir/$name/$path (\" || mount -t nullfs -o $mode '$home/$path' '$dir/$name/$path' || exit 1"
+		printf '%s\n' "printf '# guest %s: %s %s in its view\\n' '$name' '$path' '$mode' >&2"
+	done
+}
+
+#@help _guest_view_unmount1
+# @command guest view unmount <guest>
+# @summary Act terminal (root): every mount under the guest's view (the mount table read at generation time, deepest first) let go, so the view holds only what the guest itself wrote; nothing hung in is a note
+# @group   guest
+# @internal
+# @see     guest stop
+# @see     guest view mount
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+#@end
+_guest_view_unmount1() {
+	local dir="$VM_BAKE_VIEW_DIR" m="" mounts=""
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	mounts=$(mount | awk -v p="$dir/$1/" 'index($3, p) == 1 { print $3 }' | sort -r)
+	test -n "$mounts" || { emit_note "guest $1: nothing hung into its view"; return 0; }
+	for m in $mounts; do
+		printf '%s\n' "umount '$m' || exit 1"
+		printf '%s\n' "printf '# guest %s: %s let go\\n' '$1' '$m' >&2"
+	done
+}
+
+#@help _guest_view_destroy1
+# @command guest view destroy <guest>
+# @summary Act terminal (root): the guest's view dataset destroyed -- everything the guest wrote in its home goes with it; no view is a note
+# @group   guest
+# @internal
+# @see     guest view drop
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+#@end
+_guest_view_destroy1() {
+	local dir="$VM_BAKE_VIEW_DIR"
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	printf '%s\n' "ds=\$(zfs list -H -o name '$dir/$1' 2>/dev/null) || { printf '# guest %s: no view\\n' '$1' >&2; exit 0; }"
+	printf '%s\n' "zfs destroy -r \"\$ds\" || exit 1"
+	printf '%s\n' "printf '# guest %s: view %s destroyed\\n' '$1' \"\$ds\" >&2"
+}
+
+#@help ___guest_view_drop1
+# @command guest view drop <guest>
+# @summary Throw the guest's view away: the guest is not running (vm-bhyve's run.lock); then whatever is hung into the view let go and its dataset destroyed. 'guest drop' keeps the view, this removes it -- the dotfiles, the state of the guest's tools and its clones are gone
+# @group   guest
+# @example vm-bake guest view drop dalmatia
+# @see     guest view ensure
+# @see     guest drop
+#@end
+___guest_view_drop1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check stopped $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view unmount $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view destroy $(sq "$1")"
+}
+
+#@help _guest_gone1
+# @command guest gone <guest>
+# @summary Act terminal: wait until the guest's bhyve process is gone (up to two minutes, then an error) -- 'vm stop' only sends the ACPI signal, and the view may be let go only after the last process of the guest has left it
+# @group   guest
+# @internal
+# @see     guest stop
+#@end
+_guest_gone1() {
+	printf '%s\n' "n=0; while pgrep -q -f 'bhyve: $1\$'; do n=\$((n + 1)); test \"\$n\" -lt 120 || { printf '# Error: guest %s still runs\\n' '$1' >&2; exit 1; }; sleep 1; done"
+	printf '%s\n' "printf '# guest %s is down\\n' '$1' >&2"
+}
+
+#@help __guest_repo_valid1
+# @command guest repo valid <repo>
+# @summary The repository is a plain path relative to the invoking user's home (e.g. git/Infrastruktur), no '..': a comment line, else an error line
+# @group   guest
+# @internal
+# @see     guest repo add
+#@end
+__guest_repo_valid1() {
+	local ok=yes
+	case "$1" in ""|/*|*/|..|../*|*/..|*/../*|*[!A-Za-z0-9_.+/-]*) ok=no ;; esac
+	if test "$ok" = yes; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "repository $1 valid")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest repo: invalid repository $1 (a plain path relative to the home, e.g. git/Infrastruktur, no ..)")"
+	fi
+}
+
+#@help ___guest_repo_add2
+# @command guest repo add <guest> <repo>
+# @summary Give the guest its own clone of one of the invoking user's repositories: the guest has a record and a view, the path is plain and relative to the home; then the clone written into the view at the same path, so the guest finds it where the host has it. A repository of the host is never hung into a view: git runs what .git/config and the hooks say, and a guest that fell would own the host
+# @group   guest
+# @example vm-bake guest repo add dalmatia git/Infrastruktur
+# @see     guest repo fetch
+# @see     guest repo show
+# @see     guest repo drop
+#@end
+___guest_repo_add2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check view $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo clone $(sq "$1") $(sq "$2")"
+}
+
+#@help ___guest_repo_fetch2
+# @command guest repo fetch <guest> <repo>
+# @summary Fetch what the guest committed into the invoking user's own repository: the guest has a record and a view, the path is plain; then its branches fetched into refs/remotes/<guest>/* of the host's repository, where 'git log <guest>/main' reads them and 'git merge --ff-only <guest>/main' takes them over -- the host signs, the guest never does
+# @group   guest
+# @example vm-bake guest repo fetch dalmatia git/Infrastruktur
+# @see     guest repo add
+# @see     guest repo show
+#@end
+___guest_repo_fetch2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check view $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo refs $(sq "$1") $(sq "$2")"
+}
+
+#@help ___guest_repo_drop2
+# @command guest repo drop <guest> <repo>
+# @summary Remove the guest's clone from its view: the guest has a view, the path is plain; then the clone removed -- what the guest committed and the host has not fetched is gone with it
+# @group   guest
+# @example vm-bake guest repo drop dalmatia git/Infrastruktur
+# @see     guest repo add
+# @see     guest repo fetch
+#@end
+___guest_repo_drop2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check view $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo remove $(sq "$1") $(sq "$2")"
+}
+
+#@help _guest_repo_clone2
+# @command guest repo clone <guest> <repo>
+# @summary Act terminal (the invoking user, their own repository and their own view): the repository cloned into the view at the same path, without hardlinks (a hardlink would let the guest reach into the objects of the host's repository) and without a remote (the guest has no path to the host; 'guest repo fetch' is the way back)
+# @group   guest
+# @internal
+# @see     guest repo add
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+#@end
+_guest_repo_clone2() {
+	local dir="$VM_BAKE_VIEW_DIR" home=""
+	eval "home=~$(id -un)"
+	case "$dir" in "~/"*) dir="$home${dir#\~}" ;; esac
+	printf '%s\n' "test -d '$home/$2/.git' || { printf '# Error: %s is no repository of the host\\n' '$home/$2' >&2; exit 1; }"
+	printf '%s\n' "test ! -e '$dir/$1/$2' || { printf '# Error: %s exists in the view of %s\\n' '$2' '$1' >&2; exit 1; }"
+	printf '%s\n' "install -d -m 755 \"\$(dirname '$dir/$1/$2')\" || exit 1"
+	printf '%s\n' "git clone --no-hardlinks '$home/$2' '$dir/$1/$2' || exit 1"
+	printf '%s\n' "git -C '$dir/$1/$2' remote remove origin || exit 1"
+	printf '%s\n' "printf '# guest %s: clone of %s in its view\\n' '$1' '$2' >&2"
+}
+
+#@help _guest_repo_refs2
+# @command guest repo refs <guest> <repo>
+# @summary Act terminal (the invoking user, in their OWN repository): 'git fetch' from the guest's clone into refs/remotes/<guest>/*, no tags -- the host reads the guest's commits without ever running git inside the guest's clone, whose configuration and hooks belong to the guest
+# @group   guest
+# @internal
+# @see     guest repo fetch
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+#@end
+_guest_repo_refs2() {
+	local dir="$VM_BAKE_VIEW_DIR" home=""
+	eval "home=~$(id -un)"
+	case "$dir" in "~/"*) dir="$home${dir#\~}" ;; esac
+	printf '%s\n' "test -d '$dir/$1/$2/.git' || { printf '# Error: no clone %s in the view of %s (guest repo add)\\n' '$2' '$1' >&2; exit 1; }"
+	printf '%s\n' "git -C '$home/$2' fetch --no-tags --prune '$dir/$1/$2' \"+refs/heads/*:refs/remotes/$1/*\" || exit 1"
+	printf '%s\n' "printf '# guest %s: its branches are %s/* in %s now\\n' '$1' '$1' '$home/$2' >&2"
+}
+
+#@help _guest_repo_remove2
+# @command guest repo remove <guest> <repo>
+# @summary Act terminal (the invoking user, their own view): the clone removed from the view
+# @group   guest
+# @internal
+# @see     guest repo drop
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+#@end
+_guest_repo_remove2() {
+	local dir="$VM_BAKE_VIEW_DIR"
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	printf '%s\n' "test -d '$dir/$1/$2/.git' || { printf '# Error: no clone %s in the view of %s\\n' '$2' '$1' >&2; exit 1; }"
+	printf '%s\n' "rm -rf '$dir/$1/$2' || exit 1"
+	printf '%s\n' "printf '# guest %s: clone %s removed from its view\\n' '$1' '$2' >&2"
+}
+
+#@help _guest_repo_show1
+# @command guest repo show <guest>
+# @summary The clones in the guest's view, one line each: the path as the guest sees it under its home and the branch its HEAD names (the file read, no git run in the guest's clone)
+# @group   guest
+# @example vm-bake guest repo show dalmatia
+# @see     guest repo add
+# @see     guest repo fetch
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+#@end
+_guest_repo_show1() {
+	local dir="$VM_BAKE_VIEW_DIR" g="" d="" b="" n=0
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	printf '%s\n' "# clones in the view of $1 (path  branch)"
+	for g in $(find "$dir/$1" -maxdepth 5 -type d -name .git 2>/dev/null | sort); do
+		d=${g%/.git}
+		IFS= read -r b 2>/dev/null < "$g/HEAD" || b="-"
+		printf '#   %-40s %s\n' "${d#$dir/$1/}" "${b#ref: refs/heads/}"
+		n=$((n + 1))
+	done
+	test "$n" -gt 0 || printf '%s\n' "#   (none)"
 }
 
 #@help _guest_hostkey_ensure1

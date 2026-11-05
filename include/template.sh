@@ -945,19 +945,43 @@ ___template_env_show1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") env"
 }
 
-#@help ___template_home_add2
-# @command template home add <template> <path>
-# @summary Add a path of the invoking user's home (its path from the user name, the batch environment carries no HOME; relative, e.g. .themes/NsCDE or .config/gtk-3.0) that every guest of this template gets copied into the home of each of its users at 'guest make': the template exists, the path is relative and plain; then 'template line append'
+#@help __template_home_add2
+# @command template home add <template> <path> [<mode>]
+# @summary Add a path of the invoking user's home (its path from the user name, the batch environment carries no HOME; relative, e.g. .themes/NsCDE or .config/gtk-3.0) to the view every guest of this template gets of that home, read-only (ro) unless the mode says rw: rewrite to 'template home add <template> <path> ro'
 # @group   template
+# @param   mode  ro (the default) or rw: how the guest sees the path
 # @example vm-bake template home add freebsd-x .themes/NsCDE
+# @example vm-bake template home add freebsd-x .config/gtk-3.0 rw
 # @see     template home drop
 # @see     template home show
 # @see     guest make
 #@end
-___template_home_add2() {
+__template_home_add2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home add $(sq "$1") $(sq "$2") ro"
+}
+
+#@help ___template_home_add3
+# @internal arity-3 sibling of 'template home add' (template home add <template> <path> <mode>): the template exists, the path is relative and plain, the mode is ro or rw; then 'template line append' of '<path> <mode>'
+#@end
+___template_home_add3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") home $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home mode valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") home $(sq "$2 $3")"
+}
+
+#@help __template_home_mode_valid1
+# @command template home mode valid <mode>
+# @summary The mode is ro or rw: a comment line, else an error line
+# @group   template
+# @internal
+# @see     template home add
+#@end
+__template_home_mode_valid1() {
+	case "$1" in
+	ro|rw) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "home mode $1 valid")" ;;
+	*) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template home: the mode is ro or rw, not $1")" ;;
+	esac
 }
 
 #@help __template_home_valid1
@@ -977,30 +1001,47 @@ __template_home_valid1() {
 	fi
 }
 
-#@help ___template_home_drop2
-# @command template home drop <template> <path>
-# @summary Remove a home path from the template's own list: the template exists, the path is listed there; then 'template line remove'
+#@help __template_home_drop2
+# @command template home drop <template> <path> [<mode>]
+# @summary Remove a home path from the template's own list, the line being '<path> <mode>' with ro as the default: rewrite to 'template home drop <template> <path> ro'
 # @group   template
+# @param   mode  ro (the default) or rw, as the line was added
 # @example vm-bake template home drop freebsd-x .themes/NsCDE
 # @see     template home add
 #@end
-___template_home_drop2() {
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") home $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") home $(sq "$2")"
+__template_home_drop2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home drop $(sq "$1") $(sq "$2") ro"
 }
 
-#@help ___template_home_mask2
-# @command template home mask <template> <path>
-# @summary Hide an inherited home path in this template and below: the template exists, the path is valid; then 'template line mask'
+#@help ___template_home_drop3
+# @internal arity-3 sibling of 'template home drop' (template home drop <template> <path> <mode>): the template exists, the line '<path> <mode>' is listed there; then 'template line remove'
+#@end
+___template_home_drop3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") home $(sq "$2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") home $(sq "$2 $3")"
+}
+
+#@help __template_home_mask2
+# @command template home mask <template> <path> [<mode>]
+# @summary Hide an inherited home line '<path> <mode>' in this template and below, ro as the default: rewrite to 'template home mask <template> <path> ro'
 # @group   template
+# @param   mode  ro (the default) or rw, as the inherited line reads
 # @example vm-bake template home mask freebsd-x .themes/NsCDE
 # @see     template home drop
 #@end
-___template_home_mask2() {
+__template_home_mask2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home mask $(sq "$1") $(sq "$2") ro"
+}
+
+#@help ___template_home_mask3
+# @internal arity-3 sibling of 'template home mask' (template home mask <template> <path> <mode>): the template exists, the path and the mode are valid; then 'template line mask' of '<path> <mode>'
+#@end
+___template_home_mask3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") home $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home mode valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") home $(sq "$2 $3")"
 }
 
 #@help ___template_home_show1

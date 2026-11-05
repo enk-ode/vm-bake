@@ -252,14 +252,62 @@ pattern over the resolved tags, from the records, without starting anything:
 
 ## Homes and host keys
 
-What a guest carries in its users' homes is a list of the template:
-`template home add <template> <path>` names a path of your own home
-(relative: `.themes/NsCDE`, `.config/gtk-3.0`), and `guest make` copies it
-into the home of every user of the template, offline through the clone's
-disk, owned by that user. A rebuilt guest gets the files again. The guest's
-ssh host key is part of its record (`guest/<guest>/ssh_host_ed25519_key`,
-made once) and installed into every clone, so the host's known_hosts stays
-right across rebuilds.
+What a guest sees of your home is a list of the template:
+`template home add <template> <path> [<mode>]` names a path of your own
+home (relative: `.themes/NsCDE`, `.config/gtk-3.0`) and how the guest sees
+it, `ro` unless you say `rw`. A guest without a view gets each path copied
+into the home of every user of the template at `guest make`, offline
+through the clone's disk, owned by that user; a rebuilt guest gets the
+files again. The guest's ssh host key is part of its record
+(`guest/<guest>/ssh_host_ed25519_key`, made once) and installed into every
+clone, so the host's known_hosts stays right across rebuilds.
 
     vm-bake template home add freebsd-x .themes/NsCDE
+    vm-bake template home add freebsd-x .config/gtk-3.0 rw
     vm-bake template home show freebsd-x
+
+## The view: one home
+
+There is one home, yours on the host. `guest view tree ensure` makes the
+dataset that carries the views, once per host: a child of the dataset that
+carries your home, named after the path of `VM_BAKE_VIEW_DIR` below it
+(`~/vm-bake/guest` becomes `<carrier>/vm-bake-guest`) and mounted there.
+A template that says `service files view` then gives its guests a view:
+`guest make` makes the ZFS dataset `VM_BAKE_VIEW_DIR/<guest>` below that
+one, which inherits the mount point, and writes the share into the guest's
+configuration as `bhyve_options`; the image learns at `image burn` to load
+`virtio_p9fs` and to mount the share `home` on the home of the user whose
+uid is `host`. What the guest writes -- its dotfiles, the state of its
+tools, its clones -- lies in the view, in your home, and is backed up with
+it. A new image replaces the guest, not its view: `guest drop` keeps the
+view, `guest view drop` is the command that throws it away.
+
+Of the rest of your home the guest sees what the template's home lines
+allow: `guest start` hangs each one into the view as a nullfs overlay, `ro`
+or `rw` as the line says, `guest stop` lets them go once the guest's bhyve
+process is gone. The login does not hang on the mount: sshd reads the keys
+from `/etc/ssh/authorized_keys/%u` as well, where `image user make` puts
+them.
+
+    vm-bake guest view tree ensure          # once per host, needs root
+    vm-bake template service add freebsd-dev files view
+    vm-bake template user add freebsd-dev brj host
+    vm-bake template home add freebsd-dev .vm-bake/db
+    vm-bake guest make freebsd-dev-20261104 dalmatia 172.16.100.101/24
+    vm-bake guest start dalmatia
+    vm-bake guest view drop dalmatia        # the view and everything in it
+
+## Repositories of a guest
+
+A repository of the host is never hung into a view: git runs what
+`.git/config` and the hooks say, so a guest that fell would own the host.
+The guest gets its own clone instead, at the same path it has on the host,
+and commits unsigned; you fetch it back into your own repository, read it
+and sign there. `guest repo fetch` runs git only in YOUR repository and
+fetches the guest's branches into `refs/remotes/<guest>/*`:
+
+    vm-bake guest repo add dalmatia git/Infrastruktur
+    vm-bake guest repo show dalmatia
+    vm-bake guest repo fetch dalmatia git/Infrastruktur
+    git -C ~/git/Infrastruktur log dalmatia/main
+    git -C ~/git/Infrastruktur merge --ff-only dalmatia/main
