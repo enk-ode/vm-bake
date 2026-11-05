@@ -1275,12 +1275,13 @@ test_view_acts() {
   else
     fail "ssh write: $out"
   fi
-  local carrier
+  local carrier parent
   carrier=$(df "$HOME" 2>/dev/null | awk 'NR == 2 { print $1 }')
+  parent=${carrier%/*}
   run_vmbake setenv VM_BAKE_VIEW_DIR "$HOME/.vm-bake-view-test/guest" > /dev/null
   out=$(run_vmbake guest view tree ensure)
-  if printf '%s\n' "$out" | grep -q "zfs create -o mountpoint='$HOME/.vm-bake-view-test/guest' '$carrier/.vm-bake-view-test-guest'" && printf '%s\n' "$out" | grep -q "chown '$(id -un)':'$(id -gn)' '$HOME/.vm-bake-view-test/guest'" && printf '%s\n' "$out" | grep -q "zfs list -H -o name '$HOME/.vm-bake-view-test/guest' > /dev/null 2>&1 &&"; then
-    pass "view tree ensure names the dataset after the path below the home, on the dataset that carries it, and keeps an existing one"
+  if printf '%s\n' "$out" | grep -q "zfs create -o mountpoint='$HOME/.vm-bake-view-test' '$parent/.vm-bake-view-test'" && printf '%s\n' "$out" | grep -q "zfs create -p '$parent/.vm-bake-view-test/guest'" && printf '%s\n' "$out" | grep -q "chown '$(id -un)':'$(id -gn)' '$HOME/.vm-bake-view-test/guest' && chmod 0700" && printf '%s\n' "$out" | grep -q "zfs list -H -o name '$HOME/.vm-bake-view-test/guest' > /dev/null 2>&1 &&"; then
+    pass "view tree ensure lays the path below the home out as a dataset path beside the home's own, the head carries the mount point, and an existing one is kept"
   else
     fail "view tree ensure: $out"
   fi

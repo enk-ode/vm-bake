@@ -269,10 +269,14 @@ clone, so the host's known_hosts stays right across rebuilds.
 ## The view: one home
 
 There is one home, yours on the host. `guest view tree ensure` makes the
-dataset that carries the views, once per host: a child of the dataset that
-carries your home, named after the path of `VM_BAKE_VIEW_DIR` below it
-(`~/vm-bake/guest` becomes `<carrier>/vm-bake-guest`) and mounted there.
-A template that says `service files view` then gives its guests a view:
+datasets that carry the views, once per host: beside the dataset that
+carries your home, under its parent, with the path of `VM_BAKE_VIEW_DIR`
+below the home as the dataset path, slash for slash -- `~/vm-bake/guest`
+becomes `<parent>/vm-bake/guest`, the head carries the mount point and
+everything below inherits it. A view is a dataset of its own, so it is not
+in the snapshots of the home's dataset: a backup takes the parent
+recursively. A template that says `service files view` then gives its
+guests a view:
 `guest make` makes the ZFS dataset `VM_BAKE_VIEW_DIR/<guest>` below that
 one, which inherits the mount point, and writes the share into the guest's
 configuration as `bhyve_options`; the image learns at `image burn` to load

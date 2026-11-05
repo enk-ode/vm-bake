@@ -614,29 +614,30 @@ __guest_check_view1() {
 
 #@help _guest_view_tree_ensure0
 # @command guest view tree ensure
-# @summary Act terminal (root, once per host): the dataset that carries the views -- a child of the dataset that carries the invoking user's home, named after the path of VM_BAKE_VIEW_DIR below that home (its slashes become dashes) and mounted on it, then handed to that user, 0700. Every view 'guest view ensure' makes below it inherits that mount point and needs no further right. An existing one is a note
+# @summary Act terminal (root, once per host): the datasets that carry the views -- beside the dataset that carries the invoking user's home, under its parent, the path of VM_BAKE_VIEW_DIR below that home as a dataset path (slash for slash, so the hierarchy reads like the path: <parent>/vm-bake/guest for ~/vm-bake/guest); the head of that path gets the mount point, everything below inherits it, and both are handed to the invoking user (the head 0755, the views' directory 0700). Every view 'guest view ensure' makes below it inherits the mount point too and needs no further right. An existing one is a note
 # @group   guest
 # @example vm-bake guest view tree ensure
 # @see     guest view ensure
 # @see     guest make
-# @env     VM_BAKE_VIEW_DIR  the views' directory, the mount point of this dataset
+# @env     VM_BAKE_VIEW_DIR  the views' directory, the mount point this dataset path carries
 #@end
 _guest_view_tree_ensure0() {
-	local dir="$VM_BAKE_VIEW_DIR" home="" u="" g="" rel="" parent="" name=""
+	local dir="$VM_BAKE_VIEW_DIR" home="" u="" g="" rel="" carrier="" parent="" head=""
 	eval "home=~$(id -un)"
 	case "$dir" in "~/"*) dir="$home${dir#\~}" ;; esac
 	u=$(id -un); g=$(id -gn)
 	case "$dir" in "$home/"*) rel=${dir#"$home/"} ;; *) rel="" ;; esac
 	test -n "$rel" || { generate_error "guest view tree ensure: VM_BAKE_VIEW_DIR ($dir) lies outside the home of $u ($home), and a view is a part of that home"; return 0; }
-	parent=$(df "$home" 2>/dev/null | awk 'NR == 2 { print $1 }')
-	case "$parent" in */*) ;; *) parent="" ;; esac
-	test -n "$parent" || { generate_error "guest view tree ensure: no ZFS dataset carries $home (df says $(df "$home" 2>/dev/null | awk 'NR == 2 { print $1 }')), and a view is a dataset"; return 0; }
-	name=$(printf '%s' "$rel" | tr '/' '-')
+	carrier=$(df "$home" 2>/dev/null | awk 'NR == 2 { print $1 }')
+	case "$carrier" in */?*) parent=${carrier%/*} ;; *) parent="" ;; esac
+	test -n "$parent" || { generate_error "guest view tree ensure: no ZFS dataset below a parent carries $home (df says ${carrier:-nothing}), and the views live beside that dataset"; return 0; }
+	head=${rel%%/*}
 	printf '%s\n' "zfs list -H -o name '$dir' > /dev/null 2>&1 && { printf '# the views already live in %s\\n' '$dir' >&2; exit 0; }"
-	printf '%s\n' "install -d -o $(sq "$u") -g $(sq "$g") -m 755 $(sq "$(dirname "$dir")") || exit 1"
-	printf '%s\n' "zfs create -o mountpoint='$dir' '$parent/$name' || exit 1"
+	printf '%s\n' "zfs list -H -o name '$parent/$head' > /dev/null 2>&1 || zfs create -o mountpoint='$home/$head' '$parent/$head' || exit 1"
+	printf '%s\n' "zfs list -H -o name '$parent/$rel' > /dev/null 2>&1 || zfs create -p '$parent/$rel' || exit 1"
+	printf '%s\n' "chown $(sq "$u"):$(sq "$g") '$home/$head' && chmod 0755 '$home/$head' || exit 1"
 	printf '%s\n' "chown $(sq "$u"):$(sq "$g") '$dir' && chmod 0700 '$dir' || exit 1"
-	printf '%s\n' "printf '# %s: the dataset of the views, mounted on %s\\n' '$parent/$name' '$dir' >&2"
+	printf '%s\n' "printf '# %s: the datasets of the views, mounted on %s\\n' '$parent/$rel' '$dir' >&2"
 }
 
 #@help _guest_view_ensure1
