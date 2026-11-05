@@ -540,7 +540,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove report_place dowry_place_idem dowry_place_overwrite"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove report_place dowry_place_idem dowry_place_overwrite vmm_release"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -578,12 +578,20 @@ test_image_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan today
   today=$(date -u '+%Y%m%d')
-  plan=$(run_vmbake image make freebsd freebsd-dev)
-  if [ "$(printf '%s\n' "$plan" | grep -c '"\$VM_BAKE_CONTEXT_SCRIPT"')" = "7" ] && printf '%s\n' "$plan" | sed -n 1p | grep -q "note 'image make freebsd: template freebsd-dev -> image freebsd-dev-$today" && printf '%s\n' "$plan" | grep -q "image create 'freebsd-dev' 'freebsd-dev-$today'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "image seal 'freebsd-dev-$today'"; then
-    pass "make freebsd: the name announced, the template checked, then create, base, burn, close, seal"
+  plan=$(run_vmbake image make freebsd freebsd-dev ides-2026-11)
+  if [ "$(printf '%s\n' "$plan" | grep -c '"\$VM_BAKE_CONTEXT_SCRIPT"')" = "9" ] && printf '%s\n' "$plan" | sed -n 1p | grep -q "note 'image make freebsd: template freebsd-dev -> image ides-2026-11" && printf '%s\n' "$plan" | grep -q "image name valid 'ides-2026-11'" && printf '%s\n' "$plan" | grep -q "image check absent 'ides-2026-11'" && printf '%s\n' "$plan" | grep -q "image create 'freebsd-dev' 'ides-2026-11'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image seal 'ides-2026-11'"; then
+    pass "make freebsd with a name: announced, template checked, name valid and free, then create, base, burn, close, seal"
   else
     fail "make plan: $plan"
   fi
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake image make freebsd freebsd-dev | grep -q "image make freebsd 'freebsd-dev' 'freebsd-dev-$today'"; then
+    pass "without a name of its own the image is called <template>-<yyyymmdd>, handed to the arity-2 command"
+  else
+    fail "make freebsd without a name: $(run_vmbake image make freebsd freebsd-dev)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   plan=$(run_vmbake image create freebsd-dev x)
   if [ "$(printf '%s\n' "$plan" | grep -c .)" = "13" ] && printf '%s\n' "$plan" | grep -q "image disk create 'x' '64G'" && printf '%s\n' "$plan" | grep -q "image lock take 'x'" && printf '%s\n' "$plan" | sed -n 13p | grep -q "image disk detach 'x'"; then
     pass "create of a release base: checks, lock, record, dataset, disk in 64G, attach, partition, format, detach"
@@ -814,8 +822,8 @@ test_guest_plan() {
   else
     fail "guest make plan: $plan"
   fi
-  if [ "$(run_vmbake guest start bake | grep -c .)" = "7" ] && printf '%s\n' "$(run_vmbake guest start bake)" | sed -n 2p | grep -q "guest check stopped" && [ "$(run_vmbake guest stop bake | grep -c .)" = "4" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "9" ]; then
-    pass "start seven lines, the running check second (before any mount and its sudo), stop four, drop nine"
+  if [ "$(run_vmbake guest start bake | grep -c .)" = "7" ] && printf '%s\n' "$(run_vmbake guest start bake)" | sed -n 2p | grep -q "guest check stopped" && [ "$(run_vmbake guest stop bake | grep -c .)" = "5" ] && printf '%s\n' "$(run_vmbake guest stop bake)" | sed -n 4p | grep -q "guest vmm release" && [ "$(run_vmbake guest drop bake | grep -c .)" = "9" ]; then
+    pass "start seven lines, the running check second (before any mount and its sudo), stop five with the vm instance released, drop nine"
   else
     fail "guest start/stop/drop: $(run_vmbake guest drop bake)"
   fi
@@ -825,6 +833,12 @@ test_guest_plan() {
   else
     fail "guest guards"
   fi
+  if [ -z "$(run_vmbake guest check stopped bake)" ] && printf 'x\n' > "$TEST_DIR/guest-dir-probe" && mkdir -p "$TEST_DIR/vmdir/bake" && printf 'x\n' > "$TEST_DIR/vmdir/bake/run.lock" && run_vmbake setenv VM_BAKE_GUEST_DIR "$TEST_DIR/vmdir" > /dev/null && run_vmbake guest check stopped bake | grep -q "run.lock in $TEST_DIR/vmdir/bake"; then
+    pass "check stopped names the run.lock, and is silent when nothing of the guest is left running"
+  else
+    fail "check stopped: $(run_vmbake guest check stopped bake)"
+  fi
+  run_vmbake unsetenv VM_BAKE_GUEST_DIR > /dev/null
   run_vmbake guest record write b bake 172.16.100.250/24 > /dev/null
   if [ "$(cat "$TEST_DIR/guest/bake/image")" = "b" ] && [ "$(cat "$TEST_DIR/guest/bake/address")" = "172.16.100.250/24" ] && run_vmbake guest list | grep -q "^#   bake  *b  *172.16.100.250/24" && run_vmbake guest check absent bake | grep -q "bake exists"; then
     pass "guest record write and list"
@@ -1573,7 +1587,11 @@ test_dowry_place() {
   else
     fail "dowry place without rules: $(run_vmbake guest dowry place bake)"
   fi
-  if [ -z "$(run_vmbake guest check homes caledonia)" ] && ! run_vmbake guest view mount caledonia | grep -q "nullfs -o copy"; then
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_guest_view_mount"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if [ "$(run_vmbake getintp guest_view_mount | tail -1)" != cat ]; then
+    fail "guest view mount not pinned to cat -- not calling it (its default is sudo sh and WOULD mount)"
+  elif [ -z "$(run_vmbake guest check homes caledonia)" ] && ! run_vmbake guest view mount caledonia | grep -q "nullfs -o copy"; then
     pass "the readers of the home lines skip the copy lines"
   else
     fail "readers: $(run_vmbake guest view mount caledonia)"

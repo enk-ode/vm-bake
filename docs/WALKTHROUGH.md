@@ -141,8 +141,10 @@ release` one command.
 An image is the template baked onto a sparse UFS disk under
 `VM_BAKE_IMAGE_DIR/<image>` (a ZFS dataset of its own), from the pkgbase
 repository of the template's release, sealed by the snapshot `@image`.
-The bake is five commands; `image make freebsd` is the chain over them
-and names the image `<template>-<yyyymmdd>`:
+The bake is five commands; `image make freebsd` is the chain over them.
+Without a name of your own the image is called `<template>-<yyyymmdd>`; with
+one, a template bakes as many images as you like -- more than one on the
+same day included:
 
     vm-bake image create freebsd-dev freebsd-dev-20261031   # lock, record, dataset, disk, GPT, newfs, mount
     vm-bake image base   freebsd-dev-20261031               # keys, pkg -r set-minimal + kernel + pkg, repos, loader, fstab
@@ -187,7 +189,8 @@ template's sha256, written, grown, relabelled), baked on the host:
     vm-bake image make freebsd freebsd-builder
     vm-bake guest make freebsd-builder-20261101 bake 172.16.100.250/24
     vm-bake image builder use
-    vm-bake image make freebsd freebsd-dev
+    vm-bake image make freebsd freebsd-dev            # Name: freebsd-dev-<datum>
+    vm-bake image make freebsd freebsd-x ides-2026-11 # oder ein eigener Name
 
 A template that lists `doas` gives its users doas without a password; that
 is how the builder's user escalates. `image builder use` sets

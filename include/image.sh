@@ -38,27 +38,33 @@
 # @defcompletion osversion  none
 #@end
 
-#@help ___image_make_freebsd1
-# @command image make freebsd <template>
-# @summary Bake a FreeBSD image from the template, named <template>-<yyyymmdd>: 'image create', 'image base', 'image burn', 'image close' and 'image seal' in turn (each a command of its own; create decides by the template's base kind)
+#@help __image_make_freebsd1
+# @command image make freebsd <template> [<name>]
+# @summary Bake a FreeBSD image from the template; without a name of your own it is called <template>-<yyyymmdd>: rewrite to 'image make freebsd <template> <that name>'
 # @group   image
+# @param   name  the image's name; left out, the template and today's date
 # @example vm-bake image make freebsd freebsd-dev
-# @see     image create
-# @see     image base
-# @see     image burn
-# @see     image close
-# @see     image seal
+# @example vm-bake image make freebsd freebsd-x ides-2026-11
+# @see     image make freebsd
 # @see     image list
 #@end
-___image_make_freebsd1() {
-	local name="$1-$(date -u '+%Y%m%d')"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image make freebsd: template $1 -> image $name (create, base, burn, close, seal)")"
+__image_make_freebsd1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make freebsd $(sq "$1") $(sq "$1-$(date -u '+%Y%m%d')")"
+}
+
+#@help ___image_make_freebsd2
+# @internal arity-2 sibling of 'image make freebsd' (image make freebsd <template> <name>): the template exists, the name is an image name and free; then 'image create', 'image base', 'image burn', 'image close' and 'image seal' in turn (each a command of its own; create decides by the template's base kind). A name of your own is how one template bakes more than one image -- and more than one on the same day
+#@end
+___image_make_freebsd2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image make freebsd: template $1 -> image $2 (create, base, burn, close, seal)")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image create $(sq "$1") $(sq "$name")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image base $(sq "$name")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image burn $(sq "$name")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image close $(sq "$name")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seal $(sq "$name")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image name valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check absent $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image create $(sq "$1") $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image base $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image burn $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image close $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seal $(sq "$2")"
 }
 
 #@help __image_create2

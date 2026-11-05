@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest vmm release), pinned to sudo sh: bhyvectl --destroy needs root. Inspect first: vm-bake setintp guest_vmm_release cat.

@@ -90,16 +90,18 @@ ___guest_start1() {
 
 #@help ___guest_stop1
 # @command guest stop <guest>
-# @summary Stop the guest: it has a record; then 'vm stop' (ACPI shutdown), the wait until its bhyve process is gone, and the overlays of its view let go
+# @summary Stop the guest: it has a record; then 'vm stop' (ACPI shutdown), the wait until its bhyve process is gone, the vm instance released if one is left behind, and the overlays of its view let go
 # @group   guest
 # @example vm-bake guest stop bake
 # @see     guest start
+# @see     guest vmm release
 # @see     guest view unmount
 #@end
 ___guest_stop1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest halt $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest gone $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest vmm release $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view unmount $(sq "$1")"
 }
 
@@ -178,20 +180,38 @@ __guest_check_absent1() {
 
 #@help __guest_check_stopped1
 # @command guest check stopped <guest>
-# @summary The guest is not running by vm-bhyve's own mark, no run.lock in its directory (readable without root, where the bhyve process is not): a comment line, else an error line -- guest stop first
+# @summary Nothing of the guest is running any more -- neither vm-bhyve's own mark (run.lock in its directory, readable without root) nor the vm instance the kernel keeps for it (/dev/vmm/<guest>): a comment line, else an error line naming which of the two it is. A bhyve that died without taking its instance with it leaves the second one behind, and vm-bhyve then refuses to start the guest at all ('guest vmm release' clears it)
 # @group   guest
 # @internal
 # @see     guest drop
 # @see     guest stop
 # @see     guest start
+# @see     guest vmm release
 # @env     VM_BAKE_GUEST_DIR  the guests' directory
 #@end
 __guest_check_stopped1() {
-	if test ! -e "$VM_BAKE_GUEST_DIR/$1/run.lock"; then
+	local why=""
+	test ! -e "$VM_BAKE_GUEST_DIR/$1/run.lock" || why="run.lock in $VM_BAKE_GUEST_DIR/$1 (guest stop $1 first, then wait for bhyve to leave)"
+	test ! -e "/dev/vmm/$1" || why="${why:+$why; }the vm instance /dev/vmm/$1 (a stale one of a bhyve that died: guest vmm release $1)"
+	if test -z "$why"; then
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1 is not running")"
 	else
-		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest $1 is running (run.lock in $VM_BAKE_GUEST_DIR/$1): guest stop $1 first, then wait for bhyve to leave")"
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest $1 is running: $why")"
 	fi
+}
+
+#@help _guest_vmm_release1
+# @command guest vmm release <guest>
+# @summary Act terminal (root): the vm instance the kernel keeps for the guest (/dev/vmm/<guest>) destroyed with bhyvectl -- what a bhyve leaves behind when it dies, and what makes vm-bhyve say 'guest appears to be running already' even with no process and no run.lock; none there is a note
+# @group   guest
+# @internal
+# @see     guest stop
+# @see     guest check stopped
+#@end
+_guest_vmm_release1() {
+	printf '%s\n' "test -e '/dev/vmm/$1' || { printf '# guest %s: no vm instance to release\\n' '$1' >&2; exit 0; }"
+	printf '%s\n' "bhyvectl --destroy --vm=$(sq "$1") || exit 1"
+	printf '%s\n' "printf '# guest %s: vm instance /dev/vmm/%s destroyed\\n' '$1' '$1' >&2"
 }
 
 #@help __guest_check_record1
