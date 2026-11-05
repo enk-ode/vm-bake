@@ -540,7 +540,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove report_place"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -814,8 +814,8 @@ test_guest_plan() {
   else
     fail "guest make plan: $plan"
   fi
-  if [ "$(run_vmbake guest start bake | grep -c .)" = "4" ] && [ "$(run_vmbake guest stop bake | grep -c .)" = "4" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "9" ]; then
-    pass "start and stop four lines each (the view hung in and let go), drop nine"
+  if [ "$(run_vmbake guest start bake | grep -c .)" = "5" ] && [ "$(run_vmbake guest stop bake | grep -c .)" = "4" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "9" ]; then
+    pass "start five lines (homes checked, view hung in, report written), stop four, drop nine"
   else
     fail "guest start/stop/drop: $(run_vmbake guest drop bake)"
   fi
@@ -1430,6 +1430,53 @@ parallel_main() {
   return $rc
 }
 
+
+test_guest_report() {
+  test_header "report: what the records say about a guest, shown and written into its view as GUEST.txt"
+  test_setup
+  image_chain
+  view_chain
+  local out plan
+  out=$(run_vmbake guest show caledonia)
+  if printf '%s\n' "$out" | grep -q "^# guest caledonia" && printf '%s\n' "$out" | grep -q "^#   image     x" && printf '%s\n' "$out" | grep -q "^#   chain     empty > freebsd > freebsd-15.1 > freebsd-dev" && printf '%s\n' "$out" | grep -q "^#   view      $TEST_DIR/view/caledonia on the host" && printf '%s\n' "$out" | grep -q "slot 30, share home" && [ "$(printf '%s\n' "$out" | grep -c '^# [a-z]* (origin')" = "12" ]; then
+    pass "guest show names record, template chain, view and every list family"
+  else
+    fail "guest show: $out"
+  fi
+  if run_vmbake guest show bake | grep -q "^#   view      none (the home lies on the disk of the guest)"; then
+    pass "a guest without a view says so"
+  else
+    fail "guest show without a view: $(run_vmbake guest show bake | sed -n 9p)"
+  fi
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  plan=$(run_vmbake guest report caledonia)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "3" ] && printf '%s\n' "$plan" | grep -q "guest show 'caledonia' > '$TEST_DIR/view/caledonia/GUEST.txt.new'" && printf '%s\n' "$plan" | grep -q "guest report place 'caledonia'"; then
+    pass "guest report renders through a redirection and puts the file in place"
+  else
+    fail "guest report plan: $plan"
+  fi
+  plan=$(run_vmbake guest start caledonia)
+  if printf '%s\n' "$plan" | grep -n "guest report\|guest run" | sed -n 1p | grep -q "guest report"; then
+    pass "guest start writes the report before it starts the guest"
+  else
+    fail "guest start plan: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  mkdir -p "$TEST_DIR/view/caledonia"
+  run_vmbake guest report caledonia > /dev/null
+  if [ -s "$TEST_DIR/view/caledonia/GUEST.txt" ] && grep -q "^# guest caledonia" "$TEST_DIR/view/caledonia/GUEST.txt" && [ "$(stat -f '%Lp' "$TEST_DIR/view/caledonia/GUEST.txt")" = 644 ] && [ ! -e "$TEST_DIR/view/caledonia/GUEST.txt.new" ]; then
+    pass "the report lands in the view as GUEST.txt (0644), nothing left over"
+  else
+    fail "report file: $(ls -l "$TEST_DIR/view/caledonia" 2>&1)"
+  fi
+  if [ -z "$(run_vmbake guest report bake)" ] && [ ! -e "$TEST_DIR/view/bake/GUEST.txt" ]; then
+    pass "a guest without a view gets no report"
+  else
+    fail "report without a view: $(run_vmbake guest report bake)"
+  fi
+}
+
 test_dump_witness() {
   test_header "dump: header, image and guest records as witnesses, env and tag lines with their arity, a replay restores the records"
   test_setup
@@ -1568,6 +1615,7 @@ main() {
   should_run_test test_view_plan
   should_run_test test_view_acts
   should_run_test test_repo_plan
+  should_run_test test_guest_report
   should_run_test test_dump_witness
   should_run_test test_archive_pair
 

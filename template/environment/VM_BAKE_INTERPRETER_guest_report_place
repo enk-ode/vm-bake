@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest report place), pinned to sh: it moves the rendered report into the view, which belongs to the invoking user -- no root.

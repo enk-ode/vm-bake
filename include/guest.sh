@@ -69,17 +69,19 @@ ___guest_make3() {
 
 #@help ___guest_start1
 # @command guest start <guest>
-# @summary Start the guest: it has a record and every home path of its template is there; then the overlays of the template hung into its view (a guest without a view: a note) and 'vm start'
+# @summary Start the guest: it has a record and every home path of its template is there; then the overlays of the template hung into its view (a guest without a view: a note), the report of what the records say about it written into that view, and 'vm start'
 # @group   guest
 # @example vm-bake guest start bake
 # @see     guest stop
 # @see     guest make
 # @see     guest view mount
+# @see     guest report
 #@end
 ___guest_start1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check homes $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view mount $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest report $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest run $(sq "$1")"
 }
 
@@ -1007,6 +1009,93 @@ _guest_dataset_destroy1() {
 	printf '%s\n' "ds=\$(zfs list -H -o name '$VM_BAKE_GUEST_DIR/$1' 2>/dev/null) || { printf '# guest %s: no dataset\\n' '$1' >&2; exit 0; }"
 	printf '%s\n' "zfs destroy -r \"\$ds\" || exit 1"
 	printf '%s\n' "printf '# guest %s: %s destroyed\\n' '$1' \"\$ds\" >&2"
+}
+
+#@help _guest_show1
+# @command guest show <guest>
+# @summary Everything the records say about one guest, as comment lines: its own record (image, address, created, the fingerprint of its ssh host key), the template behind its image with the resolved chain and resources, whether it has a view and where, and every list family resolved over the chain with its origin -- the SOLL of this guest, against which it can be checked from inside. 'guest report' is the same text, written into the guest's view
+# @group   guest
+# @example vm-bake guest show dalmatia
+# @see     guest list
+# @see     guest report
+# @see     template show
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+# @env     VM_BAKE_VIEW_SLOT  the PCI slot of the 9p device the share rides on
+# @env     VM_BAKE_SSH_PORT  the port sshd listens on in the guest
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
+# @env     VM_BAKE_GUEST_GATEWAY  gateway and resolver of the guests
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_show1() {
+	local d="$VM_BAKE_BASE/guest/$1" img="" t="" cur="" chain="" p="" n=0 a="" res="" f="" dir="$VM_BAKE_VIEW_DIR" view=no addr=- created=- key=-
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	IFS= read -r img 2>/dev/null < "$d/image" || img=-
+	IFS= read -r addr 2>/dev/null < "$d/address" || addr=-
+	IFS= read -r created 2>/dev/null < "$d/created" || created=-
+	test ! -f "$d/ssh_host_ed25519_key.pub" || key=$(ssh-keygen -l -f "$d/ssh_host_ed25519_key.pub" 2>/dev/null | cut -d' ' -f2)
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/resource" && IFS= read -r res < "$VM_BAKE_BASE/template/$a/resource"; done
+	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' && view=yes
+	printf '# guest %s (the records of %s, read %s)\n' "$1" "$(hostname)" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+	printf '#   image     %s\n#   template  %s\n#   chain     %s\n' "$img" "$t" "empty > $(printf '%s' "$chain" | tr ' ' '>' | sed 's/>/ > /g')"
+	printf '#   address   %s (gateway and resolver %s, name %s.%s)\n' "$addr" "$VM_BAKE_GUEST_GATEWAY" "$1" "$VM_BAKE_GUEST_DOMAIN"
+	printf '#   resource  %s (cpu memory disk)\n#   sshd      port %s, keys only, /etc/ssh/authorized_keys/<user>\n' "${res:--}" "$VM_BAKE_SSH_PORT"
+	printf '#   hostkey   %s\n#   created   %s\n' "$key" "$created"
+	printf '#   view      %s\n' "$(test "$view" = no && printf 'none (the home lies on the disk of the guest)' || printf '%s on the host, mounted as the home over p9fs (slot %s, share home)' "$dir/$1" "$VM_BAKE_VIEW_SLOT")"
+	for f in $TEMPLATE_FAMILIES; do
+		printf '# %s (origin  entry)\n' "$f"
+		awk -v base="$VM_BAKE_BASE" -v family="$f" -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk"
+	done
+}
+
+#@help ___guest_report1
+# @command guest report <guest>
+# @summary Write what 'guest show' says into the guest's own view, as GUEST.txt beside its home, so the guest can hold its SOLL against what it finds: the guest has a record; then the text rendered into GUEST.txt.new and put in place. A guest without a view has nowhere to put it and gets a comment
+# @group   guest
+# @example vm-bake guest report dalmatia
+# @see     guest show
+# @see     guest start
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+___guest_report1() {
+	local img="" t="" cur="" chain="" p="" n=0 dir="$VM_BAKE_VIEW_DIR" view=no
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' && view=yes
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	test "$view" = no || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest show $(sq "$1") > $(sq "$dir/$1/GUEST.txt.new")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest report place $(sq "$1")"
+	test "$view" = yes || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1: no view in the template $t, nowhere to put a report")"
+}
+
+#@help _guest_report_place1
+# @command guest report place <guest>
+# @summary Act terminal (the invoking user, the view is theirs): GUEST.txt.new moved into place as GUEST.txt (0644) and the lines counted; nothing rendered is an error
+# @group   guest
+# @internal
+# @see     guest report
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+#@end
+_guest_report_place1() {
+	local dir="$VM_BAKE_VIEW_DIR" f=""
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	f="$dir/$1/GUEST.txt"
+	printf '%s\n' "test -s '$f.new' || { printf '# Error: no report rendered (%s)\\n' '$f.new' >&2; exit 1; }"
+	printf '%s\n' "chmod 0644 '$f.new' && mv -f '$f.new' '$f' || exit 1"
+	printf '%s\n' "printf '# guest %s: %s lines in %s\\n' '$1' \"\$(grep -c . '$f')\" '$f' >&2"
 }
 
 #@help _guest_list0
