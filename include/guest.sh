@@ -69,17 +69,20 @@ ___guest_make3() {
 
 #@help ___guest_start1
 # @command guest start <guest>
-# @summary Start the guest: it has a record and every home path of its template is there; then the overlays of the template hung into its view (a guest without a view: a note), the report of what the records say about it written into that view, and 'vm start'
+# @summary Start the guest: it has a record, it is not running already (vm-bhyve's run.lock -- the check stands first, so a running guest costs neither a mount nor the sudo behind it) and every home path of its template is there; then the dowry of its template placed in its view, the overlays of the template hung in (a guest without a view: a note), the report of what the records say about it written into that view, and 'vm start'
 # @group   guest
 # @example vm-bake guest start bake
 # @see     guest stop
 # @see     guest make
+# @see     guest dowry place
 # @see     guest view mount
 # @see     guest report
 #@end
 ___guest_start1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check stopped $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check homes $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dowry place $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view mount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest report $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest run $(sq "$1")"
@@ -180,6 +183,7 @@ __guest_check_absent1() {
 # @internal
 # @see     guest drop
 # @see     guest stop
+# @see     guest start
 # @env     VM_BAKE_GUEST_DIR  the guests' directory
 #@end
 __guest_check_stopped1() {
@@ -533,7 +537,7 @@ __guest_check_homes1() {
 		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
 		cur=$p; n=$((n + 1))
 	done
-	paths=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | cut -d' ' -f1)
+	paths=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -v '^copy ' | cut -d' ' -f1)
 	for h in $paths; do test -e "$home/$h" || missing="$missing $h"; done
 	if test -z "$missing"; then
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1: home paths present ($(printf '%s' "$paths" | tr '\n' ' '))")"
@@ -565,7 +569,7 @@ _guest_home_write1() {
 		cur=$p; n=$((n + 1))
 	done
 	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' && { emit_note "guest $1: its home comes from the host through its view, the paths are hung in at guest start, nothing seeded"; return 0; }
-	paths=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | cut -d' ' -f1)
+	paths=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -v '^copy ' | cut -d' ' -f1)
 	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	test -n "$paths" && test -n "$users" || { emit_note "guest $1: no home paths or no users in the template, nothing seeded"; return 0; }
 	printf '%s\n' "md=\$(mdconfig -a -t vnode -f '$disk') || exit 1"
@@ -673,6 +677,87 @@ _guest_view_ensure1() {
 	printf '%s\n' "printf '# guest %s: view %s\\n' '$1' '$dir/$1' >&2"
 }
 
+#@help ___guest_dowry_place1
+# @command guest dowry place <guest>
+# @summary Put the dowry the image's template hands out into the guest's view, by its policy: 'guest dowry place idem' for the lines that only fill what is missing, then 'guest dowry place overwrite' for the lines that replace what is there. 'guest start' does it before it hangs the overlays in, so an overlay never hides a destination
+# @group   guest
+# @example vm-bake guest dowry place dalmatia
+# @see     guest start
+# @see     template home copy idem
+#@end
+___guest_dowry_place1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dowry place idem $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dowry place overwrite $(sq "$1")"
+}
+
+#@help _guest_dowry_place_idem1
+# @command guest dowry place idem <guest>
+# @summary Act terminal (the invoking user, the view and the database are theirs): every 'copy idem' line of the image's template (read at generation time over the chain) placed in the view where its destination is MISSING -- what the guest made of it stays untouched; no such line is a note, a dowry the database does not keep an error
+# @group   guest
+# @internal
+# @see     guest dowry place
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_dowry_place_idem1() {
+	local name="$1" dir="$VM_BAKE_VIEW_DIR" img="" t="" cur="" chain="" p="" n=0 lines="" l="" dw="" dest="" src=""
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep '^copy idem ')
+	test -n "$lines" || { emit_note "guest $name: the template $t hands out no dowry to fill in"; return 0; }
+	IFS='
+'; set -- $lines; IFS='
+'
+	for l; do
+		dw=$(printf '%s' "$l" | cut -d' ' -f3); dest=$(printf '%s' "$l" | cut -d' ' -f4)
+		src="$VM_BAKE_BASE/dowry/$dw/object"
+		test -e "$src" || { generate_error "guest dowry place idem: the template $t hands out the dowry $dw, which this database does not keep (dowry add $dw <source>, or template home unlink idem $t $dw $dest)"; return 0; }
+		printf '%s\n' "test -e '$dir/$name/$dest' || { install -d \"\$(dirname '$dir/$name/$dest')\" && cp -Rp '$src' '$dir/$name/$dest' || exit 1; }"
+		printf '%s\n' "printf '# guest %s: dowry %s at %s (idem)\\n' '$name' '$dw' '$dest' >&2"
+	done
+}
+
+#@help _guest_dowry_place_overwrite1
+# @command guest dowry place overwrite <guest>
+# @summary Act terminal (the invoking user, the view and the database are theirs): every 'copy overwrite' line of the image's template (read at generation time over the chain) placed in the view, the destination removed first -- whatever the guest wrote there is gone; no such line is a note, a dowry the database does not keep an error
+# @group   guest
+# @internal
+# @see     guest dowry place
+# @env     VM_BAKE_VIEW_DIR  the views' directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_dowry_place_overwrite1() {
+	local name="$1" dir="$VM_BAKE_VIEW_DIR" img="" t="" cur="" chain="" p="" n=0 lines="" l="" dw="" dest="" src=""
+	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep '^copy overwrite ')
+	test -n "$lines" || { emit_note "guest $name: the template $t hands out no dowry to replace"; return 0; }
+	IFS='
+'; set -- $lines; IFS='
+'
+	for l; do
+		dw=$(printf '%s' "$l" | cut -d' ' -f3); dest=$(printf '%s' "$l" | cut -d' ' -f4)
+		src="$VM_BAKE_BASE/dowry/$dw/object"
+		test -e "$src" || { generate_error "guest dowry place overwrite: the template $t hands out the dowry $dw, which this database does not keep (dowry add $dw <source>, or template home unlink overwrite $t $dw $dest)"; return 0; }
+		printf '%s\n' "install -d \"\$(dirname '$dir/$name/$dest')\" && rm -rf '$dir/$name/$dest' && cp -Rp '$src' '$dir/$name/$dest' || exit 1"
+		printf '%s\n' "printf '# guest %s: dowry %s at %s (overwrite)\\n' '$name' '$dw' '$dest' >&2"
+	done
+}
+
 #@help _guest_view_mount1
 # @command guest view mount <guest>
 # @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first; a line already hung in stays, a line from before the modes (a bare path) counts as ro. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
@@ -699,7 +784,7 @@ _guest_view_mount1() {
 	done
 	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' || { emit_note "guest $1: no view in the template $t, nothing to hang in"; return 0; }
 	test -d "$dir/$1" || { generate_error "guest view mount: $dir/$1 is not there -- the view is the home of this guest (guest view ensure $1)"; return 0; }
-	lines=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | sort)
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -v '^copy ' | sort)
 	test -n "$lines" || { emit_note "guest $1: the template $t hangs nothing into the view"; return 0; }
 	IFS='
 '; set -- $lines; IFS='

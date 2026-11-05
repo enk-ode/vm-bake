@@ -1056,6 +1056,118 @@ ___template_home_show1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") home"
 }
 
+#@help ___template_home_copy_idem3
+# @command template home copy idem <template> <dowry> <destination>
+# @summary Hand a dowry to the home of every guest of this template, where it is missing: the template exists, the dowry is kept in the database, the destination is a plain path relative to the home; then 'template line append' of 'copy idem <dowry> <destination>'. 'guest start' places it before it hangs the overlays in; what the guest makes of it afterwards stays its own
+# @group   template
+# @example vm-bake template home copy idem freebsd-dev claude-state .claude
+# @see     template home copy overwrite
+# @see     template home unlink idem
+# @see     dowry add
+#@end
+___template_home_copy_idem3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" dowry check $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") home $(sq "copy idem $2 $3")"
+}
+
+#@help ___template_home_copy_overwrite3
+# @command template home copy overwrite <template> <dowry> <destination>
+# @summary Hand a dowry to the home of every guest of this template at every start, replacing what is there: the template exists, the dowry is kept, the destination is plain; then 'template line append' of 'copy overwrite <dowry> <destination>'. What the guest wrote at that path is gone with the next 'guest start' -- for anything the guest keeps working on, 'idem' is the word
+# @group   template
+# @example vm-bake template home copy overwrite freebsd-x nscde-theme .themes/NsCDE
+# @see     template home copy idem
+# @see     template home unlink overwrite
+#@end
+___template_home_copy_overwrite3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" dowry check $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") home $(sq "copy overwrite $2 $3")"
+}
+
+#@help ___template_home_unlink_idem3
+# @command template home unlink idem <template> <dowry> <destination>
+# @summary Take the rule back from the template's own list: the template exists, the line 'copy idem <dowry> <destination>' is listed there; then 'template line remove'. What already lies in a guest's view stays -- it belongs to the guest
+# @group   template
+# @example vm-bake template home unlink idem freebsd-dev claude-state .claude
+# @see     template home copy idem
+# @see     template home mask idem
+#@end
+___template_home_unlink_idem3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") home $(sq "copy idem $2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") home $(sq "copy idem $2 $3")"
+}
+
+#@help ___template_home_unlink_overwrite3
+# @command template home unlink overwrite <template> <dowry> <destination>
+# @summary Take the rule back from the template's own list: the template exists, the line 'copy overwrite <dowry> <destination>' is listed there; then 'template line remove'
+# @group   template
+# @see     template home copy overwrite
+# @see     template home mask overwrite
+#@end
+___template_home_unlink_overwrite3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") home $(sq "copy overwrite $2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") home $(sq "copy overwrite $2 $3")"
+}
+
+#@help ___template_home_mask_idem3
+# @command template home mask idem <template> <dowry> <destination>
+# @summary Hide an inherited rule 'copy idem <dowry> <destination>' in this template and below: the template exists, the destination is plain; then 'template line mask'. The guests of this template get that dowry no longer -- the dowry itself stays in the database
+# @group   template
+# @example vm-bake template home mask idem freebsd-x claude-state .claude
+# @see     template home copy idem
+# @see     template home unmask idem
+#@end
+___template_home_mask_idem3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") home $(sq "copy idem $2 $3")"
+}
+
+#@help ___template_home_mask_overwrite3
+# @command template home mask overwrite <template> <dowry> <destination>
+# @summary Hide an inherited rule 'copy overwrite <dowry> <destination>' in this template and below: the template exists, the destination is plain; then 'template line mask'
+# @group   template
+# @see     template home copy overwrite
+# @see     template home unmask overwrite
+#@end
+___template_home_mask_overwrite3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") home $(sq "copy overwrite $2 $3")"
+}
+
+#@help ___template_home_unmask_idem3
+# @command template home unmask idem <template> <dowry> <destination>
+# @summary Take such a mask back: the template exists, the line 'copy idem <dowry> <destination>' is masked here; then 'template line unmask' -- the inherited rule reaches this template and everything below it again
+# @group   template
+# @example vm-bake template home unmask idem freebsd-x claude-state .claude
+# @see     template home mask idem
+#@end
+___template_home_unmask_idem3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") home $(sq "copy idem $2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") home $(sq "copy idem $2 $3")"
+}
+
+#@help ___template_home_unmask_overwrite3
+# @command template home unmask overwrite <template> <dowry> <destination>
+# @summary Take such a mask back: the template exists, the line 'copy overwrite <dowry> <destination>' is masked here; then 'template line unmask'
+# @group   template
+# @see     template home mask overwrite
+#@end
+___template_home_unmask_overwrite3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template home valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") home $(sq "copy overwrite $2 $3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") home $(sq "copy overwrite $2 $3")"
+}
+
 #@help ___template_rc_add3
 # @command template rc add <template> <variable> <value>
 # @summary Add an rc.conf line '<variable>="<value>"' to the template's own list: the template exists, the variable is an rc.conf name, the value a plain word; then 'template line append'

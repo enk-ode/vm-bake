@@ -309,6 +309,32 @@ them.
     vm-bake guest start dalmatia
     vm-bake guest view drop dalmatia        # the view and everything in it
 
+## The dowry
+
+An overlay shows a guest something of YOUR home and takes it back when the
+guest stops. A dowry is the other case: an object the guest is to **own**.
+`dowry add <dowry> <source>` copies it into the database under a name, and a
+template hands it to the home of every guest it stands for -- where it lands
+says the template, because that may differ from guest to guest:
+
+    vm-bake dowry add claude-state /home/brj/vm-bake/guest/dalmatia/.claude
+    vm-bake dowry list
+    vm-bake template home copy idem freebsd-dev claude-state .claude
+    vm-bake template home show freebsd-dev
+
+`idem` places it only where the destination is missing -- the guest keeps
+what it has made of it, which is what you want for anything it works in.
+`overwrite` replaces the destination at every start, for things that are to
+stay as they are. `guest start` places them before it hangs the overlays
+in, so no overlay can hide a destination.
+
+The rule is a line of the `home` family like any other, so it inherits:
+`template home unlink idem <t> <dowry> <dest>` takes the template's own rule
+back, `template home mask idem <child> <dowry> <dest>` keeps an inherited
+one from reaching a child, and `unmask` lets it through again. The object
+itself travels in the export bundle and the dump carries its record as a
+witness (`dowry record restore`), so a dowry is reproducible on another host.
+
 ## What the guest knows about itself
 
 `guest show <guest>` is everything the records say about one guest: its own

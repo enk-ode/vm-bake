@@ -1096,10 +1096,11 @@ __dump0() {
 
 #@help ___dump_all0
 # @command dump all
-# @summary The database as replay lines: the header (generator, format, date, profile, base), the prologue (the overrides the replay depends on), the templates parents first, the image and guest records as witnesses, the epilogue (every override, the pins included)
+# @summary The database as replay lines: the header (generator, format, date, profile, base), the prologue (the overrides the replay depends on), the dowry records as witnesses (their objects travel in the bundle), the templates parents first, the image and guest records as witnesses, the epilogue (every override, the pins included)
 # @group   database
 # @see     dump header
 # @see     dump env prologue
+# @see     dowry dump all
 # @see     template dump all
 # @see     image dump all
 # @see     guest dump all
@@ -1109,6 +1110,7 @@ __dump0() {
 ___dump_all0() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" dump header"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" dump env prologue"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" dowry dump all"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template dump all"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image dump all"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dump all"

@@ -83,7 +83,7 @@ __archiver_set0() {
 
 #@help _export_collection_write0
 # @command export collection write
-# @summary Act terminal (owner): export/collection written -- one line per file the bundle carries, <kind>/<path> below the tree: guest/<guest>/ssh_host_ed25519_key and .pub of every guest record that has one, pkg/<file> for every pkgfile line of every template that is in VM_BAKE_PKG_DIR, home/<path> for every file and symlink under every home line of every template (the invoking user's home, read here at generation); sorted, duplicates once; a pkgfile or home path that is not here is noted and not bundled
+# @summary Act terminal (owner): export/collection written -- one line per file the bundle carries, <kind>/<path> below the tree: guest/<guest>/ssh_host_ed25519_key and .pub of every guest record that has one, db/dowry/<dowry>/object/... for every object the database keeps as a dowry, pkg/<file> for every pkgfile line of every template that is in VM_BAKE_PKG_DIR, home/<path> for every file and symlink under every home line of every template (the invoking user's home, read here at generation); sorted, duplicates once; a pkgfile or home path that is not here is noted and not bundled
 # @group   archive
 # @internal
 # @env     VM_BAKE_PKG_DIR  where the package files of the pkgfile lists lie
@@ -108,10 +108,16 @@ pkg/$f"; else missing="$missing pkg/$f"; fi
 		done < "$l/pkgfile"
 		test -f "$l/home" && while IFS= read -r f; do
 			test -n "$f" || continue
+			case "$f" in "copy "*) continue ;; esac
 			f=${f%% *}
 			if test -e "$home/$f" || test -L "$home/$f"; then lines="$lines
 $(find "$home/$f" \( -type f -o -type l \) | sed "s|^$home/|home/|")"; else missing="$missing home/$f"; fi
 		done < "$l/home"
+	done
+	for l in "$VM_BAKE_BASE"/dowry/*; do
+		test -e "$l/object" || continue
+		lines="$lines
+$(find "$l/object" \( -type f -o -type l \) | sed "s|^$VM_BAKE_BASE/|db/|")"
 	done
 	lines=$(printf '%s\n' "$lines" | grep . | LC_ALL=C sort -u)
 	n=$(printf '%s\n' "$lines" | grep -c .)
@@ -126,7 +132,7 @@ $(find "$home/$f" \( -type f -o -type l \) | sed "s|^$home/|home/|")"; else miss
 
 #@help _export_tree_write0
 # @command export tree write
-# @summary Act terminal (owner): export/tree made anew from the collection -- the old tree removed, every listed file copied to tree/<kind>/<path> from where its kind lives (guest: this database, pkg: VM_BAKE_PKG_DIR, home: the invoking user's home), modes kept, a symlink copied as the link; the collection copied beside them as tree/collection. The tree IS what the bundle carries, readable before it is packed
+# @summary Act terminal (owner): export/tree made anew from the collection -- the old tree removed, every listed file copied to tree/<kind>/<path> from where its kind lives (guest and db: this database, pkg: VM_BAKE_PKG_DIR, home: the invoking user's home), modes kept, a symlink copied as the link; the collection copied beside them as tree/collection. The tree IS what the bundle carries, readable before it is packed
 # @group   archive
 # @internal
 # @env     VM_BAKE_PKG_DIR  where the package files of the pkgfile lists lie
@@ -142,6 +148,7 @@ _export_tree_write0() {
 		test -n "$l" || continue
 		case "$l" in
 		guest/*) src="$VM_BAKE_BASE/$l" ;;
+		db/*) src="$VM_BAKE_BASE/${l#db/}" ;;
 		pkg/*) src="$VM_BAKE_PKG_DIR/${l#pkg/}" ;;
 		home/*) src="$home/${l#home/}" ;;
 		*) src="" ;;
@@ -630,7 +637,7 @@ __manifest_tree_matches2() {
 
 #@help __import_check_clear1
 # @command import check clear <incoming>
-# @summary Every file of the unpacked bundle's collection is either absent at its place here (guest/<guest>/... in this database, pkg/<file> in VM_BAKE_PKG_DIR, home/<path> in the invoking user's home) or identical to what is there (same sha256, a symlink with the same target), read here at generation: a comment line counting what is new and what is already here, else an error line naming every file that DIFFERS or whose kind is unknown -- nothing of yours is overwritten; move it away or keep it and drop the line from the collection
+# @summary Every file of the unpacked bundle's collection is either absent at its place here (guest/... and db/... in this database, pkg/<file> in VM_BAKE_PKG_DIR, home/<path> in the invoking user's home) or identical to what is there (same sha256, a symlink with the same target), read here at generation: a comment line counting what is new and what is already here, else an error line naming every file that DIFFERS or whose kind is unknown -- nothing of yours is overwritten; move it away or keep it and drop the line from the collection
 # @group   archive
 # @internal
 # @env     VM_BAKE_PKG_DIR  where the package files of the pkgfile lists go
@@ -644,6 +651,7 @@ __import_check_clear1() {
 		test -n "$l" || continue
 		case "$l" in
 		guest/*) dst="$VM_BAKE_BASE/$l" ;;
+		db/*) dst="$VM_BAKE_BASE/${l#db/}" ;;
 		pkg/*) dst="$VM_BAKE_PKG_DIR/${l#pkg/}" ;;
 		home/*) dst="$home/${l#home/}" ;;
 		*) findings="$findings UNKNOWN $l;"; continue ;;
@@ -665,7 +673,7 @@ __import_check_clear1() {
 
 #@help _import_place1
 # @command import place <incoming>
-# @summary Act terminal (owner): every file of the collection that is absent at its place copied there from the unpacked bundle (one line per file, modes kept, a symlink as the link; guest keys land in this database, package files in VM_BAKE_PKG_DIR, home seeds in the invoking user's home), the ones already here left alone -- 'import check clear' has seen that they are identical
+# @summary Act terminal (owner): every file of the collection that is absent at its place copied there from the unpacked bundle (one line per file, modes kept, a symlink as the link; guest keys and dowry objects land in this database, package files in VM_BAKE_PKG_DIR, home seeds in the invoking user's home), the ones already here left alone -- 'import check clear' has seen that they are identical
 # @group   archive
 # @internal
 # @env     VM_BAKE_PKG_DIR  where the package files of the pkgfile lists go
@@ -679,6 +687,7 @@ _import_place1() {
 		test -n "$l" || continue
 		case "$l" in
 		guest/*) dst="$VM_BAKE_BASE/$l" ;;
+		db/*) dst="$VM_BAKE_BASE/${l#db/}" ;;
 		pkg/*) dst="$VM_BAKE_PKG_DIR/${l#pkg/}" ;;
 		home/*) dst="$home/${l#home/}" ;;
 		*) continue ;;

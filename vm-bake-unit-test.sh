@@ -540,7 +540,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove report_place"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove report_place dowry_place_idem dowry_place_overwrite"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -814,8 +814,8 @@ test_guest_plan() {
   else
     fail "guest make plan: $plan"
   fi
-  if [ "$(run_vmbake guest start bake | grep -c .)" = "5" ] && [ "$(run_vmbake guest stop bake | grep -c .)" = "4" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "9" ]; then
-    pass "start five lines (homes checked, view hung in, report written), stop four, drop nine"
+  if [ "$(run_vmbake guest start bake | grep -c .)" = "7" ] && printf '%s\n' "$(run_vmbake guest start bake)" | sed -n 2p | grep -q "guest check stopped" && [ "$(run_vmbake guest stop bake | grep -c .)" = "4" ] && [ "$(run_vmbake guest drop bake | grep -c .)" = "9" ]; then
+    pass "start seven lines, the running check second (before any mount and its sudo), stop four, drop nine"
   else
     fail "guest start/stop/drop: $(run_vmbake guest drop bake)"
   fi
@@ -1477,6 +1477,131 @@ test_guest_report() {
   fi
 }
 
+
+# dowry_chain - an object in the database, handed to freebsd-dev's guests
+dowry_chain() {
+  mkdir -p "$TEST_DIR/src/sub"
+  printf 'eins\n' > "$TEST_DIR/src/datei"
+  printf 'zwei\n' > "$TEST_DIR/src/sub/mehr"
+  run_vmbake template add freebsd-x freebsd-dev > /dev/null
+  run_vmbake dowry add claude-state "$TEST_DIR/src" > /dev/null
+  run_vmbake setenv VM_BAKE_VIEW_DIR "$TEST_DIR/view" > /dev/null
+  mkdir -p "$TEST_DIR/view/caledonia" "$TEST_DIR/view/bake"
+}
+
+test_dowry() {
+  test_header "dowry: an object kept in the database, handed out by the template (copy, unlink, mask, unmask)"
+  test_setup
+  image_chain
+  view_chain
+  dowry_chain
+  local out
+  if run_vmbake dowry list | grep -q "^#   claude-state .*directory" && [ -f "$(record_of freebsd-dev)/../../dowry/claude-state/object/datei" ] && [ -f "$TEST_DIR/dowry/claude-state/object/sub/mehr" ]; then
+    pass "dowry add copies the whole object into the database, list names it"
+  else
+    fail "dowry add: $(run_vmbake dowry list)"
+  fi
+  if run_vmbake dowry add 'bad name' "$TEST_DIR/src" | grep -q "invalid name" && run_vmbake dowry add other relative/path | grep -q "absolute path" && run_vmbake dowry add other "$TEST_DIR/no-such-source" | grep -q "absolute path"; then
+    pass "the name is a word, the source an absolute path that is there"
+  else
+    fail "dowry guards: $(run_vmbake dowry add other relative/path)"
+  fi
+  if run_vmbake template home copy idem freebsd-dev claude-state .claude | grep -q "home + copy idem claude-state .claude" && run_vmbake template home copy overwrite freebsd-dev claude-state .vorlage | grep -q "home + copy overwrite claude-state .vorlage" && run_vmbake template home copy idem freebsd-dev no-such-dowry .x | grep -q "unknown dowry no-such-dowry" && run_vmbake template home copy idem freebsd-dev claude-state /etc | grep -q "invalid path"; then
+    pass "copy idem and copy overwrite record their line, an unknown dowry and an absolute destination are refused"
+  else
+    fail "template home copy: $(run_vmbake template home show freebsd-dev)"
+  fi
+  if run_vmbake template home show freebsd-x | grep -q "^#   freebsd-dev  *copy idem claude-state .claude"; then
+    pass "a child inherits the rule"
+  else
+    fail "inheritance: $(run_vmbake template home show freebsd-x)"
+  fi
+  run_vmbake template home mask idem freebsd-x claude-state .claude > /dev/null
+  if ! run_vmbake template home show freebsd-x | grep -q "copy idem claude-state .claude" && run_vmbake template home show freebsd-dev | grep -q "copy idem claude-state .claude"; then
+    pass "mask idem hides the inherited rule below, not at its origin"
+  else
+    fail "mask idem: $(run_vmbake template home show freebsd-x)"
+  fi
+  run_vmbake template home unmask idem freebsd-x claude-state .claude > /dev/null
+  if run_vmbake template home show freebsd-x | grep -q "copy idem claude-state .claude" && run_vmbake template home unmask idem freebsd-x claude-state .claude | grep -q "does not mask"; then
+    pass "unmask idem takes the mask back, and without a mask it is an error"
+  else
+    fail "unmask idem: $(run_vmbake template home show freebsd-x)"
+  fi
+  run_vmbake template home unlink overwrite freebsd-dev claude-state .vorlage > /dev/null
+  if ! run_vmbake template home show freebsd-dev | grep -q "copy overwrite" && run_vmbake template home unlink idem freebsd-x claude-state .claude | grep -q "no own home entry"; then
+    pass "unlink removes the template's own rule and refuses an inherited one"
+  else
+    fail "unlink: $(run_vmbake template home show freebsd-dev)"
+  fi
+  if run_vmbake dowry drop claude-state | grep -q "removed from the database" && run_vmbake dowry drop claude-state | grep -q "unknown dowry claude-state" && [ ! -d "$TEST_DIR/dowry/claude-state" ]; then
+    pass "dowry drop throws the object out, a second drop is an error"
+  else
+    fail "dowry drop: $(run_vmbake dowry list)"
+  fi
+}
+
+test_dowry_place() {
+  test_header "dowry: placed into the view by its policy at guest start, witnessed in the dump, carried by the bundle"
+  test_setup
+  image_chain
+  view_chain
+  dowry_chain
+  local out plan
+  run_vmbake template home copy idem freebsd-dev claude-state .claude > /dev/null
+  run_vmbake template home copy overwrite freebsd-dev claude-state .vorlage > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  plan=$(run_vmbake guest start caledonia)
+  if printf '%s\n' "$plan" | grep -n "guest dowry place\|guest view mount" | sed -n 1p | grep -q "dowry place" && [ "$(run_vmbake guest dowry place caledonia | grep -c .)" = "2" ]; then
+    pass "guest start places the dowry before it hangs the overlays in, by its two policies"
+  else
+    fail "guest start plan: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake guest dowry place caledonia > /dev/null
+  printf 'des gastes\n' > "$TEST_DIR/view/caledonia/.claude/eigenes"
+  printf 'des gastes\n' > "$TEST_DIR/view/caledonia/.vorlage/eigenes"
+  run_vmbake guest dowry place caledonia > /dev/null
+  if [ -f "$TEST_DIR/view/caledonia/.claude/datei" ] && [ -f "$TEST_DIR/view/caledonia/.claude/sub/mehr" ] && [ -f "$TEST_DIR/view/caledonia/.claude/eigenes" ] && [ ! -e "$TEST_DIR/view/caledonia/.vorlage/eigenes" ]; then
+    pass "idem keeps what the guest made of it, overwrite replaces the destination"
+  else
+    fail "policies: $(find "$TEST_DIR/view/caledonia" | sort | tr '\n' ' ')"
+  fi
+  if run_vmbake guest dowry place bake | grep -q "hands out no dowry"; then
+    pass "a guest of a template without rules gets a note"
+  else
+    fail "dowry place without rules: $(run_vmbake guest dowry place bake)"
+  fi
+  if [ -z "$(run_vmbake guest check homes caledonia)" ] && ! run_vmbake guest view mount caledonia | grep -q "nullfs -o copy"; then
+    pass "the readers of the home lines skip the copy lines"
+  else
+    fail "readers: $(run_vmbake guest view mount caledonia)"
+  fi
+  run_vmbake dowry drop claude-state > /dev/null
+  if run_vmbake guest dowry place caledonia | grep -q "which this database does not keep"; then
+    pass "a rule whose dowry the database no longer keeps is an error at generation time"
+  else
+    fail "missing dowry: $(run_vmbake guest dowry place caledonia)"
+  fi
+  run_vmbake dowry add claude-state "$TEST_DIR/src" > /dev/null
+  out=$(run_vmbake dowry dump all)
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if printf '%s\n' "$out" | grep -q "dowry record restore 'claude-state' '$TEST_DIR/src'" && run_vmbake dump all | grep -n "dowry dump all\|template dump all" | sed -n 1p | grep -q "dowry dump all"; then
+    pass "the dump witnesses the dowry record, dump all calls it before the templates"
+  else
+    fail "dowry dump: $out"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake export collection write > /dev/null
+  if grep -q "^db/dowry/claude-state/object/datei$" "$TEST_DIR/export/collection" && grep -q "^db/dowry/claude-state/object/sub/mehr$" "$TEST_DIR/export/collection"; then
+    pass "the collection carries the object, so the bundle takes it along"
+  else
+    fail "collection: $(grep dowry "$TEST_DIR/export/collection" 2>&1)"
+  fi
+}
+
 test_dump_witness() {
   test_header "dump: header, image and guest records as witnesses, env and tag lines with their arity, a replay restores the records"
   test_setup
@@ -1616,6 +1741,8 @@ main() {
   should_run_test test_view_acts
   should_run_test test_repo_plan
   should_run_test test_guest_report
+  should_run_test test_dowry
+  should_run_test test_dowry_place
   should_run_test test_dump_witness
   should_run_test test_archive_pair
 

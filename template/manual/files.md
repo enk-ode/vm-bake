@@ -14,3 +14,6 @@
 
 `~/vm-bake/guest/<guest>`
 :   the view: one dataset per guest, the home it sees (VM_BAKE_VIEW_DIR)
+
+`dowry/<name>/object`
+:   the dowry: an object a template hands to the homes of its guests
