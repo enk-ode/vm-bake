@@ -1,2 +1,2 @@
 sh
-# Act terminal of the guests (guest repo remove), pinned to sh: the clone in the view removed, as the invoking user who owns it.
+# Act terminal of the guests (guest repo remove), pinned to sh: rm over ssh in the guest, the clone on its disk.

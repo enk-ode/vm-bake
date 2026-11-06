@@ -14,7 +14,8 @@ datasets outside the image, so a new image replaces the guest, never the
 data. There is one home, the host's: a guest whose template says `service
 files view` mounts its *view* of it over virtio-9p, sees of the rest what
 the template's home lines allow (nullfs overlays, `ro` or `rw`), and works
-in its own clones of the host's repositories, which the host fetches back.
+in its own clones of the host's repositories -- on its own disk, from
+mirrors in the view -- which the host fetches back over ssh.
 A *session* is a rendered client script that brings one application of the
 guest onto the host desktop.
 
@@ -31,8 +32,9 @@ data/session/tag with add/drop/mask/unmask/show), images (`image make freebsd`,
 on the host or in a builder guest), ssh host keys as a resource (`hostkey
 create`, bound to one guest each), guests (`guest make`, tags,
 home seeds, the view with its overlays, the dowry a template hands to the
-homes of its guests, the guest's own repository clones and the report of its
-records written into the view at every start),
+homes of its guests, the guest's own repository clones on its disk with the
+mirrors in the view and the report of its records written into the view at
+every start),
 sessions (ssh, and X in a Xephyr compartment) and the pair
 that travels (`dump`/`restore` with the records as witnesses, `export`/
 `import` with the bundle of ssh host keys, package files and home seeds, sealed

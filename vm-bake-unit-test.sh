@@ -540,7 +540,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove repo_show repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -839,8 +839,8 @@ test_guest_plan() {
   else
     fail "guest make plan: $plan"
   fi
-  if [ "$(run_vmbake guest start bake | grep -c .)" = "7" ] && printf '%s\n' "$(run_vmbake guest start bake)" | sed -n 2p | grep -q "guest check stopped" && [ "$(run_vmbake guest stop bake | grep -c .)" = "5" ] && printf '%s\n' "$(run_vmbake guest stop bake)" | sed -n 4p | grep -q "guest vmm release" && [ "$(run_vmbake guest drop bake | grep -c .)" = "9" ]; then
-    pass "start seven lines, the running check second (before any mount and its sudo), stop five with the vm instance released, drop nine"
+  if [ "$(run_vmbake guest start bake | grep -c .)" = "9" ] && printf '%s\n' "$(run_vmbake guest start bake)" | sed -n 2p | grep -q "guest check stopped" && printf '%s\n' "$(run_vmbake guest start bake)" | grep -n "guest fetched drop\|guest run\|guest repo ensure" | tr '\n' ' ' | grep -q "7:.*fetched drop.* 8:.*guest run.* 9:.*repo ensure" && [ "$(run_vmbake guest stop bake | grep -c .)" = "6" ] && printf '%s\n' "$(run_vmbake guest stop bake)" | sed -n 2p | grep -q "guest repo hold" && printf '%s\n' "$(run_vmbake guest stop bake)" | sed -n 5p | grep -q "guest vmm release" && [ "$(run_vmbake guest drop bake | grep -c .)" = "10" ]; then
+    pass "start nine lines, the running check second (before any mount and its sudo), the mark dropped before vm start and the clones ensured after; stop six with the hold first and the vm instance released; drop ten"
   else
     fail "guest start/stop/drop: $(run_vmbake guest drop bake)"
   fi
@@ -915,12 +915,23 @@ test_session_plan() {
   else
     fail "session ssh: $out"
   fi
-  if run_vmbake session create ssh dalmatia 'claude --version' | grep -q "^exec ssh -t -p 2222 .* '$(id -un)@dalmatia.local' 'claude --version' \"\$@\"$"; then
-    pass "session create ssh with a program runs it in the guest, with a pseudo-terminal (-t)"
+  local lc
+  lc="'$(id -un)@dalmatia.local' 'sh -lc '\\''claude --version \"\$@\"'\\'' sh' \"\$@\""
+  if run_vmbake session create ssh dalmatia 'claude --version' | grep -q "^exec ssh -t -p 2222 .* '$(id -un)@dalmatia.local' " && run_vmbake session create ssh dalmatia 'claude --version' | grep -qF -- "$lc"; then
+    pass "session create ssh with a program runs it in the guest with a pseudo-terminal (-t), in a login shell (sh -lc), the script's arguments appended"
   else
     fail "session ssh program: $(run_vmbake session create ssh dalmatia 'claude --version')"
   fi
-  if run_vmbake session create ssh dalmatia claude screen | grep -q "^exec screen -dR -S 'claude@dalmatia' ssh -t -p 2222 .* '$(id -un)@dalmatia.local' 'claude' \"\$@\"$" && run_vmbake session create ssh dalmatia 'cd git/Infrastruktur && exec /usr/local/bin/claude --resume' screen | grep -q "^exec screen -dR -S 'claude@dalmatia:Infrastruktur' ssh -t .* 'cd git/Infrastruktur && exec /usr/local/bin/claude --resume' \"\$@\"$"; then
+  run_vmbake template env add freebsd-dev CLAUDE_CODE_DISABLE_MOUSE 1 > /dev/null
+  lc="'sh -lc '\\''export CLAUDE_CODE_DISABLE_MOUSE=\"1\"; claude \"\$@\"'\\'' sh' \"\$@\""
+  if run_vmbake session create ssh dalmatia claude | grep -qF -- "$lc" && run_vmbake session create ssh dalmatia | grep -q "'$(id -un)@dalmatia.local' \"\$@\"$"; then
+    pass "the template's env lines are exported in the login shell before the program; a session without a program is the login itself"
+  else
+    fail "session env: $(run_vmbake session create ssh dalmatia claude)"
+  fi
+  run_vmbake template env drop freebsd-dev CLAUDE_CODE_DISABLE_MOUSE 1 > /dev/null
+  lc="'sh -lc '\\''cd git/Infrastruktur && exec /usr/local/bin/claude --resume \"\$@\"'\\'' sh' \"\$@\""
+  if run_vmbake session create ssh dalmatia claude screen | grep -q "^exec screen -dR -S 'claude@dalmatia' ssh -t -p 2222 .* '$(id -un)@dalmatia.local' 'sh -lc " && run_vmbake session create ssh dalmatia 'cd git/Infrastruktur && exec /usr/local/bin/claude --resume' screen | grep -q "^exec screen -dR -S 'claude@dalmatia:Infrastruktur' ssh -t " && run_vmbake session create ssh dalmatia 'cd git/Infrastruktur && exec /usr/local/bin/claude --resume' screen | grep -qF -- "$lc"; then
     pass "session create ssh ... screen wraps the ssh in screen -dR, the session named after the last command of the program line (no path, no exec), the guest, and the target of a leading cd"
   else
     fail "session ssh screen: $(run_vmbake session create ssh dalmatia claude screen)"
@@ -930,12 +941,13 @@ test_session_plan() {
   else
     fail "session mux guard: $(run_vmbake session create ssh dalmatia claude tmux)"
   fi
-  if run_vmbake session create xterm dalmatia | grep -q "^exec xterm -T 'dalmatia' -e ssh -p 2222 .* '$(id -un)@dalmatia.local' \"\$@\"$" && run_vmbake session create xterm dalmatia claude | grep -q "^exec xterm -T 'claude@dalmatia' -e ssh -t -p 2222 .* 'claude' \"\$@\"$"; then
+  lc="'sh -lc '\\''claude \"\$@\"'\\'' sh' \"\$@\""
+  if run_vmbake session create xterm dalmatia | grep -q "^exec xterm -T 'dalmatia' -e ssh -p 2222 .* '$(id -un)@dalmatia.local' \"\$@\"$" && run_vmbake session create xterm dalmatia claude | grep -q "^exec xterm -T 'claude@dalmatia' -e ssh -t -p 2222 " && run_vmbake session create xterm dalmatia claude | grep -qF -- "$lc"; then
     pass "session create xterm opens a window titled after guest or program@guest, with the ssh (and -t for a program) as its command"
   else
     fail "session xterm: $(run_vmbake session create xterm dalmatia claude)"
   fi
-  if run_vmbake session create xterm dalmatia claude screen | grep -q "^exec xterm -T 'claude@dalmatia' -e screen -dR -S 'claude@dalmatia' ssh -t -p 2222 .* 'claude' \"\$@\"$" && run_vmbake session create xterm nobody claude screen | grep -q "unknown guest nobody"; then
+  if run_vmbake session create xterm dalmatia claude screen | grep -q "^exec xterm -T 'claude@dalmatia' -e screen -dR -S 'claude@dalmatia' ssh -t -p 2222 " && run_vmbake session create xterm dalmatia claude screen | grep -qF -- "$lc" && run_vmbake session create xterm nobody claude screen | grep -q "unknown guest nobody"; then
     pass "session create xterm ... screen puts screen -dR between the window and the ssh; an unknown guest is refused"
   else
     fail "session xterm screen: $(run_vmbake session create xterm dalmatia claude screen)"
@@ -1334,6 +1346,11 @@ test_view_acts() {
   else
     fail "view mount: $out"
   fi
+  if printf '%s\n' "$out" | grep -n "git/local\|mount -t nullfs" | sed -n 1p | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 755 '$view/caledonia/git' '$view/caledonia/git/local'"; then
+    pass "view mount makes the mount point git/local (and its parent) for the guest's disk before the overlays"
+  else
+    fail "view mount: $out"
+  fi
   run_vmbake template home add freebsd-dev .no-such-dir-vmbake > /dev/null
   if run_vmbake guest view mount caledonia | grep -q "no-such-dir-vmbake is no directory"; then
     pass "a home line that is no directory on the host stops the mount at generation time"
@@ -1366,8 +1383,8 @@ test_view_acts() {
     fail "home write with a view: $(run_vmbake guest home write caledonia)"
   fi
   out=$(run_vmbake image view write x)
-  if printf '%s\n' "$out" | grep -q 'virtio_p9fs_load="YES"' && printf '%s\n' "$out" | grep -q "/data/vm/vm-bake/image/x/mnt/boot/loader.conf" && ! printf '%s\n' "$out" | grep -q "kld_list" && printf '%s\n' "$out" | grep -q "'/home/$(id -un)' >> '/data/vm/vm-bake/image/x/mnt/etc/fstab'"; then
-    pass "image view write loads the transport from the loader (not kld_list, which comes after the fstab) and mounts the share on the host-uid user's home"
+  if printf '%s\n' "$out" | grep -q 'virtio_p9fs_load="YES"' && printf '%s\n' "$out" | grep -q "/data/vm/vm-bake/image/x/mnt/boot/loader.conf" && ! printf '%s\n' "$out" | grep -q "kld_list" && printf '%s\n' "$out" | grep -q "'/home/$(id -un)' >> '/data/vm/vm-bake/image/x/mnt/etc/fstab'" && printf '%s\n' "$out" | grep -q "install -d -m 755 '/data/vm/vm-bake/image/x/mnt/var/git' && chown '$(id -u)':\"\$g\"" && printf '%s\n' "$out" | grep -n "p9fs\|nullfs" | grep -q "nullfs.*failok.*/var/git '/home/$(id -un)/git/local' >> " && printf '%s\n' "$out" | grep -n "p9fs.*fstab\|nullfs.*fstab" | sed -n 2p | grep -q nullfs; then
+    pass "image view write loads the transport from the loader (not kld_list, which comes after the fstab), mounts the share on the host-uid user's home, and after it /var/git of the disk (the user's, failok) on git/local of that home"
   else
     fail "image view write: $out"
   fi
@@ -1406,34 +1423,79 @@ test_view_acts() {
 }
 
 test_repo_plan() {
-  test_header "repo: the guest's own clones in its view, fetched back into the host's repository"
+  test_header "repo: the host's mirror in the view, the guest's clone on its disk over ssh, fetched back over ssh; the record, ensure after start, hold before stop, the fetched mark before drop"
   test_setup
   image_chain
   view_chain
+  printf 'ssh-ed25519 AAAATEST test@host\n' > "$TEST_DIR/key.pub"
+  run_vmbake setenv VM_BAKE_HOST_KEY "$TEST_DIR/key.pub" > /dev/null
+  run_vmbake setenv VM_BAKE_GUEST_DIR "$TEST_DIR/vmdir" > /dev/null
+  mkdir -p "$TEST_DIR/vmdir/caledonia"
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  local plan out view
+  local plan out view lc
   view="$TEST_DIR/view"
   mkdir -p "$view/caledonia"
   plan=$(run_vmbake guest repo add caledonia git/Infrastruktur)
-  if printf '%s\n' "$plan" | grep -q "guest check view 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo valid 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo clone 'caledonia' 'git/Infrastruktur'"; then
-    pass "repo add checks the record, the view and the path, then clones"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "7" ] && printf '%s\n' "$plan" | grep -q "guest check view 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest check running 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo valid 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo mirror 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo record 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest repo clone 'caledonia' 'git/Infrastruktur'"; then
+    pass "repo add checks record, view, running guest and path, then mirror, record, clone"
   else
     fail "repo add plan: $plan"
   fi
   plan=$(run_vmbake guest repo fetch caledonia git/Infrastruktur)
-  if printf '%s\n' "$plan" | grep -q "guest repo refs 'caledonia' 'git/Infrastruktur'"; then
-    pass "repo fetch ends in the refs of the host's repository"
+  if printf '%s\n' "$plan" | grep -q "guest check running 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo refs 'caledonia' 'git/Infrastruktur'"; then
+    pass "repo fetch needs the running guest and ends in the refs of the host's repository"
   else
     fail "repo fetch plan: $plan"
   fi
   plan=$(run_vmbake guest repo drop caledonia git/Infrastruktur)
-  if printf '%s\n' "$plan" | grep -q "guest repo remove 'caledonia' 'git/Infrastruktur'"; then
-    pass "repo drop removes the clone"
+  if printf '%s\n' "$plan" | grep -q "guest repo remove 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo unrecord 'caledonia' 'git/Infrastruktur'"; then
+    pass "repo drop removes the clone from the disk and the line from the record"
   else
     fail "repo drop plan: $plan"
   fi
+  if run_vmbake guest repo ensure caledonia | grep -q "no repositories recorded" && run_vmbake guest repo hold caledonia | grep -q "is not running, nothing to hold" && [ -z "$(run_vmbake guest check fetched caledonia)" ]; then
+    pass "without a record: ensure and hold are comments, the fetched check is silent"
+  else
+    fail "ensure/hold without record: $(run_vmbake guest repo ensure caledonia)"
+  fi
   rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake guest repo record caledonia git/Infrastruktur > /dev/null
+  run_vmbake guest repo record caledonia git/Infrastruktur > /dev/null
+  run_vmbake guest repo record caledonia git/elvboot > /dev/null
+  if [ "$(cat "$TEST_DIR/guest/caledonia/repo" | tr '\n' ' ')" = "git/Infrastruktur git/elvboot " ] && run_vmbake guest check fetched caledonia | grep -q "were not fetched after its last start" && run_vmbake guest check running caledonia | grep -q "is not running"; then
+    pass "record lists each repository once; with a record and no mark the fetched check refuses, a stopped guest is named"
+  else
+    fail "record/fetched: $(cat "$TEST_DIR/guest/caledonia/repo"; run_vmbake guest check fetched caledonia)"
+  fi
+  printf 'x\n' > "$TEST_DIR/vmdir/caledonia/run.lock"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  plan=$(run_vmbake guest repo ensure caledonia)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "4" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "guest repo wait 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo clone 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo clone 'caledonia' 'git/elvboot'"; then
+    pass "ensure waits for ssh, then clones every recorded repository"
+  else
+    fail "ensure plan: $plan"
+  fi
+  plan=$(run_vmbake guest repo hold caledonia)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "4" ] && printf '%s\n' "$plan" | grep -q "guest repo refs 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo refs 'caledonia' 'git/elvboot'" && printf '%s\n' "$plan" | sed -n 4p | grep -q "guest fetched write 'caledonia'"; then
+    pass "hold fetches every recorded repository of the running guest, then writes the mark"
+  else
+    fail "hold plan: $plan"
+  fi
+  plan=$(run_vmbake guest drop caledonia)
+  if printf '%s\n' "$plan" | sed -n 3p | grep -q "guest check fetched 'caledonia'" && ! run_vmbake guest drop unfetched caledonia | grep -q "check fetched" && [ "$(run_vmbake guest drop unfetched caledonia | grep -c .)" = "9" ]; then
+    pass "drop checks the mark third; drop unfetched does not"
+  else
+    fail "drop plans: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake guest fetched write caledonia > /dev/null
+  if [ -s "$TEST_DIR/guest/caledonia/fetched" ] && [ -z "$(run_vmbake guest check fetched caledonia)" ] && run_vmbake guest fetched drop caledonia > /dev/null && [ ! -e "$TEST_DIR/guest/caledonia/fetched" ]; then
+    pass "the mark is written with a date, satisfies the check, and is dropped again"
+  else
+    fail "fetched mark: $(ls -l "$TEST_DIR/guest/caledonia")"
+  fi
   if [ -z "$(run_vmbake guest repo valid git/Infrastruktur)" ] && run_vmbake guest repo valid ../x | grep -q "invalid repository" && run_vmbake guest repo valid /etc | grep -q "invalid repository"; then
     pass "a repository is a plain path relative to the home"
   else
@@ -1444,23 +1506,38 @@ test_repo_plan() {
   else
     fail "acts not pinned -- not calling them"; return
   fi
+  out=$(run_vmbake guest repo mirror git/Infrastruktur)
+  if printf '%s\n' "$out" | grep -q "install -d -m 755 '$HOME/git/views'" && printf '%s\n' "$out" | grep -q "git clone --mirror --no-hardlinks '$HOME/git/Infrastruktur' '$HOME/git/views/Infrastruktur'" && printf '%s\n' "$out" | grep -q "git -C '$HOME/git/views/Infrastruktur' fetch --prune origin" && printf '%s\n' "$out" | grep -q "config --get remote.origin.url"; then
+    pass "the mirror is bare, without hardlinks, refreshed when there, refused when it is of another repository"
+  else
+    fail "repo mirror: $out"
+  fi
   out=$(run_vmbake guest repo clone caledonia git/Infrastruktur)
-  if printf '%s\n' "$out" | grep -q "git clone --no-hardlinks '$HOME/git/Infrastruktur' '$view/caledonia/git/Infrastruktur'" && printf '%s\n' "$out" | grep -q "remote remove origin" && printf '%s\n' "$out" | grep -q "test ! -e '$view/caledonia/git/Infrastruktur'"; then
-    pass "the clone is made without hardlinks and without a remote, an existing path refused"
+  lc="git clone \"\$HOME/git/views/Infrastruktur\" '\\''git/local/Infrastruktur'\\''"
+  if printf '%s\n' "$out" | grep -q "^ssh -p 2222 -i '$TEST_DIR/key' .* -o BatchMode=yes '$(id -un)@caledonia.local' " && printf '%s\n' "$out" | grep -qF -- "$lc" && printf '%s\n' "$out" | grep -qF -- "test ! -e '\\''git/local/Infrastruktur'\\''"; then
+    pass "the clone is made over ssh on the guest's disk from the mirror in its view, an existing one left alone"
   else
     fail "repo clone: $out"
   fi
   out=$(run_vmbake guest repo refs caledonia git/Infrastruktur)
-  if printf '%s\n' "$out" | grep -q "git -C '$HOME/git/Infrastruktur' fetch --no-tags --prune '$view/caledonia/git/Infrastruktur'" && printf '%s\n' "$out" | grep -q "refs/remotes/caledonia/"; then
-    pass "the host fetches in its OWN repository, into refs/remotes/<guest>/"
+  if printf '%s\n' "$out" | grep -q "git -C '$HOME/git/Infrastruktur' -c core.sshCommand='ssh -i $TEST_DIR/key .*' fetch --no-tags --prune 'ssh://$(id -un)@caledonia.local:2222/~/git/local/Infrastruktur' '+refs/heads/\*:refs/remotes/caledonia/\*'"; then
+    pass "the host fetches in its OWN repository, over ssh from the guest's disk, into refs/remotes/<guest>/"
   else
     fail "repo refs: $out"
   fi
-  if run_vmbake guest repo remove caledonia git/Infrastruktur | grep -q "rm -rf '$view/caledonia/git/Infrastruktur'" && run_vmbake guest repo show caledonia | grep -q "(none)"; then
-    pass "remove takes the clone out, show lists an empty view"
+  out=$(run_vmbake guest repo remove caledonia git/Infrastruktur)
+  if printf '%s\n' "$out" | grep -q "^ssh -p 2222 .* '$(id -un)@caledonia.local' " && printf '%s\n' "$out" | grep -qF -- "rm -rf '\\''git/local/Infrastruktur'\\''"; then
+    pass "remove takes the clone off the guest's disk over ssh"
   else
-    fail "repo remove/show: $(run_vmbake guest repo show caledonia)"
+    fail "repo remove: $out"
   fi
+  out=$(run_vmbake guest repo show caledonia)
+  if printf '%s\n' "$out" | grep -q "'#   git/Infrastruktur'" && printf '%s\n' "$out" | grep -q "'#   git/elvboot'" && printf '%s\n' "$out" | grep -q "^ssh -p 2222 .* '$(id -un)@caledonia.local' " && printf '%s\n' "$out" | grep -qF -- "git/local/*/.git/HEAD"; then
+    pass "show prints the record and lists the clones on the disk over ssh"
+  else
+    fail "repo show: $out"
+  fi
+  run_vmbake unsetenv VM_BAKE_GUEST_DIR > /dev/null
 }
 
 # ============================================================================
@@ -1693,6 +1770,7 @@ test_dump_witness() {
   run_vmbake image record write freebsd img2 > /dev/null
   run_vmbake guest record write img1 g1 172.16.100.5/24 > /dev/null
   run_vmbake guest tag add g1 note 'two words' > /dev/null
+  run_vmbake guest repo record g1 git/Infrastruktur > /dev/null
   run_vmbake dump > "$TEST_DIR/all.vmb" 2>/dev/null
   if grep -q '^# vm-bake database dump$' "$TEST_DIR/all.vmb" && grep -q "^# Profile: $TEST_PROFILE$" "$TEST_DIR/all.vmb" && grep -q '^# Version: 1$' "$TEST_DIR/all.vmb"; then
     pass "the dump opens with its header: generator, version, profile"
@@ -1704,8 +1782,8 @@ test_dump_witness() {
   else
     fail "env/tag lines: $(grep 'template env\|template tag' "$TEST_DIR/all.vmb")"
   fi
-  if grep -q "image record restore 'img1' 'freebsd' '[0-9T:Z-]*' '0123456789abcdef'" "$TEST_DIR/all.vmb" && grep -q "image record restore 'img2' 'freebsd' '[0-9T:Z-]*' 'open'" "$TEST_DIR/all.vmb" && grep -q "guest record restore 'g1' 'img1' '172.16.100.5/24' '[0-9T:Z-]*'" "$TEST_DIR/all.vmb" && grep -q "guest tag add 'g1' 'note' 'two words'" "$TEST_DIR/all.vmb"; then
-    pass "image and guest records are witnesses in the dump, the guest with its own tags"
+  if grep -q "image record restore 'img1' 'freebsd' '[0-9T:Z-]*' '0123456789abcdef'" "$TEST_DIR/all.vmb" && grep -q "image record restore 'img2' 'freebsd' '[0-9T:Z-]*' 'open'" "$TEST_DIR/all.vmb" && grep -q "guest record restore 'g1' 'img1' '172.16.100.5/24' '[0-9T:Z-]*'" "$TEST_DIR/all.vmb" && grep -q "guest tag add 'g1' 'note' 'two words'" "$TEST_DIR/all.vmb" && grep -q "guest repo record 'g1' 'git/Infrastruktur'" "$TEST_DIR/all.vmb"; then
+    pass "image and guest records are witnesses in the dump, the guest with its own tags and repositories"
   else
     fail "witness lines: $(grep 'record restore\|guest tag' "$TEST_DIR/all.vmb")"
   fi

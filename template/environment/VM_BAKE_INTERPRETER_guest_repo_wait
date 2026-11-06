@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest repo wait), pinned to sh: it acts as the invoking user -- on the host, in the database, or over ssh in the guest.

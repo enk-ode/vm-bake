@@ -176,39 +176,59 @@ _session_script_ssh1() {
 
 #@help _session_script_ssh2
 # @command session script ssh <guest> <program>
-# @summary Display terminal: the ssh client script with a program -- exec ssh -t (a pseudo-terminal for the program) to the guest, the program and the arguments given to the script
+# @summary Display terminal: the ssh client script with a program -- exec ssh -t (a pseudo-terminal for the program) to the guest, where a login shell (sh -lc: /etc/profile and the profile.d the image wrote, then ~/.profile) runs the template's env lines (read over the chain at generation time) as exports and then the program with the arguments given to the script
 # @group   session
 # @internal
 # @see     session create ssh
 # @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
 # @env     VM_BAKE_SSH_PORT  the guest's sshd port
 # @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk, the env lines of the template's chain
 #@end
 _session_script_ssh2() {
-	local key="$VM_BAKE_HOST_KEY"
+	local key="$VM_BAKE_HOST_KEY" img="" t="" cur="" chain="" p="" n=0 exp="" l=""
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
-	printf '%s\n' '#!/bin/sh' "# vm-bake session ssh: guest $1, program $2 (session create ssh $1 $2)"
-	printf '%s\n' "exec ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for l in $(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk"); do exp="${exp}export ${l%%=*}=\"${l#*=}\"; "; done
+	printf '%s\n' '#!/bin/sh' "# vm-bake session ssh: guest $1, program $2 in a login shell with the template's env (session create ssh $1 $2)"
+	printf '%s\n' "exec ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "sh -lc $(sq "$exp$2 \"\$@\"") sh") \"\$@\""
 }
 
 #@help _session_script_ssh_screen2
 # @command session script ssh screen <guest> <program>
-# @summary Display terminal: the ssh client script with a program under screen -- exec screen -dR -S <program>@<guest> (the last command of the program line, its first word without path and a leading exec, and the target of a leading cd after a colon: 'cd git/Infrastruktur && exec claude' is claude@<guest>:Infrastruktur, one session per guest and repository) around the ssh -t of 'session script ssh <guest> <program>'
+# @summary Display terminal: the ssh client script with a program under screen -- exec screen -dR -S <program>@<guest> (the last command of the program line, its first word without path and a leading exec, and the target of a leading cd after a colon: 'cd git/Infrastruktur && exec claude' is claude@<guest>:Infrastruktur, one session per guest and repository) around the ssh -t of 'session script ssh <guest> <program>', the program in a login shell with the template's env lines exported before it
 # @group   session
 # @internal
 # @see     session create ssh
 # @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
 # @env     VM_BAKE_SSH_PORT  the guest's sshd port
 # @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk, the env lines of the template's chain
 #@end
 _session_script_ssh_screen2() {
-	local key="$VM_BAKE_HOST_KEY" prog="$2" dir=""
+	local key="$VM_BAKE_HOST_KEY" prog="$2" dir="" img="" t="" cur="" chain="" p="" n=0 exp="" l=""
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	case "$2" in "cd "*) dir=${2#cd }; dir=${dir%%[ ;&|]*}; dir=${dir%/}; dir=${dir##*/} ;; esac
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for l in $(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk"); do exp="${exp}export ${l%%=*}=\"${l#*=}\"; "; done
 	prog=${prog##*&&}; prog=${prog##*;}; prog=${prog##*|}; prog=${prog# }; prog=${prog#exec }; prog=${prog%% *}; prog=${prog##*/}
 	prog="$prog@$1${dir:+:$dir}"
 	printf '%s\n' '#!/bin/sh' "# vm-bake session ssh screen: guest $1, program $2 in the screen session $prog (session create ssh $1 $2 screen)"
-	printf '%s\n' "exec screen -dR -S $(sq "$prog") ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+	printf '%s\n' "exec screen -dR -S $(sq "$prog") ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "sh -lc $(sq "$exp$2 \"\$@\"") sh") \"\$@\""
 }
 
 #@help _session_script_xterm1
@@ -230,42 +250,62 @@ _session_script_xterm1() {
 
 #@help _session_script_xterm2
 # @command session script xterm <guest> <program>
-# @summary Display terminal: the window script with a program -- exec xterm titled <program>@<guest>, with the ssh -t of 'session script ssh <guest> <program>' as its command
+# @summary Display terminal: the window script with a program -- exec xterm titled <program>@<guest>, with the ssh -t of 'session script ssh <guest> <program>' as its command: the program in a login shell with the template's env lines exported before it
 # @group   session
 # @internal
 # @see     session create xterm
 # @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
 # @env     VM_BAKE_SSH_PORT  the guest's sshd port
 # @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk, the env lines of the template's chain
 #@end
 _session_script_xterm2() {
-	local key="$VM_BAKE_HOST_KEY" prog="$2" dir=""
+	local key="$VM_BAKE_HOST_KEY" prog="$2" dir="" img="" t="" cur="" chain="" p="" n=0 exp="" l=""
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	case "$2" in "cd "*) dir=${2#cd }; dir=${dir%%[ ;&|]*}; dir=${dir%/}; dir=${dir##*/} ;; esac
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for l in $(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk"); do exp="${exp}export ${l%%=*}=\"${l#*=}\"; "; done
 	prog=${prog##*&&}; prog=${prog##*;}; prog=${prog##*|}; prog=${prog# }; prog=${prog#exec }; prog=${prog%% *}; prog=${prog##*/}
 	prog="$prog@$1${dir:+:$dir}"
 	printf '%s\n' '#!/bin/sh' "# vm-bake session xterm: guest $1, program $2 (session create xterm $1 $2)"
-	printf '%s\n' "exec xterm -T $(sq "$prog") -e ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+	printf '%s\n' "exec xterm -T $(sq "$prog") -e ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "sh -lc $(sq "$exp$2 \"\$@\"") sh") \"\$@\""
 }
 
 #@help _session_script_xterm_screen2
 # @command session script xterm screen <guest> <program>
-# @summary Display terminal: the window script with a program under screen -- exec xterm titled <program>@<guest>, with screen -dR -S <program>@<guest> around the ssh -t as its command
+# @summary Display terminal: the window script with a program under screen -- exec xterm titled <program>@<guest>, with screen -dR -S <program>@<guest> around the ssh -t as its command: the program in a login shell with the template's env lines exported before it
 # @group   session
 # @internal
 # @see     session create xterm
 # @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
 # @env     VM_BAKE_SSH_PORT  the guest's sshd port
 # @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk, the env lines of the template's chain
 #@end
 _session_script_xterm_screen2() {
-	local key="$VM_BAKE_HOST_KEY" prog="$2" dir=""
+	local key="$VM_BAKE_HOST_KEY" prog="$2" dir="" img="" t="" cur="" chain="" p="" n=0 exp="" l=""
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	case "$2" in "cd "*) dir=${2#cd }; dir=${dir%%[ ;&|]*}; dir=${dir%/}; dir=${dir##*/} ;; esac
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for l in $(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk"); do exp="${exp}export ${l%%=*}=\"${l#*=}\"; "; done
 	prog=${prog##*&&}; prog=${prog##*;}; prog=${prog##*|}; prog=${prog# }; prog=${prog#exec }; prog=${prog%% *}; prog=${prog##*/}
 	prog="$prog@$1${dir:+:$dir}"
 	printf '%s\n' '#!/bin/sh' "# vm-bake session xterm screen: guest $1, program $2 in the screen session $prog (session create xterm $1 $2 screen)"
-	printf '%s\n' "exec xterm -T $(sq "$prog") -e screen -dR -S $(sq "$prog") ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+	printf '%s\n' "exec xterm -T $(sq "$prog") -e screen -dR -S $(sq "$prog") ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "sh -lc $(sq "$exp$2 \"\$@\"") sh") \"\$@\""
 }
 
 #@help _session_script_x3

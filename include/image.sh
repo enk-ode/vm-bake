@@ -1098,13 +1098,15 @@ _image_user_make1() {
 
 #@help _image_view_write1
 # @command image view write <image>
-# @summary Act terminal (root, host or builder): when the template's resolved services (read at generation time) say 'files view', the image learns to take its home from the host -- virtio_p9fs_load="YES" appended to loader.conf and the share home mounted on the home of the template's host-uid user by a p9fs line in fstab; no view in the template is a note. The TRANSPORT has to come from the loader, not from kld_list in rc.conf: mountcritlocal works through the fstab before rc.d/kld loads anything, the mount then fails for want of the device, and the boot stops in the single-user shell (05.11., dalmatia)
+# @summary Act terminal (root, host or builder): when the template's resolved services (read at generation time) say 'files view', the image learns to take its home from the host -- virtio_p9fs_load="YES" appended to loader.conf and the share home mounted on the home of the template's host-uid user by a p9fs line in fstab; after it the directory /var/git of the disk, owned by that user, hung by a nullfs line (failok: a view without the mount point does not stop the boot) on VM_BAKE_REPO_LOCAL under that home -- where the guest's clones live, because git cannot write its objects on p9fs; no view in the template is a note. The TRANSPORT has to come from the loader, not from kld_list in rc.conf: mountcritlocal works through the fstab before rc.d/kld loads anything, the mount then fails for want of the device, and the boot stops in the single-user shell (05.11., dalmatia)
 # @group   image
 # @internal
 # @see     image burn
 # @see     template service add
 # @see     guest view ensure
+# @see     guest repo add
 # @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_REPO_LOCAL  the clones' directory under the guest's home
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _image_view_write1() {
@@ -1123,7 +1125,10 @@ _image_view_write1() {
 	printf '%s\n' "test -d '$mnt/home/$u' || { printf '# Error: no home of %s in the image (image user make first)\\n' $(sq "$u") >&2; exit 1; }"
 	printf '%s\n' "printf '%s\\n' 'virtio_p9fs_load=\"YES\"' >> '$mnt/boot/loader.conf' || exit 1"
 	printf '%s\n' "printf '%s\\t%s\\tp9fs\\trw\\t0 0\\n' home '/home/$u' >> '$mnt/etc/fstab' || exit 1"
-	printf '%s\n' "printf '# image %s: the share home as the home of %s (p9fs), transport virtio_p9fs from the loader\\n' '$1' $(sq "$u") >&2"
+	printf '%s\n' "g=\$(awk -F: -v u=$(sq "$u") '\$1 == u { print \$3 }' '$mnt/etc/group'); test -n \"\$g\" || { printf '# Error: no group %s in the image\\n' $(sq "$u") >&2; exit 1; }"
+	printf '%s\n' "install -d -m 755 '$mnt/var/git' && chown $(sq "$(id -u "$u" 2>/dev/null || printf '%s' "$u")"):\"\$g\" '$mnt/var/git' || exit 1"
+	printf '%s\n' "printf '%s\\t%s\\tnullfs\\trw,failok\\t0 0\\n' /var/git '/home/$u/$VM_BAKE_REPO_LOCAL' >> '$mnt/etc/fstab' || exit 1"
+	printf '%s\n' "printf '# image %s: the share home as the home of %s (p9fs), transport virtio_p9fs from the loader; /var/git of the disk as %s in that home\\n' '$1' $(sq "$u") '$VM_BAKE_REPO_LOCAL' >&2"
 }
 
 #@help _image_root_lock1

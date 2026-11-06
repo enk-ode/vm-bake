@@ -70,7 +70,7 @@ ___guest_make3() {
 
 #@help ___guest_start1
 # @command guest start <guest>
-# @summary Start the guest: it has a record, it is not running already (vm-bhyve's run.lock -- the check stands first, so a running guest costs neither a mount nor the sudo behind it) and every home path of its template is there; then the dowry of its template placed in its view, the overlays of the template hung in (a guest without a view: a note), the report of what the records say about it written into that view, and 'vm start'
+# @summary Start the guest: it has a record, it is not running already (vm-bhyve's run.lock -- the check stands first, so a running guest costs neither a mount nor the sudo behind it) and every home path of its template is there; then the dowry of its template placed in its view, the overlays of the template hung in (a guest without a view: a note), the report of what the records say about it written into that view, the fetched mark dropped (it is about to commit again), 'vm start', and 'guest repo ensure' -- the clones its record lists made on its disk once it answers ssh
 # @group   guest
 # @example vm-bake guest start bake
 # @see     guest stop
@@ -86,12 +86,14 @@ ___guest_start1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dowry place $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view mount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest report $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest fetched drop $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest run $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo ensure $(sq "$1")"
 }
 
 #@help ___guest_stop1
 # @command guest stop <guest>
-# @summary Stop the guest: it has a record; then 'vm stop' (ACPI shutdown), the wait until its bhyve process is gone, the vm instance released if one is left behind, and the overlays of its view let go
+# @summary Stop the guest: it has a record; then 'guest repo hold' (its commits fetched into the host's repositories and the fetched mark written, while it still answers), 'vm stop' (ACPI shutdown), the wait until its bhyve process is gone, the vm instance released if one is left behind, and the overlays of its view let go
 # @group   guest
 # @example vm-bake guest stop bake
 # @see     guest start
@@ -100,6 +102,7 @@ ___guest_start1() {
 #@end
 ___guest_stop1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo hold $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest halt $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest gone $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest vmm release $(sq "$1")"
@@ -108,7 +111,7 @@ ___guest_stop1() {
 
 #@help ___guest_drop1
 # @command guest drop <guest>
-# @summary Remove the guest: it has a record and is not running (vm-bhyve's run.lock); the overlays of its view let go, whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed with its hostkey binding, unbound told, what the host remembered of its ssh host key forgotten. The ssh host key itself stays in the database and is free again, so the guest built anew under that name takes it back and answers with the same identity; the view stays too -- a new image replaces the guest, not what it wrote ('guest view drop' removes that, 'hostkey drop' the key)
+# @summary Remove the guest: it has a record, is not running (vm-bhyve's run.lock) and its repositories are fetched (the mark of 'guest stop'; 'guest drop unfetched' gives them up); the overlays of its view let go, whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed with its hostkey binding, unbound told, what the host remembered of its ssh host key forgotten. The ssh host key itself stays in the database and is free again, so the guest built anew under that name takes it back and answers with the same identity; the view stays too -- a new image replaces the guest, not what it wrote ('guest view drop' removes that, 'hostkey drop' the key)
 # @group   guest
 # @example vm-bake guest drop bake
 # @see     guest make
@@ -116,6 +119,27 @@ ___guest_stop1() {
 # @see     guest view drop
 #@end
 ___guest_drop1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check stopped $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check fetched $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view unmount $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link drop $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest disk release $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dataset destroy $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record remove $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dns write"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest knownhosts drop $(sq "$1")"
+}
+
+#@help ___guest_drop_unfetched1
+# @command guest drop unfetched <guest>
+# @summary 'guest drop' without the fetched check: the guest's commits that the host never fetched are given up with its disk -- for a guest stopped by other means whose clones hold nothing worth a start and a stop
+# @group   guest
+# @example vm-bake guest drop unfetched bake
+# @see     guest drop
+# @see     guest check fetched
+#@end
+___guest_drop_unfetched1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check stopped $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view unmount $(sq "$1")"
@@ -810,13 +834,14 @@ _guest_dowry_place_overwrite1() {
 
 #@help _guest_view_mount1
 # @command guest view mount <guest>
-# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first and its parents with it, all owned by the user -- the guest writes beside the overlay, not into it; a line already hung in stays, a line from before the modes (a bare path) counts as ro. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
+# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first and its parents with it, all owned by the user -- the guest writes beside the overlay, not into it; before the overlays the mount point VM_BAKE_REPO_LOCAL, where the guest hangs the directory of its own disk in; a line already hung in stays, a line from before the modes (a bare path) counts as ro. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
 # @group   guest
 # @internal
 # @see     guest start
 # @see     guest view unmount
 # @see     template home add
 # @env     VM_BAKE_VIEW_DIR  the views' directory
+# @env     VM_BAKE_REPO_LOCAL  the clones' directory under the guest's home, its mount point made here
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _guest_view_mount1() {
@@ -834,6 +859,10 @@ _guest_view_mount1() {
 	done
 	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' || { emit_note "guest $1: no view in the template $t, nothing to hang in"; return 0; }
 	test -d "$dir/$1" || { generate_error "guest view mount: $dir/$1 is not there -- the view is the home of this guest (guest view ensure $1)"; return 0; }
+	parents=""; p=$VM_BAKE_REPO_LOCAL
+	while case "$p" in */*) ;; *) false ;; esac; do p=${p%/*}; parents="'$dir/$name/$p' $parents"; done
+	printf '%s\n' "install -d -o $(sq "$u") -g $(sq "$g") -m 755 $parents'$dir/$name/$VM_BAKE_REPO_LOCAL' || exit 1"
+	printf '%s\n' "printf '# guest %s: %s in its view, the mount point of its disk\\n' '$name' '$VM_BAKE_REPO_LOCAL' >&2"
 	lines=$(awk -v base="$VM_BAKE_BASE" -v family=home -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -v '^copy ' | sort)
 	test -n "$lines" || { emit_note "guest $1: the template $t hangs nothing into the view"; return 0; }
 	IFS='
@@ -930,124 +959,309 @@ __guest_repo_valid1() {
 	fi
 }
 
+#@help __guest_check_running1
+# @command guest check running <guest>
+# @summary The guest is running (vm-bhyve's run.lock is there): a comment line, else an error line -- what reaches into the guest over ssh needs it up
+# @group   guest
+# @internal
+# @see     guest repo add
+# @see     guest check stopped
+# @env     VM_BAKE_GUEST_DIR  vm-bhyve's vm_dir, where run.lock lies
+#@end
+__guest_check_running1() {
+	if test -e "$VM_BAKE_GUEST_DIR/$1/run.lock"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1 is running")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest $1 is not running (guest start $1 -- it clones what its record lists on its own)")"
+	fi
+}
+
+#@help __guest_check_fetched1
+# @command guest check fetched <guest>
+# @summary The guest's clones were fetched after its last start (guest/<guest>/fetched, which 'guest stop' writes once every recorded repository is in the host's refs), or its record lists no repository: a comment line, else an error line -- a guest with commits the host has not taken is not thrown away
+# @group   guest
+# @internal
+# @see     guest drop
+# @see     guest repo hold
+#@end
+__guest_check_fetched1() {
+	local d="$VM_BAKE_BASE/guest/$1"
+	if test -e "$d/fetched" || ! grep -q . "$d/repo" 2>/dev/null; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1: its repositories are fetched, or none recorded")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest $1: its repositories were not fetched after its last start (guest stop $1 fetches them; a guest stopped by other means: guest start, then guest stop -- or guest drop unfetched $1 to give its commits up)")"
+	fi
+}
+
 #@help ___guest_repo_add2
 # @command guest repo add <guest> <repo>
-# @summary Give the guest its own clone of one of the invoking user's repositories: the guest has a record and a view, the path is plain and relative to the home; then the clone written into the view at the same path, so the guest finds it where the host has it. A repository of the host is never hung into a view: git runs what .git/config and the hooks say, and a guest that fell would own the host
+# @summary Give the guest a clone of one of the invoking user's repositories to commit in: the guest has a record and a view and is running, the path is plain and relative to the home; then the host's bare mirror of it under VM_BAKE_REPO_VIEWS made or refreshed (the template's home line hangs that directory read-only into every view, so the guest pulls from the mirror and can touch nothing of it), the repository recorded for the guest, and the clone made over ssh under VM_BAKE_REPO_LOCAL on the guest's own disk, where git can write its objects -- the view cannot take them, p9fs refuses to create a read-only file for writing. A second add of the same repository refreshes the mirror and leaves the clone alone
 # @group   guest
 # @example vm-bake guest repo add dalmatia git/Infrastruktur
 # @see     guest repo fetch
 # @see     guest repo show
 # @see     guest repo drop
+# @see     guest repo ensure
 #@end
 ___guest_repo_add2() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check view $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check running $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo mirror $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo record $(sq "$1") $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo clone $(sq "$1") $(sq "$2")"
 }
 
 #@help ___guest_repo_fetch2
 # @command guest repo fetch <guest> <repo>
-# @summary Fetch what the guest committed into the invoking user's own repository: the guest has a record and a view, the path is plain; then its branches fetched into refs/remotes/<guest>/* of the host's repository, where 'git log <guest>/main' reads them and 'git merge --ff-only <guest>/main' takes them over -- the host signs, the guest never does
+# @summary Fetch what the guest committed into the invoking user's own repository: the guest has a record and is running, the path is plain; then its branches fetched over ssh from the clone on the guest's disk into refs/remotes/<guest>/* of the host's repository, where 'git log <guest>/main' reads them and 'git merge --ff-only <guest>/main' takes them over -- the host signs, the guest never does
 # @group   guest
 # @example vm-bake guest repo fetch dalmatia git/Infrastruktur
 # @see     guest repo add
+# @see     guest repo hold
 # @see     guest repo show
 #@end
 ___guest_repo_fetch2() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check view $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check running $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo valid $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo refs $(sq "$1") $(sq "$2")"
 }
 
 #@help ___guest_repo_drop2
 # @command guest repo drop <guest> <repo>
-# @summary Remove the guest's clone from its view: the guest has a view, the path is plain; then the clone removed -- what the guest committed and the host has not fetched is gone with it
+# @summary Take the repository from the guest: it has a record and is running, the path is plain; then the clone removed from the guest's disk over ssh and the line taken from its record -- what the guest committed and the host has not fetched is gone with it. The mirror under VM_BAKE_REPO_VIEWS stays, the other guests read it
 # @group   guest
 # @example vm-bake guest repo drop dalmatia git/Infrastruktur
 # @see     guest repo add
 # @see     guest repo fetch
 #@end
 ___guest_repo_drop2() {
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check view $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check running $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo valid $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo remove $(sq "$1") $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo unrecord $(sq "$1") $(sq "$2")"
+}
+
+#@help ___guest_repo_ensure1
+# @command guest repo ensure <guest>
+# @summary Every repository recorded for the guest has its clone on the guest's disk: the guest has a record; then, when the record lists any (read at generation time), 'guest repo wait' for its sshd and 'guest repo clone' for each -- a clone already there is left alone. 'guest start' ends with it, so a guest on a fresh image gets its clones back; a record without repositories is a comment
+# @group   guest
+# @example vm-bake guest repo ensure dalmatia
+# @see     guest start
+# @see     guest repo add
+#@end
+___guest_repo_ensure1() {
+	local f="$VM_BAKE_BASE/guest/$1/repo" l=""
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	grep -q . "$f" 2>/dev/null || { printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1: no repositories recorded (guest repo add)")"; return 0; }
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo wait $(sq "$1")"
+	while IFS= read -r l; do
+		test -n "$l" || continue
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo clone $(sq "$1") $(sq "$l")"
+	done < "$f"
+}
+
+#@help ___guest_repo_hold1
+# @command guest repo hold <guest>
+# @summary Hold what the guest committed before it goes: the guest has a record; then, when it is running (vm-bhyve's run.lock, read at generation time), 'guest repo refs' for every recorded repository and 'guest fetched write' once all are in. 'guest stop' does it first, so 'guest drop' can trust the mark; a guest that is not running cannot be read and gets a comment, no mark
+# @group   guest
+# @example vm-bake guest repo hold dalmatia
+# @see     guest stop
+# @see     guest check fetched
+# @env     VM_BAKE_GUEST_DIR  vm-bhyve's vm_dir, where run.lock lies
+#@end
+___guest_repo_hold1() {
+	local f="$VM_BAKE_BASE/guest/$1/repo" l=""
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	test -e "$VM_BAKE_GUEST_DIR/$1/run.lock" || { printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1 is not running, nothing to hold (its clones are unread until the next guest start and guest stop)")"; return 0; }
+	test -f "$f" && while IFS= read -r l; do
+		test -n "$l" || continue
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo refs $(sq "$1") $(sq "$l")"
+	done < "$f"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest fetched write $(sq "$1")"
+}
+
+#@help _guest_repo_mirror1
+# @command guest repo mirror <repo>
+# @summary Act terminal (the invoking user, in their own home): the bare mirror VM_BAKE_REPO_VIEWS/<name> of the repository (<name> its last path element) -- cloned with --mirror and without hardlinks when it is not there, its refs fetched with --prune when it is; a mirror of that name made from another repository is an error. VM_BAKE_REPO_VIEWS is made first; the template's home line for it hangs the directory read-only into the views, so a guest reads the mirrors and writes none of them
+# @group   guest
+# @internal
+# @see     guest repo add
+# @env     VM_BAKE_REPO_VIEWS  the mirrors' directory under the home, the same path on the host and in the view
+#@end
+_guest_repo_mirror1() {
+	local home="" name="${1##*/}" views="$VM_BAKE_REPO_VIEWS"
+	eval "home=~$(id -un)"
+	printf '%s\n' "test -d '$home/$1/.git' || { printf '# Error: %s is no repository of the host\\n' '$home/$1' >&2; exit 1; }"
+	printf '%s\n' "install -d -m 755 '$home/$views' || exit 1"
+	printf '%s\n' "if test -d '$home/$views/$name'; then test \"\$(git -C '$home/$views/$name' config --get remote.origin.url)\" = '$home/$1' || { printf '# Error: the mirror %s is of %s, not of %s\\n' '$home/$views/$name' \"\$(git -C '$home/$views/$name' config --get remote.origin.url)\" '$home/$1' >&2; exit 1; }; git -C '$home/$views/$name' fetch --prune origin || exit 1; else git clone --mirror --no-hardlinks '$home/$1' '$home/$views/$name' || exit 1; fi"
+	printf '%s\n' "printf '# repository %s: mirror %s\\n' '$1' '$home/$views/$name' >&2"
+}
+
+#@help _guest_repo_record2
+# @command guest repo record <guest> <repo>
+# @summary Act terminal: the repository's path appended to guest/<guest>/repo unless listed (0600) -- what 'guest repo ensure' clones and 'guest repo hold' fetches; the dump replays it
+# @group   guest
+# @internal
+# @see     guest repo add
+# @see     guest dump record
+#@end
+_guest_repo_record2() {
+	local f="$VM_BAKE_BASE/guest/$1/repo"
+	printf '%s\n' "grep -qxF $(sq "$2") '$f' 2>/dev/null || printf '%s\\n' $(sq "$2") >> '$f'"
+	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$f'"
+	printf '%s\n' "printf '# guest %s: repo + %s\\n' '$1' $(sq "$2") >&2"
+}
+
+#@help _guest_repo_unrecord2
+# @command guest repo unrecord <guest> <repo>
+# @summary Act terminal: the repository's path removed from guest/<guest>/repo
+# @group   guest
+# @internal
+# @see     guest repo drop
+#@end
+_guest_repo_unrecord2() {
+	local f="$VM_BAKE_BASE/guest/$1/repo"
+	printf '%s\n' "{ grep -vxF $(sq "$2") '$f' > '$f.new' || true; } && mv -f '$f.new' '$f'"
+	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$f'"
+	printf '%s\n' "printf '# guest %s: repo - %s\\n' '$1' $(sq "$2") >&2"
+}
+
+#@help _guest_repo_wait1
+# @command guest repo wait <guest>
+# @summary Act terminal: wait until the guest answers ssh (BatchMode, ConnectTimeout 3, two seconds between tries, 90 tries; the host key accepted into .tmp/known_hosts.<guest>) -- 'guest repo ensure' runs right after vm start
+# @group   guest
+# @internal
+# @see     guest repo ensure
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the guest's sshd port
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
+#@end
+_guest_repo_wait1() {
+	local key="$VM_BAKE_HOST_KEY"
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	printf '%s\n' "n=0; until ssh -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new -o ConnectTimeout=3 -o BatchMode=yes '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' true 2>/dev/null; do n=\$((n + 1)); test \"\$n\" -lt 90 || { printf '# Error: guest %s does not answer ssh\\n' '$1' >&2; exit 1; }; sleep 2; done"
+	printf '%s\n' "printf '# guest %s answers ssh after %s tries\\n' '$1' \"\$n\" >&2"
 }
 
 #@help _guest_repo_clone2
 # @command guest repo clone <guest> <repo>
-# @summary Act terminal (the invoking user, their own repository and their own view): the repository cloned into the view at the same path, without hardlinks (a hardlink would let the guest reach into the objects of the host's repository) and without a remote (the guest has no path to the host; 'guest repo fetch' is the way back)
+# @summary Act terminal (the invoking user, over ssh into the guest): the clone VM_BAKE_REPO_LOCAL/<name> made on the guest's disk from the mirror VM_BAKE_REPO_VIEWS/<name> the view shows, with the host's git identity (user.name, user.email, when the host has them) so the guest commits in the host's name, unsigned; a clone already there is left alone
 # @group   guest
 # @internal
 # @see     guest repo add
-# @env     VM_BAKE_VIEW_DIR  the views' directory
+# @see     guest repo ensure
+# @env     VM_BAKE_REPO_VIEWS  the mirrors' directory under the home
+# @env     VM_BAKE_REPO_LOCAL  the clones' directory under the guest's home, on its disk
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the guest's sshd port
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
 #@end
 _guest_repo_clone2() {
-	local dir="$VM_BAKE_VIEW_DIR" home=""
-	eval "home=~$(id -un)"
-	case "$dir" in "~/"*) dir="$home${dir#\~}" ;; esac
-	printf '%s\n' "test -d '$home/$2/.git' || { printf '# Error: %s is no repository of the host\\n' '$home/$2' >&2; exit 1; }"
-	printf '%s\n' "test ! -e '$dir/$1/$2' || { printf '# Error: %s exists in the view of %s\\n' '$2' '$1' >&2; exit 1; }"
-	printf '%s\n' "install -d -m 755 \"\$(dirname '$dir/$1/$2')\" || exit 1"
-	printf '%s\n' "git clone --no-hardlinks '$home/$2' '$dir/$1/$2' || exit 1"
-	printf '%s\n' "git -C '$dir/$1/$2' remote remove origin || exit 1"
-	printf '%s\n' "printf '# guest %s: clone of %s in its view\\n' '$1' '$2' >&2"
+	local key="$VM_BAKE_HOST_KEY" name="${2##*/}" views="$VM_BAKE_REPO_VIEWS" loc="$VM_BAKE_REPO_LOCAL" uname="" uemail="" cfg="" remote=""
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	uname=$(git config --get user.name 2>/dev/null || true)
+	uemail=$(git config --get user.email 2>/dev/null || true)
+	test -z "$uname" || cfg=" && git -C '$loc/$name' config user.name $(sq "$uname")"
+	test -z "$uemail" || cfg="$cfg && git -C '$loc/$name' config user.email $(sq "$uemail")"
+	remote="test ! -e '$loc/$name' || { printf '# guest %s: %s is there already\\n' '$1' '$loc/$name' >&2; exit 0; }; git clone \"\$HOME/$views/$name\" '$loc/$name'$cfg && printf '# guest %s: clone of %s at %s\\n' '$1' '$2' '$loc/$name' >&2"
+	printf '%s\n' "ssh -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new -o BatchMode=yes '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$remote") || exit 1"
 }
 
 #@help _guest_repo_refs2
 # @command guest repo refs <guest> <repo>
-# @summary Act terminal (the invoking user, in their OWN repository): 'git fetch' from the guest's clone into refs/remotes/<guest>/*, no tags -- the host reads the guest's commits without ever running git inside the guest's clone, whose configuration and hooks belong to the guest
+# @summary Act terminal (the invoking user, in their OWN repository): 'git fetch' over ssh from the clone on the guest's disk into refs/remotes/<guest>/*, no tags -- the host reads the guest's commits without ever running git inside the guest's clone, whose configuration and hooks belong to the guest
 # @group   guest
 # @internal
 # @see     guest repo fetch
-# @env     VM_BAKE_VIEW_DIR  the views' directory
+# @see     guest repo hold
+# @env     VM_BAKE_REPO_LOCAL  the clones' directory under the guest's home
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the guest's sshd port
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
 #@end
 _guest_repo_refs2() {
-	local dir="$VM_BAKE_VIEW_DIR" home=""
+	local key="$VM_BAKE_HOST_KEY" home="" name="${2##*/}" loc="$VM_BAKE_REPO_LOCAL"
 	eval "home=~$(id -un)"
-	case "$dir" in "~/"*) dir="$home${dir#\~}" ;; esac
-	printf '%s\n' "test -d '$dir/$1/$2/.git' || { printf '# Error: no clone %s in the view of %s (guest repo add)\\n' '$2' '$1' >&2; exit 1; }"
-	printf '%s\n' "git -C '$home/$2' fetch --no-tags --prune '$dir/$1/$2' \"+refs/heads/*:refs/remotes/$1/*\" || exit 1"
+	case "$key" in "~/"*) key="$home${key#\~}" ;; esac
+	printf '%s\n' "test -d '$home/$2/.git' || { printf '# Error: %s is no repository of the host\\n' '$home/$2' >&2; exit 1; }"
+	printf '%s\n' "git -C '$home/$2' -c core.sshCommand=$(sq "ssh -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$1 -o StrictHostKeyChecking=accept-new -o BatchMode=yes") fetch --no-tags --prune 'ssh://$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN:$VM_BAKE_SSH_PORT/~/$loc/$name' '+refs/heads/*:refs/remotes/$1/*' || exit 1"
 	printf '%s\n' "printf '# guest %s: its branches are %s/* in %s now\\n' '$1' '$1' '$home/$2' >&2"
 }
 
 #@help _guest_repo_remove2
 # @command guest repo remove <guest> <repo>
-# @summary Act terminal (the invoking user, their own view): the clone removed from the view
+# @summary Act terminal (the invoking user, over ssh into the guest): the clone VM_BAKE_REPO_LOCAL/<name> removed from the guest's disk
 # @group   guest
 # @internal
 # @see     guest repo drop
-# @env     VM_BAKE_VIEW_DIR  the views' directory
+# @env     VM_BAKE_REPO_LOCAL  the clones' directory under the guest's home
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the guest's sshd port
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
 #@end
 _guest_repo_remove2() {
-	local dir="$VM_BAKE_VIEW_DIR"
-	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
-	printf '%s\n' "test -d '$dir/$1/$2/.git' || { printf '# Error: no clone %s in the view of %s\\n' '$2' '$1' >&2; exit 1; }"
-	printf '%s\n' "rm -rf '$dir/$1/$2' || exit 1"
-	printf '%s\n' "printf '# guest %s: clone %s removed from its view\\n' '$1' '$2' >&2"
+	local key="$VM_BAKE_HOST_KEY" name="${2##*/}" loc="$VM_BAKE_REPO_LOCAL" remote=""
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	remote="test -d '$loc/$name/.git' || { printf '# Error: no clone %s on the disk of %s\\n' '$loc/$name' '$1' >&2; exit 1; }; rm -rf '$loc/$name' && printf '# guest %s: clone %s removed from its disk\\n' '$1' '$loc/$name' >&2"
+	printf '%s\n' "ssh -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new -o BatchMode=yes '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$remote") || exit 1"
 }
 
 #@help _guest_repo_show1
 # @command guest repo show <guest>
-# @summary The clones in the guest's view, one line each: the path as the guest sees it under its home and the branch its HEAD names (the file read, no git run in the guest's clone)
+# @summary Act terminal (the invoking user, over ssh into the guest): the repositories recorded for the guest, one line each, then the clones on its disk under VM_BAKE_REPO_LOCAL with the branch their HEAD names (the file read, no git run in the guest's clone)
 # @group   guest
 # @example vm-bake guest repo show dalmatia
 # @see     guest repo add
 # @see     guest repo fetch
-# @env     VM_BAKE_VIEW_DIR  the views' directory
+# @env     VM_BAKE_REPO_LOCAL  the clones' directory under the guest's home
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the guest's sshd port
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
 #@end
 _guest_repo_show1() {
-	local dir="$VM_BAKE_VIEW_DIR" g="" d="" b="" n=0
-	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
-	printf '%s\n' "# clones in the view of $1 (path  branch)"
-	for g in $(find "$dir/$1" -maxdepth 5 -type d -name .git 2>/dev/null | sort); do
-		d=${g%/.git}
-		IFS= read -r b 2>/dev/null < "$g/HEAD" || b="-"
-		printf '#   %-40s %s\n' "${d#$dir/$1/}" "${b#ref: refs/heads/}"
+	local key="$VM_BAKE_HOST_KEY" loc="$VM_BAKE_REPO_LOCAL" f="$VM_BAKE_BASE/guest/$1/repo" l="" n=0 remote=""
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	printf '%s\n' "printf '%s\\n' $(sq "# repositories of $1 (record)")"
+	test -f "$f" && while IFS= read -r l; do
+		test -n "$l" || continue
+		printf '%s\n' "printf '%s\\n' $(sq "#   $l")"
 		n=$((n + 1))
-	done
-	test "$n" -gt 0 || printf '%s\n' "#   (none)"
+	done < "$f"
+	test "$n" -gt 0 || printf '%s\n' "printf '%s\\n' '#   (none)'"
+	printf '%s\n' "printf '%s\\n' $(sq "# clones on the disk of $1 under $loc (name  branch)")"
+	remote='n=0; for h in '"$loc"'/*/.git/HEAD; do test -f "$h" || continue; d=${h%/.git/HEAD}; b=$(cat "$h"); printf "#   %-40s %s\n" "${d##*/}" "${b#ref: refs/heads/}"; n=$((n + 1)); done; test "$n" -gt 0 || printf "#   (none)\n"'
+	printf '%s\n' "ssh -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new -o BatchMode=yes '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$remote") || exit 1"
+}
+
+#@help _guest_fetched_write1
+# @command guest fetched write <guest>
+# @summary Act terminal: guest/<guest>/fetched written with the date (0600) -- the mark 'guest check fetched' reads; 'guest repo hold' writes it, 'guest start' drops it
+# @group   guest
+# @internal
+# @see     guest repo hold
+# @see     guest check fetched
+#@end
+_guest_fetched_write1() {
+	local f="$VM_BAKE_BASE/guest/$1/fetched"
+	printf '%s\n' "date -u '+%Y-%m-%dT%H:%M:%SZ' > '$f' && $MODIFY_FILE_PERMS 0600 '$f' || exit 1"
+	printf '%s\n' "printf '# guest %s: repositories fetched, the mark written\\n' '$1' >&2"
+}
+
+#@help _guest_fetched_drop1
+# @command guest fetched drop <guest>
+# @summary Act terminal: guest/<guest>/fetched removed -- the guest is about to run and commit again
+# @group   guest
+# @internal
+# @see     guest start
+# @see     guest check fetched
+#@end
+_guest_fetched_drop1() {
+	printf '%s\n' "rm -f '$VM_BAKE_BASE/guest/$1/fetched'"
+	printf '%s\n' "printf '# guest %s: the fetched mark dropped\\n' '$1' >&2"
 }
 
 #@help ___guest_hostkey_ensure1
@@ -1384,6 +1598,10 @@ ___guest_dump_record1() {
 		test -n "$l" || continue
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest tag add $(sq "$1") $(sq "${l%% *}") $(sq "${l#* }")"
 	done < "$d/tag"
+	test -f "$d/repo" && while IFS= read -r l; do
+		test -n "$l" || continue
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo record $(sq "$1") $(sq "$l")"
+	done < "$d/repo"
 	return 0
 }
 

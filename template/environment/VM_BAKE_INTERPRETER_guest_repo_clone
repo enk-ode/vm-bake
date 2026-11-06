@@ -1,2 +1,2 @@
 sh
-# Act terminal of the guests (guest repo clone), pinned to sh: git clone as the invoking user, from their own repository into the view.
+# Act terminal of the guests (guest repo clone), pinned to sh: git clone over ssh in the guest, from the mirror in its view onto its disk.

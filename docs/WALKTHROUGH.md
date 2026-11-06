@@ -318,9 +318,10 @@ one, which inherits the mount point, and writes the share into the guest's
 configuration as `bhyve_options`; the image learns at `image burn` to load
 `virtio_p9fs` and to mount the share `home` on the home of the user whose
 uid is `host`. What the guest writes -- its dotfiles, the state of its
-tools, its clones -- lies in the view, in your home, and is backed up with
-it. A new image replaces the guest, not its view: `guest drop` keeps the
-view, `guest view drop` is the command that throws it away.
+tools -- lies in the view, in your home, and is backed up with it; only
+its clones lie on its disk, under `git/local` (see Repositories of a
+guest). A new image replaces the guest, not its view: `guest drop` keeps
+the view, `guest view drop` is the command that throws it away.
 
 Of the rest of your home the guest sees what the template's home lines
 allow: `guest start` hangs each one into the view as a nullfs overlay, `ro`
@@ -384,15 +385,42 @@ without a view has nowhere to put the file and gets a comment instead.
 
 ## Repositories of a guest
 
-A repository of the host is never hung into a view: git runs what
+A repository of the host is never hung writable into a view: git runs what
 `.git/config` and the hooks say, so a guest that fell would own the host.
-The guest gets its own clone instead, at the same path it has on the host,
-and commits unsigned; you fetch it back into your own repository, read it
-and sign there. `guest repo fetch` runs git only in YOUR repository and
-fetches the guest's branches into `refs/remotes/<guest>/*`:
+And a clone in the view cannot commit at all: git creates every object as
+a read-only file opened for writing, which p9fs refuses. So the guest's
+clones live on its own disk, and what the guest reads of the host's
+repositories is a bare mirror it cannot change:
+
+- `VM_BAKE_REPO_VIEWS` (`git/views`) is the mirrors' directory, the same
+  path in your home and in the view. `guest repo add` makes the bare
+  mirror `git/views/<name>` of your repository there (or refreshes it); the
+  template's home line hangs the directory read-only into every view:
+
+      vm-bake template home add freebsd-dev git/views
+      install -d ~/git/views
+
+- `VM_BAKE_REPO_LOCAL` (`git/local`) is the clones' directory under the
+  guest's home -- the one place in the view that is the guest's disk: the
+  image hangs `/var/git` there (`image view write`, a nullfs line in fstab
+  after the p9fs line, `failok`), `guest view mount` makes the mount
+  point. `guest repo add` clones the mirror into it over ssh, with your
+  git identity; the guest commits there, unsigned, and pulls from the
+  mirror as `origin`.
+
+The repository is recorded for the guest (`guest/<guest>/repo`, replayed
+by the dump): `guest start` ends with `guest repo ensure`, which waits for
+the guest's sshd and clones what the record lists and the disk lacks -- a
+guest on a fresh image gets its clones back. `guest stop` begins with
+`guest repo hold`: every recorded repository fetched over ssh into YOUR
+repository, `refs/remotes/<guest>/*`, then the mark `fetched` written;
+`guest drop` refuses without that mark (`guest drop unfetched` gives the
+commits up). `guest repo fetch` is the same fetch on demand; git runs only
+in your repository, never inside the guest's clone.
 
     vm-bake guest repo add dalmatia git/Infrastruktur
     vm-bake guest repo show dalmatia
     vm-bake guest repo fetch dalmatia git/Infrastruktur
     git -C ~/git/Infrastruktur log dalmatia/main
     git -C ~/git/Infrastruktur merge --ff-only dalmatia/main
+    vm-bake guest repo add dalmatia git/Infrastruktur      # refreshes the mirror
