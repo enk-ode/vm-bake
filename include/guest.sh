@@ -1225,15 +1225,15 @@ _guest_repo_remove2() {
 _guest_repo_show1() {
 	local key="$VM_BAKE_HOST_KEY" loc="$VM_BAKE_REPO_LOCAL" f="$VM_BAKE_BASE/guest/$1/repo" l="" n=0 remote=""
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
-	printf '%s\n' "printf '%s\\n' $(sq "# repositories of $1 (record)")"
+	emit_note "repositories of $1 (record)"
 	test -f "$f" && while IFS= read -r l; do
 		test -n "$l" || continue
-		printf '%s\n' "printf '%s\\n' $(sq "#   $l")"
+		emit_note "  $l"
 		n=$((n + 1))
 	done < "$f"
-	test "$n" -gt 0 || printf '%s\n' "printf '%s\\n' '#   (none)'"
-	printf '%s\n' "printf '%s\\n' $(sq "# clones on the disk of $1 under $loc (name  branch)")"
-	remote='n=0; for h in '"$loc"'/*/.git/HEAD; do test -f "$h" || continue; d=${h%/.git/HEAD}; b=$(cat "$h"); printf "#   %-40s %s\n" "${d##*/}" "${b#ref: refs/heads/}"; n=$((n + 1)); done; test "$n" -gt 0 || printf "#   (none)\n"'
+	test "$n" -gt 0 || emit_note "  (none)"
+	emit_note "clones on the disk of $1 under $loc (name  branch)"
+	remote='n=0; for h in '"$loc"'/*/.git/HEAD; do test -f "$h" || continue; d=${h%/.git/HEAD}; b=$(cat "$h"); printf "#   %-40s %s\n" "${d##*/}" "${b#ref: refs/heads/}" >&2; n=$((n + 1)); done; test "$n" -gt 0 || printf "#   (none)\n" >&2'
 	printf '%s\n' "ssh -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new -o BatchMode=yes '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$remote") || exit 1"
 }
 

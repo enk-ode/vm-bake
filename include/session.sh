@@ -158,7 +158,7 @@ __session_check_display1() {
 }
 
 #@help _session_script_ssh1
-# @command session script ssh <guest>
+# @command session script ssh <guest> [<program>]
 # @summary Display terminal: the ssh client script for the guest -- exec ssh on VM_BAKE_SSH_PORT with the host key's private counterpart, the guest's known_hosts file under .tmp, a shell or the arguments given to the script
 # @group   session
 # @internal
@@ -175,15 +175,7 @@ _session_script_ssh1() {
 }
 
 #@help _session_script_ssh2
-# @command session script ssh <guest> <program>
-# @summary Display terminal: the ssh client script with a program -- exec ssh -t (a pseudo-terminal for the program) to the guest, where a login shell (sh -lc: /etc/profile and the profile.d the image wrote, then ~/.profile) runs the template's env lines (read over the chain at generation time) as exports and then the program with the arguments given to the script
-# @group   session
-# @internal
-# @see     session create ssh
-# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
-# @env     VM_BAKE_SSH_PORT  the guest's sshd port
-# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
-# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk, the env lines of the template's chain
+# @internal arity-2 sibling of 'session script ssh' (session script ssh <guest> <program>): exec ssh -t (a pseudo-terminal for the program) to the guest, where a login shell (sh -lc: /etc/profile and the profile.d the image wrote, then ~/.profile) runs the template's env lines (read over the chain at generation time, VM_BAKE_TEMPLATE_DIR's template-table.awk) as exports and then the program with the arguments given to the script
 #@end
 _session_script_ssh2() {
 	local key="$VM_BAKE_HOST_KEY" img="" t="" cur="" chain="" p="" n=0 exp="" l=""
@@ -232,7 +224,7 @@ _session_script_ssh_screen2() {
 }
 
 #@help _session_script_xterm1
-# @command session script xterm <guest>
+# @command session script xterm <guest> [<program>]
 # @summary Display terminal: the window script for the guest -- exec xterm titled after the guest, with the ssh of 'session script ssh <guest>' as its command
 # @group   session
 # @internal
@@ -249,15 +241,7 @@ _session_script_xterm1() {
 }
 
 #@help _session_script_xterm2
-# @command session script xterm <guest> <program>
-# @summary Display terminal: the window script with a program -- exec xterm titled <program>@<guest>, with the ssh -t of 'session script ssh <guest> <program>' as its command: the program in a login shell with the template's env lines exported before it
-# @group   session
-# @internal
-# @see     session create xterm
-# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
-# @env     VM_BAKE_SSH_PORT  the guest's sshd port
-# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
-# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk, the env lines of the template's chain
+# @internal arity-2 sibling of 'session script xterm' (session script xterm <guest> <program>): exec xterm titled <program>@<guest>, with the ssh -t of 'session script ssh <guest> <program>' as its command: the program in a login shell with the template's env lines exported before it
 #@end
 _session_script_xterm2() {
 	local key="$VM_BAKE_HOST_KEY" prog="$2" dir="" img="" t="" cur="" chain="" p="" n=0 exp="" l=""
