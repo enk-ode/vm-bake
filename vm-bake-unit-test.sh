@@ -942,7 +942,7 @@ test_session_plan() {
     fail "acts not pinned -- not calling them"; return
   fi
   run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
-  if run_vmbake image ssh write x | grep -q '^X11Forwarding yes$' && ! run_vmbake image ssh write d | grep -q 'X11Forwarding'; then
+  if run_vmbake image ssh write x | grep -q '^X11Forwarding yes$' && ! run_vmbake image ssh write d | grep -q '^X11Forwarding'; then
     pass "ssh write adds X11Forwarding only for a template with display x"
   else
     fail "ssh write x11: $(run_vmbake image ssh write x)"
