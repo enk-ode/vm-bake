@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest hostkey unbind), pinned to sh: it removes the binding from the guest record; the key itself stays.

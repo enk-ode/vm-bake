@@ -204,14 +204,14 @@ ___dowry_record_restore3() {
 
 #@help __dowry_record_compare3
 # @command dowry record compare <dowry> <source> <created>
-# @summary The record of this dowry here against the one from the dump: none here rewrites to 'dowry record place', the same one is a comment, a differing one an error line naming both
+# @summary The record of this dowry here against the one from the dump: no record here rewrites to 'dowry record place' (the object itself may already lie there -- 'import place' puts it in place before the replay), the same one is a comment, a differing one an error line naming both
 # @group   dowry
 # @internal
 # @see     dowry record restore
 #@end
 __dowry_record_compare3() {
 	local rec="$VM_BAKE_BASE/dowry/$1" s="" c=""
-	if test ! -d "$rec"; then
+	if test ! -f "$rec/source"; then
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" dowry record place $(sq "$1") $(sq "$2") $(sq "$3")"
 		return 0
 	fi

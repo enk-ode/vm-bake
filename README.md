@@ -28,13 +28,14 @@ and renamed, as elvboot's was forked from vpn-switch.
 Status: templates (add, drop, show, the scalars base/bake/firmware/
 resource, the lists package/pkgfile/port/rc/env/user/home/service/forbid/
 data/session/tag with add/drop/mask/unmask/show), images (`image make freebsd`,
-on the host or in a builder guest), guests (`guest make`, tags, host keys,
+on the host or in a builder guest), ssh host keys as a resource (`hostkey
+create`, bound to one guest each), guests (`guest make`, tags,
 home seeds, the view with its overlays, the dowry a template hands to the
 homes of its guests, the guest's own repository clones and the report of its
 records written into the view at every start),
 sessions (ssh, and X in a Xephyr compartment) and the pair
 that travels (`dump`/`restore` with the records as witnesses, `export`/
-`import` with the bundle of host keys, package files and home seeds, sealed
+`import` with the bundle of ssh host keys, package files and home seeds, sealed
 to the dump). `docs/WALKTHROUGH.md` walks the first chain, the FreeBSD
 development guest.
 

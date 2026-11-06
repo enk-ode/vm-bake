@@ -1,0 +1,2 @@
+sh
+# Act terminal of the host keys (hostkey place), pinned to sh: it copies a key pair into the database. Inspect first: vm-bake setintp hostkey_place cat.

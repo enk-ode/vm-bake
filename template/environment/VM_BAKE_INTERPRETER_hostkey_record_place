@@ -1,0 +1,2 @@
+sh
+# Act terminal of the host keys (hostkey record place), pinned to sh: it places a record from a dump, without the key.

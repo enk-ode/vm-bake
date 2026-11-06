@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest hostkey bind), pinned to sh: it writes the name of the host key into the guest record, which belongs to the invoking user -- no root.

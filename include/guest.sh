@@ -38,7 +38,7 @@
 
 #@help ___guest_make3
 # @command guest make <image> <guest> <address>
-# @summary Make a guest from a sealed image: the image has a record and a digest, the guest name is a record name and free; then the switch ensured, the record, the view of the host's home when the template says so (kept across rebuilds), the clone of @image, the configuration, the network written into the clone, the template's home paths seeded into the users' homes (a guest with a view takes them as overlays at 'guest start' instead), the guest's own ssh host key (kept in its record across rebuilds) installed, the host's unbound told the name
+# @summary Make a guest from a sealed image: the image has a record and a digest, the guest name is a record name and free; then the switch ensured, the record, the view of the host's home when the template says so (kept across rebuilds), the clone of @image, the configuration, the network written into the clone, the template's home paths seeded into the users' homes (a guest with a view takes them as overlays at 'guest start' instead), the ssh host key the guest carries installed (a resource of the database under a name of its own, made under the guest's name when the record binds none), the host's unbound told the name
 # @group   guest
 # @example vm-bake guest make freebsd-builder-20261101 bake 172.16.100.250/24
 # @see     guest start
@@ -108,7 +108,7 @@ ___guest_stop1() {
 
 #@help ___guest_drop1
 # @command guest drop <guest>
-# @summary Remove the guest: it has a record and is not running (vm-bhyve's run.lock); the overlays of its view let go, whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed, unbound told, its ssh host key forgotten. The view itself stays -- a new image replaces the guest, not what it wrote; 'guest view drop' removes that too
+# @summary Remove the guest: it has a record and is not running (vm-bhyve's run.lock); the overlays of its view let go, whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed with its hostkey binding, unbound told, what the host remembered of its ssh host key forgotten. The ssh host key itself stays in the database and is free again, so the guest built anew under that name takes it back and answers with the same identity; the view stays too -- a new image replaces the guest, not what it wrote ('guest view drop' removes that, 'hostkey drop' the key)
 # @group   guest
 # @example vm-bake guest drop bake
 # @see     guest make
@@ -1048,24 +1048,111 @@ _guest_repo_show1() {
 	test "$n" -gt 0 || printf '%s\n' "#   (none)"
 }
 
-#@help _guest_hostkey_ensure1
+#@help ___guest_hostkey_ensure1
 # @command guest hostkey ensure <guest>
-# @summary Act terminal: the guest's ssh host key lives in its record (guest/<guest>/ssh_host_ed25519_key, made once with ssh-keygen, 0600) and survives every rebuild of the guest, so the host's known_hosts stays right; an existing key is kept
+# @summary The guest carries an ssh host key: its record names one that is kept -- a comment; it names one that is gone -- an error; it names none and a key of the guest's own name is kept -- that one taken; neither -- a key of the guest's name made and taken. The key is a resource of the database and outlives the guest, so the host's known_hosts stays right across every rebuild; another key is handed over with 'guest hostkey use'
 # @group   guest
 # @internal
 # @see     guest make
-# @see     guest hostkey write
+# @see     guest hostkey use
+# @see     hostkey create
 #@end
-_guest_hostkey_ensure1() {
-	local k="$VM_BAKE_BASE/guest/$1/ssh_host_ed25519_key"
-	printf '%s\n' "test -f '$k' || ssh-keygen -q -t ed25519 -N '' -C 'vm-bake guest $1' -f '$k' || exit 1"
-	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$k' '$k.pub'"
-	printf '%s\n' "printf '# guest %s: host key %s\\n' '$1' \"\$(ssh-keygen -l -f '$k.pub' | cut -d' ' -f2)\" >&2"
+___guest_hostkey_ensure1() {
+	local k=""
+	IFS= read -r k 2>/dev/null < "$VM_BAKE_BASE/guest/$1/hostkey" || k=""
+	if test -n "$k" && test -e "$VM_BAKE_BASE/hostkey/$k/key"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1 carries the hostkey $k")"
+		return 0
+	fi
+	if test -n "$k"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest $1: its record names the hostkey $k, which is not kept (hostkey list; hostkey add $k <path>, or guest hostkey use $1 <hostkey>)")"
+		return 0
+	fi
+	test -e "$VM_BAKE_BASE/hostkey/$1/key" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" hostkey create $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey use $(sq "$1") $(sq "$1")"
+}
+
+#@help ___guest_hostkey_use2
+# @command guest hostkey use <guest> <hostkey>
+# @summary Hand an ssh host key of the database to a guest: the guest has a record, the key is kept, and no other guest carries it (a key answers for one guest only); then the binding written into the guest record. The key reaches the guest's /etc/ssh at the next 'guest make' -- a guest that is already built has to be built again to answer with it
+# @group   guest
+# @example vm-bake guest hostkey use dalmatia dalmatia
+# @see     guest hostkey drop
+# @see     hostkey create
+# @see     hostkey list
+#@end
+___guest_hostkey_use2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" hostkey check $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey unique $(sq "$1") $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey bind $(sq "$1") $(sq "$2")"
+}
+
+#@help ___guest_hostkey_drop1
+# @command guest hostkey drop <guest>
+# @summary Let go of the ssh host key of a guest: it has a record; then the binding removed from it. The key itself stays in the database and is free for another guest -- 'hostkey drop' throws it out
+# @group   guest
+# @example vm-bake guest hostkey drop dalmatia
+# @see     guest hostkey use
+# @see     hostkey drop
+#@end
+___guest_hostkey_drop1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey unbind $(sq "$1")"
+}
+
+#@help __guest_hostkey_unique2
+# @command guest hostkey unique <guest> <hostkey>
+# @summary No guest other than this one carries that ssh host key (every guest record read at generation time): a comment line, else an error line naming the guest that has it -- two guests with one identity would make every known_hosts lie about one of them
+# @group   guest
+# @internal
+# @see     guest hostkey use
+#@end
+__guest_hostkey_unique2() {
+	local d="" k="" who="" g=""
+	for d in "$VM_BAKE_BASE"/guest/*/; do
+		g=$(basename "$d")
+		test "$g" != "$1" || continue
+		test -f "$d/hostkey" || continue
+		IFS= read -r k < "$d/hostkey"
+		test "$k" = "$2" || continue
+		who="${who:+$who }$g"
+	done
+	if test -z "$who"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "hostkey $2 is free for $1")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "hostkey $2 is carried by $who (guest hostkey drop $who, or hostkey create <name> for $1)")"
+	fi
+}
+
+#@help _guest_hostkey_bind2
+# @command guest hostkey bind <guest> <hostkey>
+# @summary Act terminal: the name of the ssh host key written into the guest record (guest/<guest>/hostkey, 0600) -- the binding, which 'guest hostkey write' reads
+# @group   guest
+# @internal
+# @see     guest hostkey use
+#@end
+_guest_hostkey_bind2() {
+	local rec="$VM_BAKE_BASE/guest/$1"
+	printf '%s\n' "printf '%s\\n' $(sq "$2") > '$rec/hostkey' && $MODIFY_FILE_PERMS 0600 '$rec/hostkey' || exit 1"
+	printf '%s\n' "printf '# guest %s: carries the hostkey %s (%s)\\n' '$1' $(sq "$2") \"\$(ssh-keygen -l -f '$VM_BAKE_BASE/hostkey/$2/key.pub' | cut -d' ' -f2)\" >&2"
+}
+
+#@help _guest_hostkey_unbind1
+# @command guest hostkey unbind <guest>
+# @summary Act terminal: the binding removed from the guest record (guest/<guest>/hostkey); the key stays in the database
+# @group   guest
+# @internal
+# @see     guest hostkey drop
+#@end
+_guest_hostkey_unbind1() {
+	printf '%s\n' "$MODIFY_FILE_REMOVE '$VM_BAKE_BASE/guest/$1/hostkey'"
+	emit_note "guest $1: the hostkey binding removed, the key stays in the database"
 }
 
 #@help _guest_hostkey_write1
 # @command guest hostkey write <guest>
-# @summary Act terminal (root): the clone's disk0.img attached as md, its root mounted by the image's label, the guest's host key from the record written to /etc/ssh/ssh_host_ed25519_key (root, 0600; the public half 0644), unmounted and detached -- sshd in the guest uses it from the first boot, the other key types it makes itself
+# @summary Act terminal (root): the clone's disk0.img attached as md, its root mounted by the image's label, the ssh host key the guest carries (the binding of its record, read at generation time) written to /etc/ssh/ssh_host_ed25519_key (root, 0600; the public half 0644), unmounted and detached -- sshd in the guest uses it from the first boot, the other key types it makes itself
 # @group   guest
 # @internal
 # @see     guest make
@@ -1073,13 +1160,17 @@ _guest_hostkey_ensure1() {
 # @env     VM_BAKE_GUEST_DIR  the guests' directory
 #@end
 _guest_hostkey_write1() {
-	local img="" k="$VM_BAKE_BASE/guest/$1/ssh_host_ed25519_key" disk="$VM_BAKE_GUEST_DIR/$1/disk0.img" mnt="$VM_BAKE_GUEST_DIR/$1/mnt"
+	local img="" hk="" k="" disk="$VM_BAKE_GUEST_DIR/$1/disk0.img" mnt="$VM_BAKE_GUEST_DIR/$1/mnt"
 	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r hk 2>/dev/null < "$VM_BAKE_BASE/guest/$1/hostkey" || hk=""
+	test -n "$hk" || { generate_error "guest hostkey write: the guest $1 carries no ssh host key (guest hostkey use $1 <hostkey>)"; return 0; }
+	k="$VM_BAKE_BASE/hostkey/$hk/key"
+	test -f "$k" || { generate_error "guest hostkey write: the guest $1 carries the hostkey $hk, which is not kept (hostkey list)"; return 0; }
 	printf '%s\n' "md=\$(mdconfig -a -t vnode -f '$disk') || exit 1"
 	printf '%s\n' "mkdir -p '$mnt' && mount '/dev/gpt/$img-root' '$mnt' || { mdconfig -d -u \"\${md#md}\"; exit 1; }"
 	printf '%s\n' "install -m 600 -o root -g wheel '$k' '$mnt/etc/ssh/ssh_host_ed25519_key' && install -m 644 -o root -g wheel '$k.pub' '$mnt/etc/ssh/ssh_host_ed25519_key.pub' || { umount '$mnt'; mdconfig -d -u \"\${md#md}\"; exit 1; }"
 	printf '%s\n' "umount '$mnt' && rmdir '$mnt' && mdconfig -d -u \"\${md#md}\" || exit 1"
-	printf '%s\n' "printf '# guest %s: host key installed\\n' '$1' >&2"
+	printf '%s\n' "printf '# guest %s: the hostkey %s installed\\n' '$1' $(sq "$hk") >&2"
 }
 
 #@help _guest_knownhosts_drop1
@@ -1148,7 +1239,7 @@ _guest_dataset_destroy1() {
 
 #@help _guest_show1
 # @command guest show <guest>
-# @summary Everything the records say about one guest, as comment lines: its own record (image, address, created, the fingerprint of its ssh host key), the template behind its image with the resolved chain and resources, whether it has a view and where, and every list family resolved over the chain with its origin -- the SOLL of this guest, against which it can be checked from inside. 'guest report' is the same text, written into the guest's view
+# @summary Everything the records say about one guest, as comment lines: its own record (image, address, created, the name and fingerprint of the ssh host key it carries), the template behind its image with the resolved chain and resources, whether it has a view and where, and every list family resolved over the chain with its origin -- the SOLL of this guest, against which it can be checked from inside. 'guest report' is the same text, written into the guest's view
 # @group   guest
 # @example vm-bake guest show dalmatia
 # @see     guest list
@@ -1162,12 +1253,13 @@ _guest_dataset_destroy1() {
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _guest_show1() {
-	local d="$VM_BAKE_BASE/guest/$1" img="" t="" cur="" chain="" p="" n=0 a="" res="" f="" dir="$VM_BAKE_VIEW_DIR" view=no addr=- created=- key=-
+	local d="$VM_BAKE_BASE/guest/$1" img="" t="" cur="" chain="" p="" n=0 a="" res="" f="" dir="$VM_BAKE_VIEW_DIR" view=no addr=- created=- key=- hk=-
 	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
 	IFS= read -r img 2>/dev/null < "$d/image" || img=-
 	IFS= read -r addr 2>/dev/null < "$d/address" || addr=-
 	IFS= read -r created 2>/dev/null < "$d/created" || created=-
-	test ! -f "$d/ssh_host_ed25519_key.pub" || key=$(ssh-keygen -l -f "$d/ssh_host_ed25519_key.pub" 2>/dev/null | cut -d' ' -f2)
+	IFS= read -r hk 2>/dev/null < "$d/hostkey" || hk=-
+	test ! -f "$VM_BAKE_BASE/hostkey/$hk/key.pub" || key=$(ssh-keygen -l -f "$VM_BAKE_BASE/hostkey/$hk/key.pub" 2>/dev/null | cut -d' ' -f2)
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
 	cur=$t
 	while test "$cur" != empty && test "$n" -lt 32; do
@@ -1181,7 +1273,7 @@ _guest_show1() {
 	printf '#   image     %s\n#   template  %s\n#   chain     %s\n' "$img" "$t" "empty > $(printf '%s' "$chain" | tr ' ' '>' | sed 's/>/ > /g')"
 	printf '#   address   %s (gateway and resolver %s, name %s.%s)\n' "$addr" "$VM_BAKE_GUEST_GATEWAY" "$1" "$VM_BAKE_GUEST_DOMAIN"
 	printf '#   resource  %s (cpu memory disk)\n#   sshd      port %s, keys only, /etc/ssh/authorized_keys/<user>\n' "${res:--}" "$VM_BAKE_SSH_PORT"
-	printf '#   hostkey   %s\n#   created   %s\n' "$key" "$created"
+	printf '#   hostkey   %s (%s)\n#   created   %s\n' "$hk" "$key" "$created"
 	printf '#   view      %s\n' "$(test "$view" = no && printf 'none (the home lies on the disk of the guest)' || printf '%s on the host, mounted as the home over p9fs (slot %s, share home)' "$dir/$1" "$VM_BAKE_VIEW_SLOT")"
 	for f in $TEMPLATE_FAMILIES; do
 		printf '# %s (origin  entry)\n' "$f"

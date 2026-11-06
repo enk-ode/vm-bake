@@ -106,8 +106,9 @@ it anew, `guest make` clones it.
 
 ## Export and import
 
-What the dump cannot carry travels in the bundle: the guest host keys (the
-guests keep their identity, known_hosts stays right), the package files of
+What the dump cannot carry travels in the bundle: the ssh host keys of the
+database (the guests keep their identity, known_hosts stays right), the
+package files of
 every `pkgfile` list, the home seeds of every `home` list. `export` writes
 the pair -- the dump to a path you commit, the bundle to a store of your
 own -- and seals the dump with the bundle's sha256. Nothing is signed or
@@ -278,13 +279,28 @@ home (relative: `.themes/NsCDE`, `.config/gtk-3.0`) and how the guest sees
 it, `ro` unless you say `rw`. A guest without a view gets each path copied
 into the home of every user of the template at `guest make`, offline
 through the clone's disk, owned by that user; a rebuilt guest gets the
-files again. The guest's ssh host key is part of its record
-(`guest/<guest>/ssh_host_ed25519_key`, made once) and installed into every
-clone, so the host's known_hosts stays right across rebuilds.
+files again.
+
+An ssh host key is a resource of the database under a name of its own, not
+a part of the guest: `hostkey create <name>` makes one, `hostkey add <name>
+<path>` takes one in from a backup or another host, `hostkey list` names
+them with their fingerprint and the guest that carries them. A guest takes
+one with `guest hostkey use <guest> <hostkey>`, and no two guests ever
+carry the same -- the binding is refused when another guest has it. That is
+why the identity outlives the guest: `guest drop` removes the record and
+the clone, the key stays, and the guest built again under that name answers
+with the same fingerprint, so the host's known_hosts keeps its word.
+`guest make` is content with a key named after the guest and makes it when
+it is missing; `guest hostkey drop <guest>` lets go of one, `hostkey drop
+<name>` throws it out once no guest carries it.
 
     vm-bake template home add freebsd-x .themes/NsCDE
     vm-bake template home add freebsd-x .config/gtk-3.0 rw
     vm-bake template home show freebsd-x
+
+    vm-bake hostkey create dalmatia
+    vm-bake guest hostkey use dalmatia dalmatia
+    vm-bake hostkey list
 
 ## The view: one home
 
@@ -350,7 +366,7 @@ witness (`dowry record restore`), so a dowry is reproducible on another host.
 ## What the guest knows about itself
 
 `guest show <guest>` is everything the records say about one guest: its own
-record (image, address, created, the fingerprint of its ssh host key), the
+record (image, address, created, the name and fingerprint of the ssh host key it carries), the
 template behind its image with the resolved chain and its resources, whether
 it has a view and where, and every list family resolved over the chain with
 its origin. That is the SOLL of the guest.

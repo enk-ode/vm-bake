@@ -5,7 +5,7 @@
 # Copyright (c) 2026 Dr. Johannes Brügmann
 # archive.sh - the pair that travels: the DUMP (the replay as text, for a
 # git repository whose signed commit vouches for it) and the BUNDLE (the
-# files the records point at and the bake needs again: guest host keys,
+# files the records point at and the bake needs again: ssh host keys,
 # package files, home seeds -- never the images, they are baked anew), bound
 # by the seal line of the dump. export writes the pair from this database,
 # import checks a pair end to end before a byte lands, then replays it.
@@ -28,7 +28,7 @@
 
 #@help ___export2
 # @command export <dump> <bundle>
-# @summary Write the pair: the DUMP to <dump> (a path of your choosing, absolute; commit it), the BUNDLE to <bundle> (absolute; keep it where the host keys may lie). Both paths absolute, the archiver set; then the dump written, the collection, the tree, the MANIFEST, the bundle packed, the dump sealed with the bundle's hash -- an earlier dump at that path is overwritten, its seal with it
+# @summary Write the pair: the DUMP to <dump> (a path of your choosing, absolute; commit it), the BUNDLE to <bundle> (absolute; keep it where private keys may lie). Both paths absolute, the archiver set; then the dump written, the collection, the tree, the MANIFEST, the bundle packed, the dump sealed with the bundle's hash -- an earlier dump at that path is overwritten, its seal with it
 # @group   archive
 # @env     VM_BAKE_ARCHIVER  the packing template; $a is the archive, $b the base directory
 # @example vm-bake export ~/git/vm-bake-dump/illyria/production/dump.sh ~/Infrastruktur/vm-bake-export/illyria/production/20261103.tar.gz
@@ -83,7 +83,7 @@ __archiver_set0() {
 
 #@help _export_collection_write0
 # @command export collection write
-# @summary Act terminal (owner): export/collection written -- one line per file the bundle carries, <kind>/<path> below the tree: guest/<guest>/ssh_host_ed25519_key and .pub of every guest record that has one, db/dowry/<dowry>/object/... for every object the database keeps as a dowry, pkg/<file> for every pkgfile line of every template that is in VM_BAKE_PKG_DIR, home/<path> for every file and symlink under every home line of every template (the invoking user's home, read here at generation); sorted, duplicates once; a pkgfile or home path that is not here is noted and not bundled
+# @summary Act terminal (owner): export/collection written -- one line per file the bundle carries, <kind>/<path> below the tree: db/hostkey/<name>/key and .pub of every ssh host key the database keeps, db/dowry/<dowry>/object/... for every object the database keeps as a dowry, pkg/<file> for every pkgfile line of every template that is in VM_BAKE_PKG_DIR, home/<path> for every file and symlink under every home line of every template (the invoking user's home, read here at generation); sorted, duplicates once; a pkgfile or home path that is not here is noted and not bundled
 # @group   archive
 # @internal
 # @env     VM_BAKE_PKG_DIR  where the package files of the pkgfile lists lie
@@ -93,11 +93,11 @@ __archiver_set0() {
 _export_collection_write0() {
 	local home="" g="" l="" f="" lines="" missing="" n=0
 	eval "home=~$(id -un)"
-	for g in "$VM_BAKE_BASE"/guest/*/; do
-		test -f "$g/ssh_host_ed25519_key" || continue
+	for g in "$VM_BAKE_BASE"/hostkey/*/; do
+		test -f "$g/key" || continue
 		lines="$lines
-guest/$(basename "$g")/ssh_host_ed25519_key
-guest/$(basename "$g")/ssh_host_ed25519_key.pub"
+db/hostkey/$(basename "$g")/key
+db/hostkey/$(basename "$g")/key.pub"
 	done
 	for l in "$VM_BAKE_BASE"/template/*; do
 		test -L "$l" || continue
@@ -126,13 +126,13 @@ $(find "$l/object" \( -type f -o -type l \) | sed "s|^$VM_BAKE_BASE/|db/|")"
 	test -z "$lines" || printf '%s\n' "$lines"
 	printf '%s\n' "VMBCOLLECTION"
 	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$VM_BAKE_BASE/export/collection'"
-	emit_note "export: collection of $n files (guest host keys, package files, home seeds)"
+	emit_note "export: collection of $n files (ssh host keys, dowry objects, package files, home seeds)"
 	test -z "$missing" || emit_note "export: not here, not bundled:$missing"
 }
 
 #@help _export_tree_write0
 # @command export tree write
-# @summary Act terminal (owner): export/tree made anew from the collection -- the old tree removed, every listed file copied to tree/<kind>/<path> from where its kind lives (guest and db: this database, pkg: VM_BAKE_PKG_DIR, home: the invoking user's home), modes kept, a symlink copied as the link; the collection copied beside them as tree/collection. The tree IS what the bundle carries, readable before it is packed
+# @summary Act terminal (owner): export/tree made anew from the collection -- the old tree removed, every listed file copied to tree/<kind>/<path> from where its kind lives (db: this database -- guest/ too, which is what older bundles carried their host keys as; pkg: VM_BAKE_PKG_DIR, home: the invoking user's home), modes kept, a symlink copied as the link; the collection copied beside them as tree/collection. The tree IS what the bundle carries, readable before it is packed
 # @group   archive
 # @internal
 # @env     VM_BAKE_PKG_DIR  where the package files of the pkgfile lists lie
@@ -637,7 +637,7 @@ __manifest_tree_matches2() {
 
 #@help __import_check_clear1
 # @command import check clear <incoming>
-# @summary Every file of the unpacked bundle's collection is either absent at its place here (guest/... and db/... in this database, pkg/<file> in VM_BAKE_PKG_DIR, home/<path> in the invoking user's home) or identical to what is there (same sha256, a symlink with the same target), read here at generation: a comment line counting what is new and what is already here, else an error line naming every file that DIFFERS or whose kind is unknown -- nothing of yours is overwritten; move it away or keep it and drop the line from the collection
+# @summary Every file of the unpacked bundle's collection is either absent at its place here (db/... in this database, guest/... too for an older bundle's host keys, pkg/<file> in VM_BAKE_PKG_DIR, home/<path> in the invoking user's home) or identical to what is there (same sha256, a symlink with the same target), read here at generation: a comment line counting what is new and what is already here, else an error line naming every file that DIFFERS or whose kind is unknown -- nothing of yours is overwritten; move it away or keep it and drop the line from the collection
 # @group   archive
 # @internal
 # @env     VM_BAKE_PKG_DIR  where the package files of the pkgfile lists go
@@ -673,7 +673,7 @@ __import_check_clear1() {
 
 #@help _import_place1
 # @command import place <incoming>
-# @summary Act terminal (owner): every file of the collection that is absent at its place copied there from the unpacked bundle (one line per file, modes kept, a symlink as the link; guest keys and dowry objects land in this database, package files in VM_BAKE_PKG_DIR, home seeds in the invoking user's home), the ones already here left alone -- 'import check clear' has seen that they are identical
+# @summary Act terminal (owner): every file of the collection that is absent at its place copied there from the unpacked bundle (one line per file, modes kept, a symlink as the link; ssh host keys and dowry objects land in this database, package files in VM_BAKE_PKG_DIR, home seeds in the invoking user's home), the ones already here left alone -- 'import check clear' has seen that they are identical
 # @group   archive
 # @internal
 # @env     VM_BAKE_PKG_DIR  where the package files of the pkgfile lists go

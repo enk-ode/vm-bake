@@ -1,0 +1,2 @@
+sh
+# Act terminal of the host keys (hostkey remove), pinned to sh: it removes a key of the database; cat shows what would go.

@@ -540,7 +540,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_ensure hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -1718,7 +1718,7 @@ test_archive_pair() {
     fail "relative path accepted"
   fi
   run_vmbake export "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" > "$TEST_DIR/export.log" 2>&1
-  if [ "$(tar tzf "$TEST_DIR/pair/bundle.tar.gz" | tr '\n' ' ')" = "guest/g1/ssh_host_ed25519_key guest/g1/ssh_host_ed25519_key.pub pkg/foo-1.0.pkg MANIFEST collection " ] && grep -q "not bundled: pkg/gone-2.0.pkg" "$TEST_DIR/export.log"; then
+  if [ "$(tar tzf "$TEST_DIR/pair/bundle.tar.gz" | tr '\n' ' ')" = "db/hostkey/g1/key db/hostkey/g1/key.pub pkg/foo-1.0.pkg MANIFEST collection " ] && grep -q "not bundled: pkg/gone-2.0.pkg" "$TEST_DIR/export.log"; then
     pass "the bundle carries the host key pair, the package file, MANIFEST and collection; a missing package file is noted"
   else
     fail "bundle: $(tar tzf "$TEST_DIR/pair/bundle.tar.gz" 2>&1 | tr '\n' ' '); $(cat "$TEST_DIR/export.log")"
@@ -1733,7 +1733,7 @@ test_archive_pair() {
   VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" bootstrap "test-$TESTS_RUN-second" "$TEST_PROFILE" > /dev/null 2>&1
   VM_BAKE_BASE="$second" "$TEST_SCRIPT" setenv VM_BAKE_TERMINAL_INTERPRETER sh > /dev/null 2>&1
   VM_BAKE_BASE="$second" "$TEST_SCRIPT" setenv VM_BAKE_PKG_DIR "$TEST_DIR/pkg2" > /dev/null 2>&1
-  if VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" import "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" > "$TEST_DIR/import.log" 2>&1 && grep -q "3 files placed, 0 already here" "$TEST_DIR/import.log" && cmp -s "$TEST_DIR/guest/g1/ssh_host_ed25519_key" "$second/guest/g1/ssh_host_ed25519_key" && cmp -s "$TEST_DIR/pkg/foo-1.0.pkg" "$TEST_DIR/pkg2/foo-1.0.pkg" && [ "$(stat -f %Lp "$second/guest/g1/ssh_host_ed25519_key")" = "600" ] && [ "$(cat "$second/guest/g1/image")" = "img1" ] && [ -d "$TEST_BASE_DIR/incoming/bundle" ]; then
+  if VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" import "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" > "$TEST_DIR/import.log" 2>&1 && grep -q "3 files placed, 0 already here" "$TEST_DIR/import.log" && cmp -s "$TEST_DIR/hostkey/g1/key" "$second/hostkey/g1/key" && cmp -s "$TEST_DIR/pkg/foo-1.0.pkg" "$TEST_DIR/pkg2/foo-1.0.pkg" && [ "$(stat -f %Lp "$second/hostkey/g1/key")" = "600" ] && [ "$(cat "$second/guest/g1/image")" = "img1" ] && [ -d "$TEST_BASE_DIR/incoming/bundle" ]; then
     pass "import verifies, unpacks into incoming, places the key (0600) and the package file, replays the records"
   else
     fail "import: $(grep -v '^$' "$TEST_DIR/import.log" | tail -8)"
@@ -1759,6 +1759,106 @@ test_archive_pair() {
     pass "export again writes a fresh pair with one seal"
   else
     fail "re-export: $(grep -c '^# Bundle:' "$TEST_DIR/pair/dump.sh") seals"
+  fi
+}
+
+test_hostkey() {
+  test_header "hostkey: a key under a name of its own, bound to at most one guest, kept across a guest's rebuild"
+  test_setup
+  image_chain
+  run_vmbake image record write freebsd-dev img1 > /dev/null
+  run_vmbake guest record write img1 g1 172.16.100.5/24 > /dev/null
+  run_vmbake guest record write img1 g2 172.16.100.6/24 > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_guest_hostkey_write"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake hostkey create k1 > /dev/null 2>&1 && [ "$(stat -f %Lp "$TEST_DIR/hostkey/k1/key")" = "600" ] && [ "$(stat -f %Lp "$TEST_DIR/hostkey/k1/key.pub")" = "644" ] && run_vmbake hostkey list | grep -q "^#   k1 .*SHA256:.* -$"; then
+    pass "hostkey create makes the pair (0600/0644), list names it with its fingerprint and no guest"
+  else
+    fail "hostkey create: $(run_vmbake hostkey list)"
+  fi
+  if run_vmbake hostkey create k1 2>&1 | grep -q "is already kept" && run_vmbake hostkey create 'bad name' 2>&1 | grep -q "invalid name"; then
+    pass "a name that is taken and a name that is no word are refused"
+  else
+    fail "create guards: $(run_vmbake hostkey create k1 2>&1 | tail -2)"
+  fi
+  ssh-keygen -q -t ed25519 -N '' -C test -f "$TEST_DIR/outside" 2>/dev/null
+  ssh-keygen -q -t rsa -b 2048 -N '' -C test -f "$TEST_DIR/rsa" 2>/dev/null
+  if run_vmbake hostkey add k2 "$TEST_DIR/outside" > /dev/null 2>&1 && cmp -s "$TEST_DIR/outside" "$TEST_DIR/hostkey/k2/key" && cmp -s "$TEST_DIR/outside.pub" "$TEST_DIR/hostkey/k2/key.pub"; then
+    pass "hostkey add takes an existing pair into the database unchanged"
+  else
+    fail "hostkey add: $(run_vmbake hostkey add k2 "$TEST_DIR/outside" 2>&1 | tail -2)"
+  fi
+  if run_vmbake hostkey add k3 relative/key 2>&1 | grep -q "not an absolute path" && run_vmbake hostkey add k3 "$TEST_DIR/no-such-key" 2>&1 | grep -q "not there or not readable" && run_vmbake hostkey add k3 "$TEST_DIR/rsa" 2>&1 | grep -q "not an ed25519 key"; then
+    pass "a relative path, a path that is not there and a key of another type are refused"
+  else
+    fail "add guards: $(run_vmbake hostkey add k3 "$TEST_DIR/rsa" 2>&1 | tail -2)"
+  fi
+  if run_vmbake guest hostkey use g1 k1 > /dev/null 2>&1 && [ "$(cat "$TEST_DIR/guest/g1/hostkey")" = "k1" ] && run_vmbake hostkey list | grep -q "^#   k1 .* g1$"; then
+    pass "guest hostkey use writes the binding, list names the guest that carries it"
+  else
+    fail "guest hostkey use: $(run_vmbake hostkey list)"
+  fi
+  if run_vmbake guest hostkey use g2 k1 2>&1 | grep -q "is carried by g1" && [ ! -f "$TEST_DIR/guest/g2/hostkey" ] && run_vmbake guest hostkey use g1 no-such-key 2>&1 | grep -q "unknown hostkey"; then
+    pass "a key another guest carries is refused, and so is an unknown one"
+  else
+    fail "uniqueness: $(run_vmbake guest hostkey use g2 k1 2>&1 | tail -2)"
+  fi
+  if run_vmbake hostkey drop k1 2>&1 | grep -q "is carried by g1" && [ -f "$TEST_DIR/hostkey/k1/key" ]; then
+    pass "hostkey drop refuses a key a guest carries"
+  else
+    fail "hostkey drop guard: $(run_vmbake hostkey drop k1 2>&1 | tail -2)"
+  fi
+  if run_vmbake guest hostkey write g1 | grep -q "install -m 600 -o root -g wheel '$TEST_DIR/hostkey/k1/key' " && run_vmbake guest hostkey write g2 2>&1 | grep -q "carries no ssh host key"; then
+    pass "guest hostkey write installs the bound key, a guest without a binding is an error"
+  else
+    fail "guest hostkey write: $(run_vmbake guest hostkey write g1 | tail -3)"
+  fi
+  if run_vmbake guest hostkey drop g1 > /dev/null 2>&1 && [ ! -f "$TEST_DIR/guest/g1/hostkey" ] && run_vmbake hostkey drop k1 2>&1 | grep -q "removed from the database" && [ ! -d "$TEST_DIR/hostkey/k1" ]; then
+    pass "guest hostkey drop lets go of the key, which can then be dropped"
+  else
+    fail "drop pair: $(run_vmbake hostkey list)"
+  fi
+  local fp=""
+  if run_vmbake guest hostkey ensure g1 > /dev/null 2>&1 && [ "$(cat "$TEST_DIR/guest/g1/hostkey")" = "g1" ] && fp=$(ssh-keygen -l -f "$TEST_DIR/hostkey/g1/key.pub" | cut -d' ' -f2) && [ -n "$fp" ]; then
+    pass "guest hostkey ensure makes a key of the guest's name and binds it"
+  else
+    fail "ensure: $(run_vmbake hostkey list)"
+  fi
+  run_vmbake guest record remove g1 > /dev/null 2>&1
+  run_vmbake guest record write img1 g1 172.16.100.5/24 > /dev/null
+  if [ -f "$TEST_DIR/hostkey/g1/key" ] && run_vmbake guest hostkey ensure g1 > /dev/null 2>&1 && [ "$(ssh-keygen -l -f "$TEST_DIR/hostkey/g1/key.pub" | cut -d' ' -f2)" = "$fp" ]; then
+    pass "the record of the guest goes, the key stays: the guest built anew takes the same identity back"
+  else
+    fail "rebuild: $(run_vmbake hostkey list)"
+  fi
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  local plan
+  plan=$(run_vmbake guest hostkey ensure g1)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "1" ] && printf '%s\n' "$plan" | grep -q "comment 'guest g1 carries the hostkey g1'"; then
+    pass "a guest that carries a kept key is left alone"
+  else
+    fail "ensure plan (bound): $plan"
+  fi
+  rm -f "$TEST_DIR/guest/g1/hostkey"
+  plan=$(run_vmbake guest hostkey ensure g1)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "1" ] && printf '%s\n' "$plan" | grep -q "guest hostkey use 'g1' 'g1'"; then
+    pass "a guest without a binding takes the kept key of its own name"
+  else
+    fail "ensure plan (key kept): $plan"
+  fi
+  rm -rf "$TEST_DIR/hostkey/g1"
+  plan=$(run_vmbake guest hostkey ensure g1)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "2" ] && printf '%s\n' "$plan" | sed -n 1p | grep -q "hostkey create 'g1'" && printf '%s\n' "$plan" | sed -n 2p | grep -q "guest hostkey use 'g1' 'g1'"; then
+    pass "with neither a binding nor a key it makes one and binds it"
+  else
+    fail "ensure plan (nothing): $plan"
+  fi
+  printf 'no-such-key\n' > "$TEST_DIR/guest/g1/hostkey"
+  if run_vmbake guest hostkey ensure g1 | grep -q "which is not kept"; then
+    pass "a binding whose key is gone is an error, not a silent new key"
+  else
+    fail "dangling binding: $(run_vmbake guest hostkey ensure g1)"
   fi
 }
 
@@ -1797,6 +1897,7 @@ main() {
   should_run_test test_guest_report
   should_run_test test_dowry
   should_run_test test_dowry_place
+  should_run_test test_hostkey
   should_run_test test_dump_witness
   should_run_test test_archive_pair
 

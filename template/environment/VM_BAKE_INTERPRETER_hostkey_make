@@ -1,0 +1,2 @@
+sh
+# Act terminal of the host keys (hostkey make), pinned to sh: ssh-keygen into the database, the invoking user's -- no root.
