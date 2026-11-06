@@ -14,8 +14,13 @@
 # @defgroup session  Sessions
 # @order   80
 #   A session is a client script, printed by 'session create', that the
-#   user keeps and runs: 'ssh' opens a terminal in the guest (or runs one
-#   command there), 'x' opens a Xephyr compartment on the host's display
+#   user keeps and runs: 'ssh' opens a shell in the guest or runs one
+#   program there (with a pseudo-terminal), 'xterm' does the same in a
+#   window of its own for a launcher without a terminal, and both take the
+#   word 'screen' after the program to put the ssh under screen -dR on the
+#   host (session <program>@<guest>: closed windows leave it detached,
+#   'screen -r' or the script again take it back); 'x' opens a Xephyr
+#   compartment on the host's display
 #   and runs one program of the guest inside it over ssh -X, so the
 #   program's windows never touch the host's own X server. The guest must
 #   list the service 'display x' in its template, which gives it xauth and
@@ -27,13 +32,16 @@
 #@help
 # @defcompletion program    none
 # @defcompletion display    none
+# @defcompletion mux        none
 #@end
 
 #@help ___session_create_ssh1
-# @command session create ssh <guest>
-# @summary The terminal session: the guest has a record; then the script that opens ssh to <guest>.VM_BAKE_GUEST_DOMAIN on VM_BAKE_SSH_PORT with the host key's private counterpart (printed, not run: keep it where you like)
+# @command session create ssh <guest> [<program>] [<mux>]
+# @summary The terminal session: the guest has a record; then the script that opens ssh to <guest>.VM_BAKE_GUEST_DOMAIN on VM_BAKE_SSH_PORT with the host key's private counterpart -- a shell in the guest, or with <program> that program under a pseudo-terminal (ssh -t: claude or vi need one, and ssh grants none when handed a command), and with the word screen as <mux> the ssh under 'screen -dR -S <program>@<guest>' on the host: an existing session of that name is taken over instead of a second one started, a terminal closed by mistake leaves it detached ('screen -r', or the script again), and 'zombie kr' in ~/.screenrc keeps a window whose ssh failed, r retries. Printed, not run: keep it where you like, ~/bin say
 # @group   session
 # @example vm-bake session create ssh dalmatia > ~/bin/dalmatia
+# @example vm-bake session create ssh dalmatia claude screen > ~/bin/claude@dalmatia
+# @see     session create xterm
 # @see     session create x
 # @see     guest make
 #@end
@@ -43,11 +51,66 @@ ___session_create_ssh1() {
 }
 
 #@help ___session_create_ssh2
-# @internal arity-2 sibling of 'session create ssh' (session create ssh <guest> <program>): the script runs that program in the guest instead of a shell
+# @internal arity-2 sibling of 'session create ssh' (session create ssh <guest> <program>): the script runs the program in the guest under a pseudo-terminal; arguments given to the script go to the program
 #@end
 ___session_create_ssh2() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" session script ssh $(sq "$1") $(sq "$2")"
+}
+
+#@help ___session_create_ssh3
+# @internal arity-3 sibling of 'session create ssh' (session create ssh <guest> <program> <mux>): <mux> is the word screen, checked by 'session mux valid'; the script wraps the ssh in screen -dR -S <program>@<guest>
+#@end
+___session_create_ssh3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" session mux valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" session script ssh $(sq "$3") $(sq "$1") $(sq "$2")"
+}
+
+#@help ___session_create_xterm1
+# @command session create xterm <guest> [<program>] [<mux>]
+# @summary The window session, for a launcher without a terminal (a window manager's menu): the guest has a record; then the script that opens an xterm of its own, titled after the guest or <program>@<guest>, with the ssh of 'session create ssh' with the same arguments as its command -- a shell, a program under ssh -t, or with the word screen as <mux> the program under 'screen -dR -S <program>@<guest>'. The window closes with its command; without screen that means a failed ssh vanishes before its message is read, with screen the session is the same one 'session create ssh <guest> <program> screen' makes: one script in ~/bin for a terminal, one in the launcher for a window, and the program wanders between them
+# @group   session
+# @example vm-bake session create xterm dalmatia > ~/.wmx/commands/Entwicklung/dalmatia
+# @example vm-bake session create xterm dalmatia claude screen > ~/.wmx/commands/Entwicklung/claude@dalmatia
+# @see     session create ssh
+# @see     session create x
+#@end
+___session_create_xterm1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" session script xterm $(sq "$1")"
+}
+
+#@help ___session_create_xterm2
+# @internal arity-2 sibling of 'session create xterm' (session create xterm <guest> <program>): the xterm is titled <program>@<guest> and runs the ssh -t with the program
+#@end
+___session_create_xterm2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" session script xterm $(sq "$1") $(sq "$2")"
+}
+
+#@help ___session_create_xterm3
+# @internal arity-3 sibling of 'session create xterm' (session create xterm <guest> <program> <mux>): <mux> is the word screen, checked by 'session mux valid'; the xterm runs screen -dR -S <program>@<guest> around the ssh -t
+#@end
+___session_create_xterm3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" session mux valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" session script xterm $(sq "$3") $(sq "$1") $(sq "$2")"
+}
+
+#@help __session_mux_valid1
+# @command session mux valid <mux>
+# @summary The multiplexer is the word 'screen' (the only one a session script knows): a comment line, else an error line
+# @group   session
+# @internal
+# @see     session create ssh
+#@end
+__session_mux_valid1() {
+	if test "$1" = screen; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "session: multiplexer screen")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "session create: the multiplexer is 'screen', not '$1'")"
+	fi
 }
 
 #@help ___session_create_x2
@@ -56,6 +119,7 @@ ___session_create_ssh2() {
 # @group   session
 # @example vm-bake session create x dalmatia idea > ~/bin/dalmatia-idea
 # @see     session create ssh
+# @see     session create xterm
 # @see     template service add
 # @env     VM_BAKE_XEPHYR_FIRST  the lowest display number a compartment may take
 #@end
@@ -111,13 +175,91 @@ _session_script_ssh1() {
 }
 
 #@help _session_script_ssh2
-# @internal arity-2 of 'session script ssh' (a program): the script runs the program in the guest
+# @command session script ssh <guest> <program>
+# @summary Display terminal: the ssh client script with a program -- exec ssh -t (a pseudo-terminal for the program) to the guest, the program and the arguments given to the script
+# @group   session
+# @internal
+# @see     session create ssh
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the guest's sshd port
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
 #@end
 _session_script_ssh2() {
 	local key="$VM_BAKE_HOST_KEY"
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	printf '%s\n' '#!/bin/sh' "# vm-bake session ssh: guest $1, program $2 (session create ssh $1 $2)"
-	printf '%s\n' "exec ssh -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+	printf '%s\n' "exec ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+}
+
+#@help _session_script_ssh_screen2
+# @command session script ssh screen <guest> <program>
+# @summary Display terminal: the ssh client script with a program under screen -- exec screen -dR -S <program>@<guest> (the program's first word, its basename) around the ssh -t of 'session script ssh <guest> <program>'
+# @group   session
+# @internal
+# @see     session create ssh
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the guest's sshd port
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
+#@end
+_session_script_ssh_screen2() {
+	local key="$VM_BAKE_HOST_KEY" prog="${2%% *}"
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	prog=${prog##*/}
+	printf '%s\n' '#!/bin/sh' "# vm-bake session ssh screen: guest $1, program $2 in the screen session $prog@$1 (session create ssh $1 $2 screen)"
+	printf '%s\n' "exec screen -dR -S $(sq "$prog@$1") ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+}
+
+#@help _session_script_xterm1
+# @command session script xterm <guest>
+# @summary Display terminal: the window script for the guest -- exec xterm titled after the guest, with the ssh of 'session script ssh <guest>' as its command
+# @group   session
+# @internal
+# @see     session create xterm
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the guest's sshd port
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
+#@end
+_session_script_xterm1() {
+	local key="$VM_BAKE_HOST_KEY"
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	printf '%s\n' '#!/bin/sh' "# vm-bake session xterm: guest $1 (session create xterm $1)"
+	printf '%s\n' "exec xterm -T $(sq "$1") -e ssh -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' \"\$@\""
+}
+
+#@help _session_script_xterm2
+# @command session script xterm <guest> <program>
+# @summary Display terminal: the window script with a program -- exec xterm titled <program>@<guest>, with the ssh -t of 'session script ssh <guest> <program>' as its command
+# @group   session
+# @internal
+# @see     session create xterm
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the guest's sshd port
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
+#@end
+_session_script_xterm2() {
+	local key="$VM_BAKE_HOST_KEY" prog="${2%% *}"
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	prog=${prog##*/}
+	printf '%s\n' '#!/bin/sh' "# vm-bake session xterm: guest $1, program $2 (session create xterm $1 $2)"
+	printf '%s\n' "exec xterm -T $(sq "$prog@$1") -e ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+}
+
+#@help _session_script_xterm_screen2
+# @command session script xterm screen <guest> <program>
+# @summary Display terminal: the window script with a program under screen -- exec xterm titled <program>@<guest>, with screen -dR -S <program>@<guest> around the ssh -t as its command
+# @group   session
+# @internal
+# @see     session create xterm
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the guest's sshd port
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
+#@end
+_session_script_xterm_screen2() {
+	local key="$VM_BAKE_HOST_KEY" prog="${2%% *}"
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	prog=${prog##*/}
+	printf '%s\n' '#!/bin/sh' "# vm-bake session xterm screen: guest $1, program $2 in the screen session $prog@$1 (session create xterm $1 $2 screen)"
+	printf '%s\n' "exec xterm -T $(sq "$prog@$1") -e screen -dR -S $(sq "$prog@$1") ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
 }
 
 #@help _session_script_x3

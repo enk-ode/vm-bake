@@ -896,7 +896,7 @@ test_guest_plan() {
 }
 
 test_session_plan() {
-  test_header "sessions: ssh and x scripts rendered from the guest record and the template's display service; X11Forwarding follows the service"
+  test_header "sessions: ssh, xterm (both with a program, both under screen) and x scripts rendered from the guest record and the template's display service; X11Forwarding follows the service"
   test_setup
   image_chain
   run_vmbake template add freebsd-x freebsd-dev > /dev/null
@@ -915,10 +915,30 @@ test_session_plan() {
   else
     fail "session ssh: $out"
   fi
-  if run_vmbake session create ssh dalmatia 'claude --version' | grep -q "'$(id -un)@dalmatia.local' 'claude --version' \"\$@\"$"; then
-    pass "session create ssh with a program runs it in the guest"
+  if run_vmbake session create ssh dalmatia 'claude --version' | grep -q "^exec ssh -t -p 2222 .* '$(id -un)@dalmatia.local' 'claude --version' \"\$@\"$"; then
+    pass "session create ssh with a program runs it in the guest, with a pseudo-terminal (-t)"
   else
     fail "session ssh program: $(run_vmbake session create ssh dalmatia 'claude --version')"
+  fi
+  if run_vmbake session create ssh dalmatia claude screen | grep -q "^exec screen -dR -S 'claude@dalmatia' ssh -t -p 2222 .* '$(id -un)@dalmatia.local' 'claude' \"\$@\"$" && run_vmbake session create ssh dalmatia '/usr/local/bin/claude --resume' screen | grep -q "^exec screen -dR -S 'claude@dalmatia' ssh -t"; then
+    pass "session create ssh ... screen wraps the ssh in screen -dR, the session named after the program's basename and the guest"
+  else
+    fail "session ssh screen: $(run_vmbake session create ssh dalmatia claude screen)"
+  fi
+  if run_vmbake session create ssh dalmatia claude tmux | grep -q "the multiplexer is 'screen', not 'tmux'"; then
+    pass "a multiplexer other than screen is refused by name"
+  else
+    fail "session mux guard: $(run_vmbake session create ssh dalmatia claude tmux)"
+  fi
+  if run_vmbake session create xterm dalmatia | grep -q "^exec xterm -T 'dalmatia' -e ssh -p 2222 .* '$(id -un)@dalmatia.local' \"\$@\"$" && run_vmbake session create xterm dalmatia claude | grep -q "^exec xterm -T 'claude@dalmatia' -e ssh -t -p 2222 .* 'claude' \"\$@\"$"; then
+    pass "session create xterm opens a window titled after guest or program@guest, with the ssh (and -t for a program) as its command"
+  else
+    fail "session xterm: $(run_vmbake session create xterm dalmatia claude)"
+  fi
+  if run_vmbake session create xterm dalmatia claude screen | grep -q "^exec xterm -T 'claude@dalmatia' -e screen -dR -S 'claude@dalmatia' ssh -t -p 2222 .* 'claude' \"\$@\"$" && run_vmbake session create xterm nobody claude screen | grep -q "unknown guest nobody"; then
+    pass "session create xterm ... screen puts screen -dR between the window and the ssh; an unknown guest is refused"
+  else
+    fail "session xterm screen: $(run_vmbake session create xterm dalmatia claude screen)"
   fi
   if run_vmbake session create x dalmatia idea | grep -q "lists no service 'display x'"; then
     pass "session create x refuses a guest whose template lacks display x"
