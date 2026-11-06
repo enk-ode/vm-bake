@@ -810,7 +810,7 @@ _guest_dowry_place_overwrite1() {
 
 #@help _guest_view_mount1
 # @command guest view mount <guest>
-# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first; a line already hung in stays, a line from before the modes (a bare path) counts as ro. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
+# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first and its parents with it, all owned by the user -- the guest writes beside the overlay, not into it; a line already hung in stays, a line from before the modes (a bare path) counts as ro. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
 # @group   guest
 # @internal
 # @see     guest start
@@ -820,7 +820,7 @@ _guest_dowry_place_overwrite1() {
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _guest_view_mount1() {
-	local name="$1" dir="$VM_BAKE_VIEW_DIR" home="" img="" t="" cur="" chain="" p="" n=0 lines="" l="" path="" mode="" u="" g=""
+	local name="$1" dir="$VM_BAKE_VIEW_DIR" home="" img="" t="" cur="" chain="" p="" n=0 lines="" l="" path="" mode="" u="" g="" parents=""
 	eval "home=~$(id -un)"
 	case "$dir" in "~/"*) dir="$home${dir#\~}" ;; esac
 	u=$(id -un); g=$(id -gn)
@@ -843,7 +843,9 @@ _guest_view_mount1() {
 		path=${l%% *}; mode=ro
 		case "$l" in *" "*) mode=${l##* } ;; esac
 		test -d "$home/$path" || { generate_error "guest view mount: $home/$path is no directory, and an overlay of a view is one"; return 0; }
-		printf '%s\n' "install -d -o $(sq "$u") -g $(sq "$g") -m 755 '$dir/$name/$path' || exit 1"
+		parents=""; p=$path
+		while case "$p" in */*) ;; *) false ;; esac; do p=${p%/*}; parents="'$dir/$name/$p' $parents"; done
+		printf '%s\n' "install -d -o $(sq "$u") -g $(sq "$g") -m 755 $parents'$dir/$name/$path' || exit 1"
 		printf '%s\n' "mount | grep -q \" on $dir/$name/$path (\" || mount -t nullfs -o $mode '$home/$path' '$dir/$name/$path' || exit 1"
 		printf '%s\n' "printf '# guest %s: %s %s in its view\\n' '$name' '$path' '$mode' >&2"
 	done
@@ -1283,7 +1285,7 @@ _guest_show1() {
 
 #@help ___guest_report1
 # @command guest report <guest>
-# @summary Write what 'guest show' says into the guest's own view, as GUEST.txt beside its home, so the guest can hold its SOLL against what it finds: the guest has a record; then the text rendered into GUEST.txt.new and put in place. A guest without a view has nowhere to put it and gets a comment
+# @summary Write what 'guest show' says into the guest's own view, as .vm-bake/GUEST.txt beside the records it reads, so the guest can hold its SOLL against what it finds: the guest has a record; then the text rendered into .tmp/report.<guest> of the database and put in place by 'guest report place'. A guest without a view has nowhere to put it and gets a comment
 # @group   guest
 # @example vm-bake guest report dalmatia
 # @see     guest show
@@ -1304,13 +1306,13 @@ ___guest_report1() {
 	done
 	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' && view=yes
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
-	test "$view" = no || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest show $(sq "$1") > $(sq "$dir/$1/GUEST.txt.new")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest report place $(sq "$1")"
+	test "$view" = no || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest show $(sq "$1") > $(sq "$VM_BAKE_BASE/.tmp/report.$1")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest report place $(sq "$1")"
 	test "$view" = yes || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "guest $1: no view in the template $t, nowhere to put a report")"
 }
 
 #@help _guest_report_place1
 # @command guest report place <guest>
-# @summary Act terminal (the invoking user, the view is theirs): GUEST.txt.new moved into place as GUEST.txt (0644) and the lines counted; nothing rendered is an error
+# @summary Act terminal (the invoking user, the view is theirs): .vm-bake made in the view where it is missing, the rendered .tmp/report.<guest> moved there as GUEST.txt (0644) and the lines counted; nothing rendered is an error
 # @group   guest
 # @internal
 # @see     guest report
@@ -1319,9 +1321,10 @@ ___guest_report1() {
 _guest_report_place1() {
 	local dir="$VM_BAKE_VIEW_DIR" f=""
 	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
-	f="$dir/$1/GUEST.txt"
-	printf '%s\n' "test -s '$f.new' || { printf '# Error: no report rendered (%s)\\n' '$f.new' >&2; exit 1; }"
-	printf '%s\n' "chmod 0644 '$f.new' && mv -f '$f.new' '$f' || exit 1"
+	f="$dir/$1/.vm-bake/GUEST.txt" tmp="$VM_BAKE_BASE/.tmp/report.$1"
+	printf '%s\n' "test -s '$tmp' || { printf '# Error: no report rendered (%s)\\n' '$tmp' >&2; exit 1; }"
+	printf '%s\n' "test -d '${f%/*}' || install -d -m 755 '${f%/*}' || exit 1"
+	printf '%s\n' "chmod 0644 '$tmp' && mv -f '$tmp' '$f' || exit 1"
 	printf '%s\n' "printf '# guest %s: %s lines in %s\\n' '$1' \"\$(grep -c . '$f')\" '$f' >&2"
 }
 

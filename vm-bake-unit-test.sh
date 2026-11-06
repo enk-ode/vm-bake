@@ -1244,12 +1244,13 @@ test_home_plan() {
 
 
 
-# view_chain - freebsd-dev gets a view and two home lines, freebsd-builder none
+# view_chain - freebsd-dev gets a view and three home lines (.vm-bake/db nested, so the mount makes its parent), freebsd-builder none
 view_chain() {
   run_vmbake template service add freebsd-dev files view > /dev/null
   run_vmbake template rc add freebsd-dev kld_list nvidia > /dev/null
   run_vmbake template home add freebsd-dev .config > /dev/null
   run_vmbake template home add freebsd-dev .cache rw > /dev/null
+  run_vmbake template home add freebsd-dev .vm-bake/db > /dev/null
   run_vmbake image record write freebsd-dev x > /dev/null
   run_vmbake image record write freebsd-builder b > /dev/null
   run_vmbake guest record write x caledonia 172.16.100.102/24 > /dev/null
@@ -1328,7 +1329,7 @@ test_view_acts() {
     fail "view ensure without the service: $(run_vmbake guest view ensure bake)"
   fi
   out=$(run_vmbake guest view mount caledonia)
-  if printf '%s\n' "$out" | grep -q "mount -t nullfs -o ro '$HOME/.config' '$view/caledonia/.config'" && printf '%s\n' "$out" | grep -q "mount -t nullfs -o rw '$HOME/.cache' '$view/caledonia/.cache'" && printf '%s\n' "$out" | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 755 '$view/caledonia/.config'"; then
+  if printf '%s\n' "$out" | grep -q "mount -t nullfs -o ro '$HOME/.config' '$view/caledonia/.config'" && printf '%s\n' "$out" | grep -q "mount -t nullfs -o rw '$HOME/.cache' '$view/caledonia/.cache'" && printf '%s\n' "$out" | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 755 '$view/caledonia/.config'" && printf '%s\n' "$out" | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 755 '$view/caledonia/.vm-bake' '$view/caledonia/.vm-bake/db'"; then
     pass "view mount hangs every home line in with its own mode, the directory made first"
   else
     fail "view mount: $out"
@@ -1526,8 +1527,8 @@ test_guest_report() {
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   plan=$(run_vmbake guest report caledonia)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "3" ] && printf '%s\n' "$plan" | grep -q "guest show 'caledonia' > '$TEST_DIR/view/caledonia/GUEST.txt.new'" && printf '%s\n' "$plan" | grep -q "guest report place 'caledonia'"; then
-    pass "guest report renders through a redirection and puts the file in place"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "3" ] && printf '%s\n' "$plan" | grep -q "guest show 'caledonia' > '$TEST_DIR/.tmp/report.caledonia'" && printf '%s\n' "$plan" | grep -q "guest report place 'caledonia'"; then
+    pass "guest report renders into the database's .tmp and puts the file in place"
   else
     fail "guest report plan: $plan"
   fi
@@ -1540,12 +1541,12 @@ test_guest_report() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   mkdir -p "$TEST_DIR/view/caledonia"
   run_vmbake guest report caledonia > /dev/null
-  if [ -s "$TEST_DIR/view/caledonia/GUEST.txt" ] && grep -q "^# guest caledonia" "$TEST_DIR/view/caledonia/GUEST.txt" && [ "$(stat -f '%Lp' "$TEST_DIR/view/caledonia/GUEST.txt")" = 644 ] && [ ! -e "$TEST_DIR/view/caledonia/GUEST.txt.new" ]; then
-    pass "the report lands in the view as GUEST.txt (0644), nothing left over"
+  if [ -s "$TEST_DIR/view/caledonia/.vm-bake/GUEST.txt" ] && grep -q "^# guest caledonia" "$TEST_DIR/view/caledonia/.vm-bake/GUEST.txt" && [ "$(stat -f '%Lp' "$TEST_DIR/view/caledonia/.vm-bake/GUEST.txt")" = 644 ] && [ ! -e "$TEST_DIR/.tmp/report.caledonia" ]; then
+    pass "the report lands in the view as .vm-bake/GUEST.txt (0644), the directory made first, nothing left over"
   else
-    fail "report file: $(ls -l "$TEST_DIR/view/caledonia" 2>&1)"
+    fail "report file: $(ls -l "$TEST_DIR/view/caledonia/.vm-bake" 2>&1)"
   fi
-  if [ -z "$(run_vmbake guest report bake)" ] && [ ! -e "$TEST_DIR/view/bake/GUEST.txt" ]; then
+  if [ -z "$(run_vmbake guest report bake)" ] && [ ! -e "$TEST_DIR/view/bake/.vm-bake/GUEST.txt" ]; then
     pass "a guest without a view gets no report"
   else
     fail "report without a view: $(run_vmbake guest report bake)"

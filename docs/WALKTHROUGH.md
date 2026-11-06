@@ -372,7 +372,7 @@ it has a view and where, and every list family resolved over the chain with
 its origin. That is the SOLL of the guest.
 
 `guest report <guest>` writes exactly that text into the guest's own view, as
-`GUEST.txt` beside its home -- and `guest start` does it on every start, so
+`.vm-bake/GUEST.txt`, beside the records it may read -- and `guest start` does it on every start, so
 the file is never older than the running guest. From inside, the guest holds
 its own findings against that file: the host key fingerprint it reports,
 the modes of its overlays, the forbid lines it must not reach. A guest
@@ -380,7 +380,7 @@ without a view has nowhere to put the file and gets a comment instead.
 
     vm-bake guest show dalmatia
     vm-bake guest report dalmatia
-    ssh -p 2222 brj@dalmatia.local 'head -12 ~/GUEST.txt'
+    ssh -p 2222 brj@dalmatia.local 'head -12 ~/.vm-bake/GUEST.txt'
 
 ## Repositories of a guest
 
