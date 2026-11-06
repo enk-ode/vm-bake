@@ -1361,6 +1361,11 @@ test_view_acts() {
   else
     fail "ssh write: $out"
   fi
+  if printf '%s\n' "$out" | sed -n 2p | grep -q "sed -i '' -E 's/\^\[\[:space:\]\]\*(Port|PermitRootLogin|PasswordAuthentication|KbdInteractiveAuthentication|LogLevel|AuthorizedKeysFile|X11Forwarding)" && printf '%s\n' "$out" | grep -q "^LogLevel VERBOSE$" && [ "$(printf '%s\n' "$out" | grep -c "^X11Forwarding")" = "0" ]; then
+    pass "the directives the shipped config sets are commented out BEFORE the block is appended (sshd takes the first value), the log says why a key is refused, and X11 stays off without the service"
+  else
+    fail "ssh write guard: $(printf '%s\n' "$out" | sed -n 2p)"
+  fi
   local carrier parent
   carrier=$(df "$HOME" 2>/dev/null | awk 'NR == 2 { print $1 }')
   parent=${carrier%/*}
