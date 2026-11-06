@@ -54,6 +54,7 @@ ___guest_make3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check homes $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image tree ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest switch ensure"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest log rotate ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record write $(sq "$1") $(sq "$2") $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey ensure $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view ensure $(sq "$2")"
@@ -241,6 +242,31 @@ __guest_check_record1() {
 _guest_switch_ensure0() {
 	printf '%s\n' "vm switch list | awk 'NR > 1 && \$1 == \"$VM_BAKE_GUEST_SWITCH\"' | grep -q . || vm switch create -t manual -b '$VM_BAKE_GUEST_BRIDGE' '$VM_BAKE_GUEST_SWITCH' || exit 1"
 	printf '%s\n' "printf '# switch %s on %s\\n' '$VM_BAKE_GUEST_SWITCH' '$VM_BAKE_GUEST_BRIDGE' >&2"
+}
+
+#@help _guest_log_rotate_ensure0
+# @command guest log rotate ensure
+# @summary Act terminal (root): VM_BAKE_LOG_ROTATE_FILE written -- the newsyslog entries for the logs of EVERY guest, by shell pattern over VM_BAKE_GUEST_DIR (flag G), so a guest that comes later needs no entry of its own: <guest>/bhyve.log (what bhyve says, kept because every guest is configured with debug) and <guest>/vm-bhyve.log (what the runner says), root and the invoking user's group, 0640, VM_BAKE_LOG_ROTATE_KEEP generations of VM_BAKE_LOG_ROTATE_SIZE KB, gzipped, no process to signal. Written anew every time: the file belongs to vm-bake, its numbers come from the environment
+# @group   guest
+# @example vm-bake guest log rotate ensure
+# @see     guest make
+# @see     guest conf write
+# @env     VM_BAKE_LOG_ROTATE_FILE  the newsyslog include file vm-bake owns
+# @env     VM_BAKE_LOG_ROTATE_KEEP  how many rotated generations are kept
+# @env     VM_BAKE_LOG_ROTATE_SIZE  the size in KB at which a log is rotated
+# @env     VM_BAKE_GUEST_DIR  the guests' directory the patterns cover
+#@end
+_guest_log_rotate_ensure0() {
+	local f="$VM_BAKE_LOG_ROTATE_FILE" g=""
+	g=$(id -gn)
+	printf '%s\n' "install -d -m 755 $(sq "$(dirname "$f")") || exit 1"
+	printf '%s\n' "cat > '$f' <<'EOF_ROTATE'"
+	printf '%s\n' "# written by vm-bake (guest log rotate ensure) -- do not edit"
+	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$VM_BAKE_GUEST_DIR/*/bhyve.log" "root:$g" 640 "$VM_BAKE_LOG_ROTATE_KEEP" "$VM_BAKE_LOG_ROTATE_SIZE" '*' GNZ
+	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$VM_BAKE_GUEST_DIR/*/vm-bhyve.log" "root:$g" 640 "$VM_BAKE_LOG_ROTATE_KEEP" "$VM_BAKE_LOG_ROTATE_SIZE" '*' GNZ
+	printf '%s\n' "EOF_ROTATE"
+	printf '%s\n' "chmod 0644 '$f' || exit 1"
+	printf '%s\n' "printf '# log rotation: %s (%s generations of %s KB, gzipped)\\n' '$f' '$VM_BAKE_LOG_ROTATE_KEEP' '$VM_BAKE_LOG_ROTATE_SIZE' >&2"
 }
 
 #@help _guest_record_write3

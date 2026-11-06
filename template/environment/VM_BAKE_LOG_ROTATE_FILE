@@ -1,0 +1,2 @@
+/usr/local/etc/newsyslog.conf.d/vm-bake.conf
+# @summary The newsyslog include file vm-bake owns (guest log rotate ensure writes it): the rotation of every guest s logs, by shell pattern over VM_BAKE_GUEST_DIR, so a guest that comes later needs no entry. /etc/newsyslog.conf reads this directory by default. The file belongs to vm-bake and is written anew at every guest make -- change the numbers through VM_BAKE_LOG_ROTATE_KEEP and VM_BAKE_LOG_ROTATE_SIZE, not by hand.

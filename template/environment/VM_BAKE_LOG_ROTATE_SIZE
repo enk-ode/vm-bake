@@ -1,0 +1,2 @@
+500
+# @summary The size in KB at which newsyslog rotates a guest log (guest log rotate ensure). A guest that says nothing never reaches it; one that repeats a bhyve message (the ps2 mouse line, say) rotates instead of growing without end.

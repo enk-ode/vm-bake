@@ -1078,7 +1078,7 @@ _image_user_make1() {
 
 #@help _image_view_write1
 # @command image view write <image>
-# @summary Act terminal (root, host or builder): when the template's resolved services (read at generation time) say 'files view', the image learns to take its home from the host -- the module virtio_p9fs appended to rc.conf as kld_list (the template's own kld_list value kept in front of it) and the share home mounted on the home of the template's host-uid user by a p9fs line in fstab; no view in the template is a note
+# @summary Act terminal (root, host or builder): when the template's resolved services (read at generation time) say 'files view', the image learns to take its home from the host -- virtio_p9fs_load="YES" appended to loader.conf and the share home mounted on the home of the template's host-uid user by a p9fs line in fstab; no view in the template is a note. The TRANSPORT has to come from the loader, not from kld_list in rc.conf: mountcritlocal works through the fstab before rc.d/kld loads anything, the mount then fails for want of the device, and the boot stops in the single-user shell (05.11., dalmatia)
 # @group   image
 # @internal
 # @see     image burn
@@ -1100,11 +1100,10 @@ _image_view_write1() {
 	u=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | awk '$2 == "host" { print $1 }')
 	seen=$(printf '%s\n' "$u" | grep -c . || true)
 	test "$seen" -eq 1 || { generate_error "image view write: the view is the home of the template's host-uid user, and $t has $seen of them (template user add <template> <name> host)"; return 0; }
-	kld=$(awk -v base="$VM_BAKE_BASE" -v family=rc -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | sed -n 's/^kld_list=//p' | tail -1)
 	printf '%s\n' "test -d '$mnt/home/$u' || { printf '# Error: no home of %s in the image (image user make first)\\n' $(sq "$u") >&2; exit 1; }"
-	printf '%s\n' "printf '%s\\n' $(sq "kld_list=\"${kld:+$kld }virtio_p9fs\"") >> '$mnt/etc/rc.conf' || exit 1"
+	printf '%s\n' "printf '%s\\n' 'virtio_p9fs_load=\"YES\"' >> '$mnt/boot/loader.conf' || exit 1"
 	printf '%s\n' "printf '%s\\t%s\\tp9fs\\trw\\t0 0\\n' home '/home/$u' >> '$mnt/etc/fstab' || exit 1"
-	printf '%s\n' "printf '# image %s: the share home as the home of %s (p9fs), module virtio_p9fs\\n' '$1' $(sq "$u") >&2"
+	printf '%s\n' "printf '# image %s: the share home as the home of %s (p9fs), transport virtio_p9fs from the loader\\n' '$1' $(sq "$u") >&2"
 }
 
 #@help _image_root_lock1

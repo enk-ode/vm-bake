@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest log rotate ensure), pinned to sudo sh: the file lies under /usr/local/etc and belongs to root. Inspect first: vm-bake setintp guest_log_rotate_ensure cat.

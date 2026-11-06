@@ -1,0 +1,2 @@
+7
+# @summary How many rotated generations of a guest log newsyslog keeps (guest log rotate ensure). Seven is a week of boots at one rotation a day; the gzipped generations of a quiet guest cost kilobytes.
