@@ -920,8 +920,8 @@ test_session_plan() {
   else
     fail "session ssh program: $(run_vmbake session create ssh dalmatia 'claude --version')"
   fi
-  if run_vmbake session create ssh dalmatia claude screen | grep -q "^exec screen -dR -S 'claude@dalmatia' ssh -t -p 2222 .* '$(id -un)@dalmatia.local' 'claude' \"\$@\"$" && run_vmbake session create ssh dalmatia 'cd git/Infrastruktur && exec /usr/local/bin/claude --resume' screen | grep -q "^exec screen -dR -S 'claude@dalmatia' ssh -t .* 'cd git/Infrastruktur && exec /usr/local/bin/claude --resume' \"\$@\"$"; then
-    pass "session create ssh ... screen wraps the ssh in screen -dR, the session named after the last command of the program line (no path, no exec) and the guest"
+  if run_vmbake session create ssh dalmatia claude screen | grep -q "^exec screen -dR -S 'claude@dalmatia' ssh -t -p 2222 .* '$(id -un)@dalmatia.local' 'claude' \"\$@\"$" && run_vmbake session create ssh dalmatia 'cd git/Infrastruktur && exec /usr/local/bin/claude --resume' screen | grep -q "^exec screen -dR -S 'claude@dalmatia:Infrastruktur' ssh -t .* 'cd git/Infrastruktur && exec /usr/local/bin/claude --resume' \"\$@\"$"; then
+    pass "session create ssh ... screen wraps the ssh in screen -dR, the session named after the last command of the program line (no path, no exec), the guest, and the target of a leading cd"
   else
     fail "session ssh screen: $(run_vmbake session create ssh dalmatia claude screen)"
   fi

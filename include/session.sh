@@ -37,7 +37,7 @@
 
 #@help ___session_create_ssh1
 # @command session create ssh <guest> [<program>] [<mux>]
-# @summary The terminal session: the guest has a record; then the script that opens ssh to <guest>.VM_BAKE_GUEST_DOMAIN on VM_BAKE_SSH_PORT with the host key's private counterpart -- a shell in the guest, or with <program> that program under a pseudo-terminal (ssh -t: claude or vi need one, and ssh grants none when handed a command), and with the word screen as <mux> the ssh under 'screen -dR -S <program>@<guest>' on the host (named after the last command of the program line, so 'cd git/Infrastruktur && exec claude' is claude@<guest>): an existing session of that name is taken over instead of a second one started, a terminal closed by mistake leaves it detached ('screen -r', or the script again), and 'zombie kr' in ~/.screenrc keeps a window whose ssh failed, r retries. Printed, not run: keep it where you like, ~/bin say
+# @summary The terminal session: the guest has a record; then the script that opens ssh to <guest>.VM_BAKE_GUEST_DOMAIN on VM_BAKE_SSH_PORT with the host key's private counterpart -- a shell in the guest, or with <program> that program under a pseudo-terminal (ssh -t: claude or vi need one, and ssh grants none when handed a command), and with the word screen as <mux> the ssh under 'screen -dR -S <program>@<guest>' on the host (named after the last command of the program line and the target of a leading cd, so 'cd git/Infrastruktur && exec claude' is claude@<guest>:Infrastruktur -- one session per guest and repository): an existing session of that name is taken over instead of a second one started, a terminal closed by mistake leaves it detached ('screen -r', or the script again), and 'zombie kr' in ~/.screenrc keeps a window whose ssh failed, r retries. Printed, not run: keep it where you like, ~/bin say
 # @group   session
 # @example vm-bake session create ssh dalmatia > ~/bin/dalmatia
 # @example vm-bake session create ssh dalmatia claude screen > ~/bin/claude@dalmatia
@@ -193,7 +193,7 @@ _session_script_ssh2() {
 
 #@help _session_script_ssh_screen2
 # @command session script ssh screen <guest> <program>
-# @summary Display terminal: the ssh client script with a program under screen -- exec screen -dR -S <program>@<guest> (the last command of the program line, its first word without path and a leading exec: 'cd git/Infrastruktur && exec claude' is claude@<guest>) around the ssh -t of 'session script ssh <guest> <program>'
+# @summary Display terminal: the ssh client script with a program under screen -- exec screen -dR -S <program>@<guest> (the last command of the program line, its first word without path and a leading exec, and the target of a leading cd after a colon: 'cd git/Infrastruktur && exec claude' is claude@<guest>:Infrastruktur, one session per guest and repository) around the ssh -t of 'session script ssh <guest> <program>'
 # @group   session
 # @internal
 # @see     session create ssh
@@ -202,11 +202,13 @@ _session_script_ssh2() {
 # @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
 #@end
 _session_script_ssh_screen2() {
-	local key="$VM_BAKE_HOST_KEY" prog="$2"
+	local key="$VM_BAKE_HOST_KEY" prog="$2" dir=""
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	case "$2" in "cd "*) dir=${2#cd }; dir=${dir%%[ ;&|]*}; dir=${dir%/}; dir=${dir##*/} ;; esac
 	prog=${prog##*&&}; prog=${prog##*;}; prog=${prog##*|}; prog=${prog# }; prog=${prog#exec }; prog=${prog%% *}; prog=${prog##*/}
-	printf '%s\n' '#!/bin/sh' "# vm-bake session ssh screen: guest $1, program $2 in the screen session $prog@$1 (session create ssh $1 $2 screen)"
-	printf '%s\n' "exec screen -dR -S $(sq "$prog@$1") ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+	prog="$prog@$1${dir:+:$dir}"
+	printf '%s\n' '#!/bin/sh' "# vm-bake session ssh screen: guest $1, program $2 in the screen session $prog (session create ssh $1 $2 screen)"
+	printf '%s\n' "exec screen -dR -S $(sq "$prog") ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
 }
 
 #@help _session_script_xterm1
@@ -237,11 +239,13 @@ _session_script_xterm1() {
 # @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
 #@end
 _session_script_xterm2() {
-	local key="$VM_BAKE_HOST_KEY" prog="$2"
+	local key="$VM_BAKE_HOST_KEY" prog="$2" dir=""
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	case "$2" in "cd "*) dir=${2#cd }; dir=${dir%%[ ;&|]*}; dir=${dir%/}; dir=${dir##*/} ;; esac
 	prog=${prog##*&&}; prog=${prog##*;}; prog=${prog##*|}; prog=${prog# }; prog=${prog#exec }; prog=${prog%% *}; prog=${prog##*/}
+	prog="$prog@$1${dir:+:$dir}"
 	printf '%s\n' '#!/bin/sh' "# vm-bake session xterm: guest $1, program $2 (session create xterm $1 $2)"
-	printf '%s\n' "exec xterm -T $(sq "$prog@$1") -e ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+	printf '%s\n' "exec xterm -T $(sq "$prog") -e ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
 }
 
 #@help _session_script_xterm_screen2
@@ -255,11 +259,13 @@ _session_script_xterm2() {
 # @env     VM_BAKE_GUEST_DOMAIN  the domain the guest's name lives in
 #@end
 _session_script_xterm_screen2() {
-	local key="$VM_BAKE_HOST_KEY" prog="$2"
+	local key="$VM_BAKE_HOST_KEY" prog="$2" dir=""
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	case "$2" in "cd "*) dir=${2#cd }; dir=${dir%%[ ;&|]*}; dir=${dir%/}; dir=${dir##*/} ;; esac
 	prog=${prog##*&&}; prog=${prog##*;}; prog=${prog##*|}; prog=${prog# }; prog=${prog#exec }; prog=${prog%% *}; prog=${prog##*/}
-	printf '%s\n' '#!/bin/sh' "# vm-bake session xterm screen: guest $1, program $2 in the screen session $prog@$1 (session create xterm $1 $2 screen)"
-	printf '%s\n' "exec xterm -T $(sq "$prog@$1") -e screen -dR -S $(sq "$prog@$1") ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
+	prog="$prog@$1${dir:+:$dir}"
+	printf '%s\n' '#!/bin/sh' "# vm-bake session xterm screen: guest $1, program $2 in the screen session $prog (session create xterm $1 $2 screen)"
+	printf '%s\n' "exec xterm -T $(sq "$prog") -e screen -dR -S $(sq "$prog") ssh -t -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$2") \"\$@\""
 }
 
 #@help _session_script_x3
