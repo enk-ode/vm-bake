@@ -28,6 +28,9 @@
 # @defcompletion url           none
 # @defcompletion sha256        none
 # @defcompletion cpu           none
+# @defcompletion sockets       none
+# @defcompletion cores         none
+# @defcompletion threads       none
 # @defcompletion memory        none
 # @defcompletion disk          none
 # @defcompletion package       none
@@ -48,7 +51,7 @@
 
 TEMPLATE_LAYOUT=""
 TEMPLATE_FAMILIES="package pkgfile port rc env user home service forbid data session tag"
-TEMPLATE_LEAVES="base bake firmware resource"
+TEMPLATE_LEAVES="base bake firmware resource topology"
 
 #@help _template_list0
 # @command template list
@@ -274,7 +277,7 @@ __template_chain_table2() {
 
 #@help _template_show_head2
 # @command template show head <template> <chain>
-# @summary Display terminal: name and id, parent, the chain, and each scalar (base, bake, firmware, resource) with the template it comes from
+# @summary Display terminal: name and id, parent, the chain, and each scalar (base, bake, firmware, resource, topology) with the template it comes from
 # @group   template
 # @internal
 # @see     template show
@@ -484,6 +487,35 @@ ___template_resource4() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template size valid $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template size valid $(sq "$4")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf record $(sq "$1") resource $(sq "$2 $3 $4")"
+}
+
+#@help ___template_topology4
+# @command template topology <template> <sockets> <cores> <threads>
+# @summary How the guest's cpus are laid out for the guest's own scheduler: sockets, cores per socket, threads per core; the template exists and the three are counts whose product is the cpu count of 'template resource' (checked when the guest's configuration is written, where both are read); then the record '<sockets> <cores> <threads>'. Without a record a guest gets 1 socket of <cpu> cores with 1 thread each -- one real core per cpu, which is what bhyve should present unless a guest is meant to see SMT
+# @group   template
+# @example vm-bake template topology freebsd-dev 1 8 1
+# @see     template topology drop
+# @see     template resource
+# @see     guest conf write
+#@end
+___template_topology4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template count valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template count valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template count valid $(sq "$4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf record $(sq "$1") topology $(sq "$2 $3 $4")"
+}
+
+#@help ___template_topology_drop1
+# @command template topology drop <template>
+# @summary Remove the template's own topology record: the template exists, a topology is set; then 'template leaf erase' -- its guests fall back to 1 socket of <cpu> cores with 1 thread each
+# @group   template
+# @see     template topology
+#@end
+___template_topology_drop1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf set $(sq "$1") topology"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf erase $(sq "$1") topology"
 }
 
 #@help ___template_resource_drop1

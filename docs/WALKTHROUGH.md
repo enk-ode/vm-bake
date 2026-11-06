@@ -35,6 +35,7 @@ line.
     vm-bake template base stage freebsd-stage amd64 daily-v1
     vm-bake template add freebsd-dev freebsd-15.1
     vm-bake template resource freebsd-dev 8 32G 64G
+    vm-bake template topology freebsd-dev 1 8 1
     printf 'vscode\nclaude-code\n' | vm-bake template package add freebsd-dev -
     vm-bake template rc add freebsd-dev linux_enable YES
     vm-bake template rc add freebsd-dev sshd_enable YES
@@ -49,6 +50,14 @@ line.
     vm-bake template session add freebsd-dev ssh
     vm-bake template session add freebsd-dev x
     vm-bake template show freebsd-dev
+
+The `topology` record is optional: without it a guest gets one socket of
+<cpu> cores with one thread each. vm-bhyve passes only `-c <n>` otherwise,
+and bhyve then invents two threads per core -- the guest's scheduler
+believes in SMT that is not there (`1 package x 4 cache groups x 1 core x 2
+hardware threads` in its dmesg). With the record the layout is yours; its
+product has to be the cpu count of `resource`, and `guest conf write` checks
+that when it writes the configuration.
 
 `16.0-RELEASE` is allowed today: add stores, the bake checks whether the
 repository exists.

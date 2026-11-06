@@ -616,6 +616,23 @@ test_image_plan() {
   else
     fail "base plan: $(run_vmbake image base x; run_vmbake image base content x; run_vmbake image base content b)"
   fi
+  if run_vmbake image base content x | sed -n 1p | grep -q "image check pkgbase place"; then
+    pass "the release content asks first where pkgbase may be installed"
+  else
+    fail "pkgbase place guard missing: $(run_vmbake image base content x)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  printf 'builder\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"
+  if run_vmbake image check pkgbase place | grep -q "comment 'pkgbase can be installed in builder"; then
+    pass "in the builder the answer is yes whatever this host's securelevel is"
+  else
+    fail "pkgbase place in the builder: $(run_vmbake image check pkgbase place)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   printf 'builder\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   if run_vmbake image base x | grep -q "image builder start 'x'" && [ "$(run_vmbake image base x | grep -c .)" = "4" ] && run_vmbake image close x | grep -q "image builder stop" && run_vmbake image builder start x | grep -q "guest check record 'bake'"; then
     pass "base and close in the builder: the builder started with the disk, stopped before the digest"
@@ -857,6 +874,25 @@ test_guest_plan() {
   else
     fail "guest emissions: $out"
   fi
+  if printf '%s\n' "$out" | grep -q '^cpu_sockets=1$' && printf '%s\n' "$out" | grep -q '^cpu_cores=2$' && printf '%s\n' "$out" | grep -q '^cpu_threads=1$'; then
+    pass "without a topology record the cpus are one socket of <cpu> cores with one thread each"
+  else
+    fail "default topology: $(run_vmbake guest conf write bake)"
+  fi
+  run_vmbake template topology freebsd-builder 2 1 1 > /dev/null
+  if run_vmbake guest conf write bake | grep -q '^cpu_sockets=2$' && run_vmbake guest conf write bake | grep -q '^cpu_cores=1$'; then
+    pass "a topology record of the template is written as it says"
+  else
+    fail "topology record: $(run_vmbake guest conf write bake)"
+  fi
+  run_vmbake template topology drop freebsd-builder > /dev/null
+  run_vmbake template topology freebsd-builder 3 3 1 > /dev/null
+  if run_vmbake guest conf write bake | grep -q "whose product is not the cpu count 2"; then
+    pass "a topology whose product is not the cpu count is an error at generation time"
+  else
+    fail "topology guard: $(run_vmbake guest conf write bake)"
+  fi
+  run_vmbake template topology drop freebsd-builder > /dev/null
 }
 
 test_session_plan() {

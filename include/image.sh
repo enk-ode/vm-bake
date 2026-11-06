@@ -226,6 +226,25 @@ __image_base_content1() {
 	esac
 }
 
+#@help __image_check_pkgbase_place0
+# @command image check pkgbase place
+# @summary pkgbase can be installed where the bake acts: either VM_BAKE_BAKE_IN is 'builder' (the builder guest runs at securelevel -1), or this host runs at securelevel -1 itself (read at generation time): a comment line, else an error line. FreeBSD-runtime carries files with schg, and pkg refuses those at any securelevel above -1, wherever the root is -- the bake would die in the middle of 'image pkg base' ('image builder use' is the way; 05./06.11. it cost a bake)
+# @group   image
+# @internal
+# @see     image base content release
+# @see     image builder use
+# @env     VM_BAKE_BAKE_IN  host or builder: where the content terminals act
+#@end
+__image_check_pkgbase_place0() {
+	local lvl=""
+	lvl=$(sysctl -n kern.securelevel 2>/dev/null || printf -- -1)
+	if test "$VM_BAKE_BAKE_IN" = builder || test "$lvl" -le -1; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "pkgbase can be installed in $VM_BAKE_BAKE_IN (securelevel $lvl)")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image base content release: pkgbase cannot be installed on this host, which runs at securelevel $lvl -- FreeBSD-runtime carries schg files and pkg refuses them above -1. Bake in the builder guest: vm-bake image builder use")"
+	fi
+}
+
 #@help ___image_base_content_release1
 # @command image base content release <image>
 # @summary The pkgbase install: the signing keys into the image, 'pkg -r' with FreeBSD-set-minimal, the GENERIC kernel, FreeBSD-ssh and pkg (ABI and OSVERSION from the template's release), the host's repository configuration, the EFI loader into the system partition, loader.conf and fstab
@@ -245,6 +264,7 @@ ___image_base_content_release1() {
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
 	abi=$(printf '%s\n' "$base" | awk '{ split($3, v, /[.-]/); printf "FreeBSD:%d:%s", v[1], $2 }')
 	osv=$(printf '%s\n' "$base" | awk '{ split($3, v, /[.-]/); printf "%d", v[1] * 100000 + v[2] * 1000 }')
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pkgbase place"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image keys write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkg base $(sq "$1") $(sq "$abi") $(sq "$osv")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image repo write $(sq "$1")"
