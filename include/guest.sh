@@ -293,7 +293,7 @@ _guest_clone1() {
 
 #@help _guest_conf_write1
 # @command guest conf write <guest>
-# @summary Act terminal (the invoking user: the clone is theirs): the vm-bhyve configuration VM_BAKE_GUEST_DIR/<guest>/<guest>.conf: UEFI, cpu and memory from the image's template (read at generation time), disk0.img as virtio-blk, one virtio-net on VM_BAKE_GUEST_SWITCH, and when the template says 'service files view' the share home on VM_BAKE_VIEW_SLOT as bhyve_options (vm-bhyve hands that option to bhyve raw), which the image mounts as its home
+# @summary Act terminal (the invoking user: the clone is theirs): the vm-bhyve configuration VM_BAKE_GUEST_DIR/<guest>/<guest>.conf: UEFI, cpu and memory from the image's template (read at generation time), disk0.img as virtio-blk, one virtio-net on VM_BAKE_GUEST_SWITCH, debug="yes" (vm-bhyve then keeps what bhyve says in <guest>/bhyve.log instead of throwing it away -- it costs nothing, bhyve writes only when it has something to report, and without it a bhyve that dies at startup leaves no reason behind), and when the template says 'service files view' the share home on VM_BAKE_VIEW_SLOT as bhyve_options (vm-bhyve hands that option to bhyve raw), which the image mounts as its home
 # @group   guest
 # @internal
 # @see     guest make
@@ -319,7 +319,7 @@ _guest_conf_write1() {
 	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' && view=yes
 	set -- "$1" ${res:-1 1G 0}
 	printf '%s\n' "cat > '$conf' <<'EOF_CONF'"
-	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" 'disk0_type="virtio-blk"' 'disk0_name="disk0.img"'
+	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" 'disk0_type="virtio-blk"' 'disk0_name="disk0.img"' 'debug="yes"'
 	test "$view" = no || printf '%s\n' "bhyve_options=\"-s $VM_BAKE_VIEW_SLOT,virtio-9p,home=$dir/$1\""
 	printf '%s\n' "EOF_CONF"
 	printf '%s\n' "printf '# guest %s: %s (cpu %s, memory %s, view $view)\\n' '$1' '$conf' '$2' '$3' >&2"
