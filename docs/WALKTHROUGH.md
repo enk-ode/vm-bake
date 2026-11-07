@@ -152,9 +152,10 @@ An image is the template baked onto a sparse UFS disk under
 `VM_BAKE_IMAGE_DIR/<image>` (a ZFS dataset of its own), from the pkgbase
 repository of the template's release, sealed by the snapshot `@image`.
 The bake is five commands; `image make freebsd` is the chain over them.
-Without a name of your own the image is called `<template>-<yyyymmdd>`; with
-one, a template bakes as many images as you like -- more than one on the
-same day included:
+Without a name of your own the image is called `<template>-<yyyymmdd>`, and
+when the day has one of that template already, `<template>-<yyyymmdd>-2`,
+`-3`, the first free name; with a name of your own, a template bakes as
+many images as you like, called what you like:
 
     vm-bake image create freebsd-dev freebsd-dev-20261031   # lock, record, dataset, disk, GPT, newfs, mount
     vm-bake image base   freebsd-dev-20261031               # keys, pkg -r set-minimal + kernel + pkg, repos, loader, fstab

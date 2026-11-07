@@ -40,16 +40,20 @@
 
 #@help __image_make_freebsd1
 # @command image make freebsd <template> [<name>]
-# @summary Bake a FreeBSD image from the template; without a name of your own it is called <template>-<yyyymmdd>: rewrite to 'image make freebsd <template> <that name>'
+# @summary Bake a FreeBSD image from the template; without a name of your own it is called <template>-<yyyymmdd>, and when that name is taken (a record or a directory, read at generation time) <template>-<yyyymmdd>-2, -3, ... the first free one -- a second bake on the same day never stops at 'image create': rewrite to 'image make freebsd <template> <that name>'
 # @group   image
-# @param   name  the image's name; left out, the template and today's date
+# @param   name  the image's name; left out, the template and today's date, with a counter when the day has an image of that template already
+# @env     VM_BAKE_IMAGE_DIR  the images' directory, where a taken name may live without a record
 # @example vm-bake image make freebsd freebsd-dev
 # @example vm-bake image make freebsd freebsd-x ides-2026-11
 # @see     image make freebsd
 # @see     image list
 #@end
 __image_make_freebsd1() {
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make freebsd $(sq "$1") $(sq "$1-$(date -u '+%Y%m%d')")"
+	local day="" name="" n=1
+	day=$(date -u '+%Y%m%d'); name="$1-$day"
+	while test -e "$VM_BAKE_BASE/image/$name" || test -e "$VM_BAKE_IMAGE_DIR/$name"; do n=$((n + 1)); name="$1-$day-$n"; done
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make freebsd $(sq "$1") $(sq "$name")"
 }
 
 #@help ___image_make_freebsd2

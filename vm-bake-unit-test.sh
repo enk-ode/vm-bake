@@ -603,6 +603,15 @@ test_image_plan() {
   else
     fail "make freebsd without a name: $(run_vmbake image make freebsd freebsd-dev)"
   fi
+  run_vmbake image record write freebsd-dev "freebsd-dev-$today" > /dev/null
+  run_vmbake image record write freebsd-dev "freebsd-dev-$today-2" > /dev/null
+  if run_vmbake image make freebsd freebsd-dev | grep -q "image make freebsd 'freebsd-dev' 'freebsd-dev-$today-3'"; then
+    pass "a taken <template>-<yyyymmdd> steps to -2, -3: the first free name, a second bake on the same day never stops at create"
+  else
+    fail "make freebsd on a taken day: $(run_vmbake image make freebsd freebsd-dev)"
+  fi
+  run_vmbake image record remove "freebsd-dev-$today" > /dev/null
+  run_vmbake image record remove "freebsd-dev-$today-2" > /dev/null
   rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   plan=$(run_vmbake image create freebsd-dev x)
   if [ "$(printf '%s\n' "$plan" | grep -c .)" = "13" ] && printf '%s\n' "$plan" | grep -q "image disk create 'x' '64G'" && printf '%s\n' "$plan" | grep -q "image lock take 'x'" && printf '%s\n' "$plan" | sed -n 13p | grep -q "image disk detach 'x'"; then
