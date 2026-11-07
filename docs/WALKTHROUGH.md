@@ -395,13 +395,15 @@ repositories is a bare mirror it cannot change:
 
 - `VM_BAKE_REPO_VIEWS` (`git/views`) is the mirrors' directory, the same
   path in your home and in the view. `guest repo add` makes the bare
-  mirror `git/views/<name>` of your repository there (or refreshes it) and
-  the directory itself with the first mirror; the template's home line
-  hangs the directory read-only into every view, and `guest start` wants
-  it to exist (guest check homes) -- so the first `guest repo add` comes
-  before the first `guest start`:
+  mirror `git/views/<name>` of your repository there (or refreshes it);
+  the template's home line hangs the directory read-only into every view.
+  `guest start` wants the directory to exist before it hangs anything
+  (guest check homes), and `guest repo add` wants the guest running
+  (guest check running) -- so the directory is made once by hand, the
+  guest started, and the repositories added then:
 
       vm-bake template home add freebsd-dev git/views
+      install -d ~/git/views
 
 - `VM_BAKE_REPO_LOCAL` (`git/local`) is the clones' directory under the
   guest's home -- the one place in the view that is the guest's disk: the
