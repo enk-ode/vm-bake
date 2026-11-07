@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest seed write), pinned to sh: the seed is a file in the guest's directory, the invoking user's own; cat shows it.

@@ -551,8 +551,8 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_place seed_meta_write seed_user_write seed_sshd_write seed_view_write seed_pack firstboot_conf_write firstboot_gone firstboot_conf_drop disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write seed_write home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -846,8 +846,8 @@ test_guest_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake guest make b bake 172.16.100.250/24)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "21" ] && printf '%s\n' "$plan" | sed -n 6p | grep -q "guest repo tree ensure" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest check homes 'bake'" && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest log rotate ensure" && printf '%s\n' "$plan" | grep -q "guest hostkey ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest view ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest hostkey write 'bake'" && printf '%s\n' "$plan" | grep -q "guest link write 'bake'" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 21p | grep -q "guest knownhosts drop 'bake'"; then
-    pass "guest make: image checked, name, free, address, mirrors' directory, homes, tree, switch, log rotation, record, host key, view, clone, conf, link, network, home, host key, dns, known hosts"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "19" ] && printf '%s\n' "$plan" | sed -n 6p | grep -q "guest repo tree ensure" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest check homes 'bake'" && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest log rotate ensure" && printf '%s\n' "$plan" | grep -q "guest hostkey ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest view ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest disk write 'bake'" && printf '%s\n' "$plan" | grep -q "guest link write 'bake'" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 19p | grep -q "guest knownhosts drop 'bake'"; then
+    pass "guest make: image checked, name, free, address, mirrors' directory, homes, tree, switch, log rotation, record, host key, view, clone, conf, link, disk (network, home and host key by the bake), dns, known hosts"
   else
     fail "guest make plan: $plan"
   fi
@@ -1235,8 +1235,10 @@ test_home_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake guest make x caledonia 172.16.100.102/24)
-  if printf '%s\n' "$plan" | grep -q "guest check homes 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest home write 'caledonia'" && printf '%s\n' "$plan" | grep -n "guest network write\|guest home write" | sed -n 2p | grep -q "home write"; then
-    pass "guest make checks the home paths and seeds them after the network"
+  local disk
+  disk=$(run_vmbake guest disk write caledonia)
+  if printf '%s\n' "$plan" | grep -q "guest check homes 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest disk write 'caledonia'" && printf '%s\n' "$disk" | grep -q "guest home write 'caledonia'" && printf '%s\n' "$disk" | grep -n "guest network write\|guest home write" | sed -n 2p | grep -q "home write"; then
+    pass "guest make checks the home paths, and the disk write of a chroot bake seeds them after the network"
   else
     fail "guest make plan: $plan"
   fi
@@ -2003,6 +2005,144 @@ test_hostkey() {
   fi
 }
 
+# linux_chain - a Debian chain beside the FreeBSD one: the cloud image as
+# base, cloud-init as bake, a dev template with packages, an env line, an
+# rc line (which a Linux image ignores), the host-uid user and the view
+linux_chain() {
+  run_vmbake template add debian > /dev/null
+  run_vmbake template add debian-13 debian > /dev/null
+  run_vmbake template base image debian-13 amd64 13 https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.raw 0000000000000000000000000000000000000000000000000000000000000000 > /dev/null
+  run_vmbake template bake cloud-init debian-13 > /dev/null
+  run_vmbake template add debian-dev debian-13 > /dev/null
+  run_vmbake template resource debian-dev 4 8G 32G > /dev/null
+  run_vmbake template package add debian-dev git > /dev/null
+  run_vmbake template package add debian-dev sudo > /dev/null
+  run_vmbake template rc add debian-dev sshd_enable YES > /dev/null
+  run_vmbake template env add debian-dev EDITOR vi > /dev/null
+  run_vmbake template user add debian-dev "$(id -un)" host > /dev/null
+  run_vmbake template service add debian-dev files view > /dev/null
+}
+
+test_linux_plan() {
+  test_header "linux: image make linux as plans, the cloud image placed, the seed rendered, the guest's seed and MAC"
+  test_setup
+  image_chain
+  linux_chain
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  local plan out disk
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  plan=$(run_vmbake image make linux debian-dev v1)
+  if printf '%s\n' "$plan" | grep -q "image make linux from 'debian-dev' 'v1' 'img:debian-dev:v1'" && run_vmbake image make linux img:debian-dev:v1 | grep -q "image make linux from 'debian-dev' 'v1' 'img:debian-dev:v1'" && run_vmbake image make linux debian-dev v1 img:k8s:v1 | grep -q "image make linux from 'debian-dev' 'v1' 'img:k8s:v1'"; then
+    pass "the three spellings of image make linux rewrite to image make linux from"
+  else
+    fail "image make linux spellings: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  plan=$(run_vmbake image make linux from debian-dev v1 img:debian-dev:v1)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "8" ] && printf '%s\n' "$plan" | sed -n 5p | grep -q "image create cloud 'debian-dev' 'img:debian-dev:v1'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image firstboot 'img:debian-dev:v1'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "image close cloud 'img:debian-dev:v1'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image seal 'img:debian-dev:v1'"; then
+    pass "image make linux from: note, template, name, free, then create cloud, firstboot, close cloud, seal"
+  else
+    fail "image make linux from plan: $plan"
+  fi
+  plan=$(run_vmbake image create cloud debian-dev img:debian-dev:v1)
+  if printf '%s\n' "$plan" | grep -q "image check cloud 'debian-dev'" && printf '%s\n' "$plan" | grep -q "image fetch 'https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.raw'" && printf '%s\n' "$plan" | grep -q "image disk place 'img:debian-dev:v1' 'https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.raw' '32G'" && printf '%s\n' "$plan" | grep -n "image record write\|image dataset create\|image disk place" | tr '\n' ' ' | grep -q "record write.* dataset create.* disk place"; then
+    pass "image create cloud: the cloud check, the record, the dataset, fetch, verify, the disk placed at the template's disk size"
+  else
+    fail "image create cloud plan: $plan"
+  fi
+  plan=$(run_vmbake image firstboot img:debian-dev:v1)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "8" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image seed write 'img:debian-dev:v1'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "guest run 'firstboot'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image firstboot conf drop"; then
+    pass "image firstboot: record, seed, conf, link, run, gone, link drop, conf drop"
+  else
+    fail "image firstboot plan: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake image check cloud freebsd-dev 2>&1 | grep -q "Error" && [ -z "$(run_vmbake image check cloud debian-dev 2>&1 | grep -v '^#')" ]; then
+    pass "image check cloud: a chroot bake is an error, a cloud-init bake on a cloud image passes"
+  else
+    fail "image check cloud: $(run_vmbake image check cloud freebsd-dev 2>&1 | tail -2)"
+  fi
+  if pin_image_cat; then
+    pass "every image and guest act is pinned to cat in the sandbox"
+  else
+    fail "acts not pinned to cat -- not calling them"; return
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_guest_hostkey_bind" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
+  run_vmbake setenv VM_BAKE_IMAGE_CACHE "$TEST_DIR/cache" > /dev/null
+  run_vmbake setenv VM_BAKE_GUEST_DIR "$TEST_DIR/gst" > /dev/null
+  printf 'ssh-ed25519 AAAATEST test@host\n' > "$TEST_DIR/key.pub"
+  run_vmbake setenv VM_BAKE_HOST_KEY "$TEST_DIR/key.pub" > /dev/null
+  run_vmbake image record write debian-dev img:debian-dev:v1 > /dev/null
+  out=$(run_vmbake image seed write img:debian-dev:v1 2>&1)
+  if printf '%s\n' "$out" | grep -q "^instance-id: bake-img:debian-dev:v1$" && printf '%s\n' "$out" | grep -q "^local-hostname: firstboot$" && printf '%s\n' "$out" | grep -q "^#cloud-config$" && printf '%s\n' "$out" | grep -q "^  - git$" && printf '%s\n' "$out" | grep -q "^  - name: $(id -un)$" && printf '%s\n' "$out" | grep -q "^    uid: $(id -u)$" && printf '%s\n' "$out" | grep -q "^      - ssh-ed25519 AAAATEST test@host$" && printf '%s\n' "$out" | grep -q "NOPASSWD:ALL" && printf '%s\n' "$out" | grep -q "^      Port 2222$" && printf '%s\n' "$out" | grep -q "path: /etc/ssh/authorized_keys/$(id -un)$" && printf '%s\n' "$out" | grep -q '^      export EDITOR="vi"$' && printf '%s\n' "$out" | grep -q "^      9pnet_virtio$" && printf '%s\n' "$out" | grep -q "^  - \[home, /home/$(id -un), 9p, 'trans=virtio,version=9p2000.L,rw,_netdev,nofail', '0', '0'\]$" && printf '%s\n' "$out" | grep -q "/home/$(id -un)/git/local, none, 'bind,nofail'" && printf '%s\n' "$out" | grep -q "^  mode: poweroff$" && printf '%s\n' "$out" | grep -q "makefs -t cd9660 -o rockridge -o label=cidata '$TEST_DIR/img/img:debian-dev:v1/seed.iso'" && printf '%s\n' "$out" | grep -q "rc lines are FreeBSD's rc.conf" && printf '%s\n' "$out" | grep "^instance-id\|^#cloud-config\|^write_files:\|^mounts:\|^power_state:" | tr '\n' ' ' | grep -q "instance-id.* #cloud-config.* write_files.* mounts.* power_state"; then
+    pass "image seed write: meta-data, then user-data in order -- packages, the host-uid user with the key and sudo, sshd on 2222, the authorized key, the env line, the 9p modules and mounts, poweroff; makefs; the rc lines noted"
+  else
+    fail "image seed write: $out"
+  fi
+  run_vmbake template service drop debian-dev files view > /dev/null
+  if run_vmbake image seed view write img:debian-dev:v1 | grep -q "no 'service files view'" && ! run_vmbake image seed sshd write img:debian-dev:v1 | grep -q 9pnet_virtio; then
+    pass "without a view: no mounts and no 9p modules"
+  else
+    fail "seed without view: $(run_vmbake image seed view write img:debian-dev:v1)"
+  fi
+  run_vmbake template service add debian-dev files view > /dev/null
+  run_vmbake template user add debian-dev builder 1002 > /dev/null
+  run_vmbake template user add debian-dev other host > /dev/null
+  if run_vmbake image seed write img:debian-dev:v1 2>&1 | grep -q "has 2 of them"; then
+    pass "a view with two host-uid users is an error"
+  else
+    fail "two host users: $(run_vmbake image seed write img:debian-dev:v1 2>&1 | tail -2)"
+  fi
+  run_vmbake template user drop debian-dev other host > /dev/null
+  out=$(run_vmbake image disk place img:debian-dev:v1 https://x/debian-13-genericcloud-amd64.raw 32G; run_vmbake image disk place img:debian-dev:v1 https://x/debian-13-generic-amd64.raw.xz 32G; run_vmbake image disk place img:debian-dev:v1 https://x/debian-13-generic-amd64.qcow2 32G 2>&1)
+  if printf '%s\n' "$out" | grep -q "^cp '$TEST_DIR/cache/debian-13-genericcloud-amd64.raw' '$TEST_DIR/img/img:debian-dev:v1/disk0.img' || exit 1$" && printf '%s\n' "$out" | grep -q "^xz -dc '$TEST_DIR/cache/debian-13-generic-amd64.raw.xz' > '$TEST_DIR/img/img:debian-dev:v1/disk0.img' || exit 1$" && [ "$(printf '%s\n' "$out" | grep -c "^truncate -s '32G' '$TEST_DIR/img/img:debian-dev:v1/disk0.img' || exit 1$")" = "2" ] && printf '%s\n' "$out" | grep -q "neither raw nor xz"; then
+    pass "image disk place: raw copied, xz unpacked, both grown to the disk size, qcow2 refused"
+  else
+    fail "image disk place: $out"
+  fi
+  out=$(run_vmbake image firstboot conf write img:debian-dev:v1)
+  if printf '%s\n' "$out" | grep -q '^cpu=4$' && printf '%s\n' "$out" | grep -q '^memory=8G$' && printf '%s\n' "$out" | grep -q "disk0_name=\"$TEST_DIR/img/img:debian-dev:v1/disk0.img\"" && printf '%s\n' "$out" | grep -q '^disk1_type="ahci-cd"$' && printf '%s\n' "$out" | grep -q "disk1_name=\"$TEST_DIR/img/img:debian-dev:v1/seed.iso\"" && printf '%s\n' "$out" | grep -q "$TEST_DIR/gst/firstboot/firstboot.conf"; then
+    pass "image firstboot conf write: the template's resources, the image's disk and seed, under the guests' directory as firstboot"
+  else
+    fail "firstboot conf: $out"
+  fi
+  run_vmbake guest record write img:debian-dev:v1 tirol 172.16.100.110/24 > /dev/null
+  run_vmbake image record write freebsd-dev x > /dev/null
+  run_vmbake guest record write x caledonia 172.16.100.102/24 > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  disk=$(run_vmbake guest disk write tirol)
+  out=$(run_vmbake guest disk write caledonia)
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if [ "$(printf '%s\n' "$disk" | grep -c .)" = "1" ] && printf '%s\n' "$disk" | grep -q "guest seed write 'tirol'" && [ "$(printf '%s\n' "$out" | grep -c .)" = "3" ] && printf '%s\n' "$out" | grep -n "network write\|home write\|hostkey write" | tr '\n' ' ' | grep -q "1:.*network write.* 2:.*home write.* 3:.*hostkey write"; then
+    pass "guest disk write: a cloud-init guest gets its seed, a chroot guest network, home and host key"
+  else
+    fail "guest disk write: $disk / $out"
+  fi
+  out=$(run_vmbake guest conf write tirol)
+  if printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:6e"$' && printf '%s\n' "$out" | grep -q '^disk1_type="ahci-cd"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/gst/tirol/seed.iso\"$" && ! run_vmbake guest conf write caledonia | grep -q network0_mac; then
+    pass "guest conf write: a cloud-init guest carries the MAC of its address and the seed as disk1, a chroot guest neither"
+  else
+    fail "guest conf write cloud: $out"
+  fi
+  if run_vmbake guest seed write tirol 2>&1 | grep -q "carries no ssh host key"; then
+    pass "guest seed write without a host key is an error"
+  else
+    fail "seed without key: $(run_vmbake guest seed write tirol 2>&1 | tail -2)"
+  fi
+  run_vmbake hostkey create k1 > /dev/null 2>&1
+  run_vmbake guest hostkey use tirol k1 > /dev/null
+  out=$(run_vmbake guest seed write tirol 2>&1)
+  if printf '%s\n' "$out" | grep -q "^instance-id: tirol$" && printf '%s\n' "$out" | grep -q "^      macaddress: '58:9c:fc:10:64:6e'$" && printf '%s\n' "$out" | grep -q "^      - 172.16.100.110/24$" && printf '%s\n' "$out" | grep -q "^        via: 172.16.100.100$" && printf '%s\n' "$out" | grep -q "^users: \[\]$" && printf '%s\n' "$out" | grep -q "sed 's/^/    /' '$TEST_DIR/hostkey/k1/key'" && ! printf '%s\n' "$out" | grep -q "PRIVATE KEY" && printf '%s\n' "$out" | grep -q "label=cidata '$TEST_DIR/gst/tirol/seed.iso'"; then
+    pass "guest seed write: hostname, the address on the MAC's interface, gateway and resolver, no users, the host key read when it runs and never emitted"
+  else
+    fail "guest seed write: $out"
+  fi
+}
+
 main() {
   if [ "$MAXPROCS" -gt 1 ]; then
     parallel_main
@@ -2039,6 +2179,7 @@ main() {
   should_run_test test_dowry
   should_run_test test_dowry_place
   should_run_test test_hostkey
+  should_run_test test_linux_plan
   should_run_test test_dump_witness
   should_run_test test_archive_pair
 

@@ -62,9 +62,7 @@ ___guest_make3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest clone $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest conf write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link write $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest network write $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest home write $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey write $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest disk write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dns write"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest knownhosts drop $(sq "$2")"
 }
@@ -358,7 +356,7 @@ _guest_clone1() {
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _guest_conf_write1() {
-	local conf="$VM_BAKE_GUEST_DIR/$1/$1.conf" img="" t="" cur="" chain="" p="" n=0 a="" res="" top="" dir="$VM_BAKE_VIEW_DIR" view=no
+	local conf="$VM_BAKE_GUEST_DIR/$1/$1.conf" img="" t="" cur="" chain="" p="" n=0 a="" res="" top="" dir="$VM_BAKE_VIEW_DIR" view=no bake="" addr="" mac=""
 	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
 	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
@@ -370,6 +368,9 @@ _guest_conf_write1() {
 	done
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/resource" && IFS= read -r res < "$VM_BAKE_BASE/template/$a/resource"; done
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/topology" && IFS= read -r top < "$VM_BAKE_BASE/template/$a/topology"; done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/bake" && IFS= read -r bake < "$VM_BAKE_BASE/template/$a/bake"; done
+	IFS= read -r addr 2>/dev/null < "$VM_BAKE_BASE/guest/$1/address" || addr=""
+	mac=$(printf '%s' "${addr%/*}" | awk -F. '{ printf "58:9c:fc:%02x:%02x:%02x", $2, $3, $4 }')
 	awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx 'files view' && view=yes
 	set -- "$1" ${res:-1 1G 0}
 	top=${top:-1 $2 1}
@@ -377,6 +378,7 @@ _guest_conf_write1() {
 	printf '%s\n' "cat > '$conf' <<'EOF_CONF'"
 	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" "cpu_sockets=$(printf '%s' "$top" | cut -d' ' -f1)" "cpu_cores=$(printf '%s' "$top" | cut -d' ' -f2)" "cpu_threads=$(printf '%s' "$top" | cut -d' ' -f3)" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" 'disk0_type="virtio-blk"' 'disk0_name="disk0.img"' 'debug="yes"'
 	test "$view" = no || printf '%s\n' "bhyve_options=\"-s $VM_BAKE_VIEW_SLOT,virtio-9p,home=$dir/$1\""
+	test "$bake" != cloud-init || printf '%s\n' "network0_mac=\"$mac\"" 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_GUEST_DIR/$1/seed.iso\"" 'disk1_dev="custom"'
 	printf '%s\n' "EOF_CONF"
 	printf '%s\n' "printf '# guest %s: %s (cpu %s as %s, memory %s, view $view)\\n' '$1' '$conf' '$2' $(sq "$top") '$3' >&2"
 }
@@ -1721,4 +1723,68 @@ _guest_record_place4() {
 	printf '%s\n' "printf '%s\\n' $(sq "$4") > '$rec/created'"
 	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$rec/image' '$rec/address' '$rec/created'"
 	emit_note "guest $1: record restored (image $2, address $3, created $4)"
+}
+
+
+#@help _guest_seed_write1
+# @command guest seed write <guest>
+# @summary Act terminal: the guest's NoCloud seed VM_BAKE_GUEST_DIR/<guest>/seed.iso (makefs cd9660, label cidata) -- meta-data with instance-id and local-hostname <guest>; network-config (version 2) with the guest's address from its record on the interface of the MAC 'guest conf write' gives it (58:9c:fc and the last three octets of the address), gateway and resolver VM_BAKE_GUEST_GATEWAY; user-data with no users of its own (users: [] keeps cloud-init from creating the distribution's default user; the bake's users and keys are on the disk) and the ssh host key the guest carries (the binding of its record, read at generation time; the key file is read when the act runs, never emitted) -- a new instance-id makes cloud-init apply hostname, network and host key at the guest's first start. 'guest conf write' hangs the seed on the guest as disk1
+# @group   guest
+# @internal
+# @see     guest disk write
+# @see     guest conf write
+# @see     guest hostkey write
+# @env     VM_BAKE_GUEST_DIR  the guests' directory
+# @env     VM_BAKE_GUEST_GATEWAY  the host's address on the bridge: gateway and resolver of the guests
+#@end
+_guest_seed_write1() {
+	local dir="$VM_BAKE_GUEST_DIR/$1" addr="" mac="" hk="" k=""
+	IFS= read -r addr 2>/dev/null < "$VM_BAKE_BASE/guest/$1/address" || addr=""
+	IFS= read -r hk 2>/dev/null < "$VM_BAKE_BASE/guest/$1/hostkey" || hk=""
+	test -n "$hk" || { generate_error "guest seed write: the guest $1 carries no ssh host key (guest hostkey use $1 <hostkey>)"; return 0; }
+	k="$VM_BAKE_BASE/hostkey/$hk/key"
+	test -f "$k" || { generate_error "guest seed write: the guest $1 carries the hostkey $hk, which is not kept (hostkey list)"; return 0; }
+	mac=$(printf '%s' "${addr%/*}" | awk -F. '{ printf "58:9c:fc:%02x:%02x:%02x", $2, $3, $4 }')
+	printf '%s\n' "install -d -m 700 '$dir/seed' || exit 1"
+	printf '%s\n' "cat > '$dir/seed/meta-data' <<'EOF_META'"
+	printf '%s\n' "instance-id: $1" "local-hostname: $1"
+	printf '%s\n' "EOF_META"
+	printf '%s\n' "cat > '$dir/seed/network-config' <<'EOF_NET'"
+	printf '%s\n' "version: 2" "ethernets:" "  net0:" "    match:" "      macaddress: '$mac'" "    set-name: net0" "    dhcp4: false" "    addresses:" "      - $addr" "    routes:" "      - to: default" "        via: $VM_BAKE_GUEST_GATEWAY" "    nameservers:" "      addresses:" "        - $VM_BAKE_GUEST_GATEWAY"
+	printf '%s\n' "EOF_NET"
+	printf '%s\n' "cat > '$dir/seed/user-data' <<'EOF_USER'"
+	printf '%s\n' "#cloud-config" "users: []" "ssh_keys:" "  ed25519_private: |"
+	printf '%s\n' "EOF_USER"
+	printf '%s\n' "{ sed 's/^/    /' '$k'; printf '  ed25519_public: '; cat '$k.pub'; } >> '$dir/seed/user-data' || exit 1"
+	printf '%s\n' "chmod 600 '$dir/seed/user-data' && rm -f '$dir/seed.iso' && makefs -t cd9660 -o rockridge -o label=cidata '$dir/seed.iso' '$dir/seed' && chmod 600 '$dir/seed.iso' || exit 1"
+	printf '%s\n' "printf '# guest %s: seed.iso -- %s on %s, gateway %s, hostkey %s\\n' '$1' '$addr' '$mac' '$VM_BAKE_GUEST_GATEWAY' $(sq "$hk") >&2"
+}
+
+#@help ___guest_disk_write1
+# @command guest disk write <guest>
+# @summary What the host writes into a new guest before its first start, by the bake of its image's template (read at generation time): a chroot-baked FreeBSD disk is mounted and gets its network (rc.conf), the home paths of the template and its ssh host key ('guest network write', 'guest home write', 'guest hostkey write'); a cloud-init image is never mounted on the host and gets a seed of its own instead ('guest seed write': network, hostname and host key for cloud-init; the home paths stay with the view)
+# @group   guest
+# @internal
+# @see     guest make
+# @see     guest network write
+# @see     guest seed write
+#@end
+___guest_disk_write1() {
+	local img="" t="" cur="" chain="" p="" n=0 a="" bake=""
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/bake" && IFS= read -r bake < "$VM_BAKE_BASE/template/$a/bake"; done
+	if test "$bake" = cloud-init; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest seed write $(sq "$1")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest network write $(sq "$1")"
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest home write $(sq "$1")"
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey write $(sq "$1")"
+	fi
 }

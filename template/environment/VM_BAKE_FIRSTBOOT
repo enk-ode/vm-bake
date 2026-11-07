@@ -1,0 +1,2 @@
+firstboot
+# @summary Name of the throwaway guest a Linux bake boots once (image firstboot): a vm-bhyve configuration under VM_BAKE_GUEST_DIR/<name> that points at the image's disk0.img and seed.iso, linked into VM_BAKE_VM_DIR for the boot and removed after it. No record, no dataset, no clone: the guest exists for the minutes cloud-init needs.
