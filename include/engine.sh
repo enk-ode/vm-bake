@@ -890,9 +890,10 @@ to_trace_file() {
 	local message="$3"
 
 	if [ -n "${VM_BAKE_TRACE_FILE:-}" ]; then
-		# Capture stdin to temp file first
+		# Pass stdin through as it comes, a copy to a temp file: the trace
+		# gets the data after the marker, the pipeline is not held up
 		local temp_data=$(mktemp "$VM_BAKE_BASE/.tmp/trace-data.XXXXXX")
-		cat > "$temp_data"
+		tee "$temp_data"
 
 		# Write marker to trace file
 		trace_log "$prefix" "$context" "$message"
@@ -900,8 +901,6 @@ to_trace_file() {
 		# Write captured data to trace file (appears after marker)
 		cat "$temp_data" >> "$VM_BAKE_TRACE_FILE"
 
-		# Output captured data to stdout (continue pipeline)
-		cat "$temp_data"
 		$MODIFY_FILE_REMOVE "$temp_data"
 	else
 		# No tracing - just pass through
@@ -919,21 +918,14 @@ consume_with_exit() {
 		return 1
 	fi
 
-	# Create temp file for interpreter stdout
-	local stdout_file=$(mktemp "$VM_BAKE_BASE/.tmp/consumer-out.XXXXXX")
-
-	# Run interpreter and capture exit code
+	# Run interpreter, its stdout streaming on (a bake shows pkg at work), capture exit code
 	# CRITICAL: set +e prevents shell exit on non-zero, allowing exit code capture
 	set +e
-	eval "run_env -- $interpreter" > "$stdout_file"
+	eval "run_env -- $interpreter"
 	local exit_code=$?
 	set -e
 	# Store exit code for caller
 	echo "$exit_code" > "$exit_file"
-
-	# Output interpreter results to stdout
-	cat "$stdout_file"
-	$MODIFY_FILE_REMOVE "$stdout_file"
 
 	return $exit_code
 }
