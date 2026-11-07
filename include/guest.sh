@@ -395,7 +395,7 @@ _guest_network_write1() {
 	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
 	IFS= read -r addr 2>/dev/null < "$VM_BAKE_BASE/guest/$1/address" || addr=""
 	printf '%s\n' "md=\$(mdconfig -a -t vnode -f '$disk') || exit 1"
-	printf '%s\n' "mkdir -p '$mnt' && mount '/dev/gpt/$img-root' '$mnt' || { mdconfig -d -u \"\${md#md}\"; exit 1; }"
+	printf '%s\n' "mkdir -p '$mnt' && mount -t ufs '/dev/gpt/$img-root' '$mnt' || { mdconfig -d -u \"\${md#md}\"; exit 1; }"
 	printf '%s\n' "cat >> '$mnt/etc/rc.conf' <<'EOF_NET'"
 	printf '%s\n' "hostname=\"$1\"" "ifconfig_vtnet0=\"inet $addr\"" "defaultrouter=\"$VM_BAKE_GUEST_GATEWAY\""
 	printf '%s\n' "EOF_NET"
@@ -649,7 +649,7 @@ _guest_home_write1() {
 	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	test -n "$paths" && test -n "$users" || { emit_note "guest $1: no home paths or no users in the template, nothing seeded"; return 0; }
 	printf '%s\n' "md=\$(mdconfig -a -t vnode -f '$disk') || exit 1"
-	printf '%s\n' "mkdir -p '$mnt' && mount '/dev/gpt/$img-root' '$mnt' || { mdconfig -d -u \"\${md#md}\"; exit 1; }"
+	printf '%s\n' "mkdir -p '$mnt' && mount -t ufs '/dev/gpt/$img-root' '$mnt' || { mdconfig -d -u \"\${md#md}\"; exit 1; }"
 	IFS='
 '; set -- $users; IFS='
 '
@@ -1409,7 +1409,7 @@ _guest_hostkey_write1() {
 	k="$VM_BAKE_BASE/hostkey/$hk/key"
 	test -f "$k" || { generate_error "guest hostkey write: the guest $1 carries the hostkey $hk, which is not kept (hostkey list)"; return 0; }
 	printf '%s\n' "md=\$(mdconfig -a -t vnode -f '$disk') || exit 1"
-	printf '%s\n' "mkdir -p '$mnt' && mount '/dev/gpt/$img-root' '$mnt' || { mdconfig -d -u \"\${md#md}\"; exit 1; }"
+	printf '%s\n' "mkdir -p '$mnt' && mount -t ufs '/dev/gpt/$img-root' '$mnt' || { mdconfig -d -u \"\${md#md}\"; exit 1; }"
 	printf '%s\n' "install -m 600 -o root -g wheel '$k' '$mnt/etc/ssh/ssh_host_ed25519_key' && install -m 644 -o root -g wheel '$k.pub' '$mnt/etc/ssh/ssh_host_ed25519_key.pub' || { umount '$mnt'; mdconfig -d -u \"\${md#md}\"; exit 1; }"
 	printf '%s\n' "umount '$mnt' && rmdir '$mnt' && mdconfig -d -u \"\${md#md}\" || exit 1"
 	printf '%s\n' "printf '# guest %s: the hostkey %s installed\\n' '$1' $(sq "$hk") >&2"

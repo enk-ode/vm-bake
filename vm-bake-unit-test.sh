@@ -590,28 +590,19 @@ test_image_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan today
   today=$(date -u '+%Y%m%d')
-  plan=$(run_vmbake image make freebsd freebsd-dev ides-2026-11)
-  if [ "$(printf '%s\n' "$plan" | grep -c '"\$VM_BAKE_CONTEXT_SCRIPT"')" = "9" ] && printf '%s\n' "$plan" | sed -n 1p | grep -q "note 'image make freebsd: template freebsd-dev -> image ides-2026-11" && printf '%s\n' "$plan" | grep -q "image name valid 'ides-2026-11'" && printf '%s\n' "$plan" | grep -q "image check absent 'ides-2026-11'" && printf '%s\n' "$plan" | grep -q "image create 'freebsd-dev' 'ides-2026-11'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image seal 'ides-2026-11'"; then
-    pass "make freebsd with a name: announced, template checked, name valid and free, then create, base, burn, close, seal"
+  plan=$(run_vmbake image make freebsd freebsd-x v1 img:ides:v1)
+  if [ "$(printf '%s\n' "$plan" | grep -c '"\$VM_BAKE_CONTEXT_SCRIPT"')" = "9" ] && printf '%s\n' "$plan" | sed -n 1p | grep -q "note 'image make freebsd: template freebsd-x, version v1 -> image img:ides:v1" && printf '%s\n' "$plan" | grep -q "image name valid 'img:ides:v1'" && printf '%s\n' "$plan" | grep -q "image check absent 'img:ides:v1'" && printf '%s\n' "$plan" | grep -q "image create 'freebsd-x' 'img:ides:v1'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image seal 'img:ides:v1'"; then
+    pass "make freebsd with a name of its own: announced, template checked, name valid and free, then create, base, burn, close, seal"
   else
     fail "make plan: $plan"
   fi
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  if run_vmbake image make freebsd freebsd-dev | grep -q "image make freebsd 'freebsd-dev' 'freebsd-dev-$today'"; then
-    pass "without a name of its own the image is called <template>-<yyyymmdd>, handed to the arity-2 command"
+  if run_vmbake image make freebsd freebsd-dev v2 | grep -q "image make freebsd from 'freebsd-dev' 'v2' 'img:freebsd-dev:v2'" && run_vmbake image make freebsd img:freebsd-dev:v3 | grep -q "image make freebsd from 'freebsd-dev' 'v3' 'img:freebsd-dev:v3'" && run_vmbake image make freebsd freebsd-x v1 img:ides:v1 | grep -q "image make freebsd from 'freebsd-x' 'v1' 'img:ides:v1'"; then
+    pass "the three spellings meet in 'image make freebsd from': template and version compose img:<template>:<version>, the full name is read apart, a name of its own passes through"
   else
-    fail "make freebsd without a name: $(run_vmbake image make freebsd freebsd-dev)"
+    fail "make freebsd spellings: $(run_vmbake image make freebsd freebsd-dev v2; run_vmbake image make freebsd img:freebsd-dev:v3)"
   fi
-  run_vmbake image record write freebsd-dev "freebsd-dev-$today" > /dev/null
-  run_vmbake image record write freebsd-dev "freebsd-dev-$today-2" > /dev/null
-  if run_vmbake image make freebsd freebsd-dev | grep -q "image make freebsd 'freebsd-dev' 'freebsd-dev-$today-3'"; then
-    pass "a taken <template>-<yyyymmdd> steps to -2, -3: the first free name, a second bake on the same day never stops at create"
-  else
-    fail "make freebsd on a taken day: $(run_vmbake image make freebsd freebsd-dev)"
-  fi
-  run_vmbake image record remove "freebsd-dev-$today" > /dev/null
-  run_vmbake image record remove "freebsd-dev-$today-2" > /dev/null
   rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   plan=$(run_vmbake image create freebsd-dev x)
   if [ "$(printf '%s\n' "$plan" | grep -c .)" = "13" ] && printf '%s\n' "$plan" | grep -q "image disk create 'x' '64G'" && printf '%s\n' "$plan" | grep -q "image lock take 'x'" && printf '%s\n' "$plan" | sed -n 13p | grep -q "image disk detach 'x'"; then
@@ -695,8 +686,8 @@ test_image_guards() {
   else
     fail "resource guard: $(run_vmbake image check resource freebsd)"
   fi
-  if run_vmbake image name valid 'bad name' | grep -q "invalid image name" && run_vmbake image name valid a-name-of-thirty-one-characters1 | grep -q "invalid image name" && [ -z "$(run_vmbake image name valid ok-name.1)" ]; then
-    pass "image names are record names of at most 30 characters"
+  if run_vmbake image name valid 'img:bad name:v1' | grep -q "invalid image name" && run_vmbake image name valid img:a-name-of-twenty-characters:v1 | grep -q "invalid image name" && run_vmbake image name valid freebsd-dev-20261107 | grep -q "invalid image name" && run_vmbake image name valid img:freebsd-dev | grep -q "invalid image name" && [ -z "$(run_vmbake image name valid img:freebsd-dev:v1)" ] && [ -z "$(run_vmbake image name valid img:ides.2026:v20261107)" ]; then
+    pass "image names are img:<name>:<version>, two words joined by the one separator, at most 30 characters"
   else
     fail "name guard"
   fi
@@ -755,7 +746,7 @@ test_image_emissions() {
     fail "dataset create: $out"
   fi
   out=$(run_vmbake image disk partition x; run_vmbake image disk format x; run_vmbake image disk mount x)
-  if printf '%s\n' "$out" | grep -q "gpart add -t efi -s 260M -a 1m -l 'x-efi'" && printf '%s\n' "$out" | grep -q "gpart add -t freebsd-ufs -a 1m -l 'x-root'" && printf '%s\n' "$out" | grep -q "newfs -j '/dev/gpt/x-root'" && printf '%s\n' "$out" | grep -q "mount '/dev/gpt/x-root' '$TEST_DIR/img/x/mnt'" && printf '%s\n' "$out" | grep -q "mount -t msdosfs '/dev/gpt/x-efi'" && printf '%s\n' "$out" | grep -q "mount -t devfs devfs '$TEST_DIR/img/x/mnt/dev'"; then
+  if printf '%s\n' "$out" | grep -q "gpart add -t efi -s 260M -a 1m -l 'x-efi'" && printf '%s\n' "$out" | grep -q "gpart add -t freebsd-ufs -a 1m -l 'x-root'" && printf '%s\n' "$out" | grep -q "newfs -j '/dev/gpt/x-root'" && printf '%s\n' "$out" | grep -q "mount -t ufs '/dev/gpt/x-root' '$TEST_DIR/img/x/mnt'" && printf '%s\n' "$out" | grep -q "mount -t msdosfs '/dev/gpt/x-efi'" && printf '%s\n' "$out" | grep -q "mount -t devfs devfs '$TEST_DIR/img/x/mnt/dev'"; then
     pass "partition, format, mount: labels <image>-efi and <image>-root, SUJ, both mounts by label"
   else
     fail "disk emissions: $out"
@@ -890,7 +881,7 @@ test_guest_plan() {
   fi
   local out
   out=$(run_vmbake guest switch ensure; run_vmbake guest clone bake; run_vmbake guest conf write bake; run_vmbake guest link write bake; run_vmbake guest network write bake; run_vmbake guest dns write; run_vmbake image tree ensure)
-  if printf '%s\n' "$out" | grep -q "vm switch create -t manual -b 'bridge0' 'dev'" && printf '%s\n' "$out" | grep -q 'zfs clone -o readonly=off "$src@image" "$dst/bake"' && printf '%s\n' "$out" | grep -q "^cpu=2$" && printf '%s\n' "$out" | grep -q 'network0_switch="dev"' && printf '%s\n' "$out" | grep -q '^debug="yes"$' && printf '%s\n' "$out" | grep -q "mount '/dev/gpt/b-root'" && printf '%s\n' "$out" | grep -q '^ifconfig_vtnet0="inet 172.16.100.250/24"$' && printf '%s\n' "$out" | grep -q '^defaultrouter="172.16.100.100"$' && printf '%s\n' "$out" | grep -q "ListenAddress %s.* '172.16.100.250'" && printf '%s\n' "$out" | grep -q 'local-data:     "bake.local. A 172.16.100.250"' && printf '%s\n' "$out" | grep -q "service local_unbound reload" && printf '%s\n' "$out" | grep -q "ln -sfn '/data/vm/vm-bake/guest/bake' '/data/vm/vm-bhyve/bake'" && printf '%s\n' "$out" | grep -q 'zfs create "$ds/image"'; then
+  if printf '%s\n' "$out" | grep -q "vm switch create -t manual -b 'bridge0' 'dev'" && printf '%s\n' "$out" | grep -q 'zfs clone -o readonly=off "$src@image" "$dst/bake"' && printf '%s\n' "$out" | grep -q "^cpu=2$" && printf '%s\n' "$out" | grep -q 'network0_switch="dev"' && printf '%s\n' "$out" | grep -q '^debug="yes"$' && printf '%s\n' "$out" | grep -q "mount -t ufs '/dev/gpt/b-root'" && printf '%s\n' "$out" | grep -q '^ifconfig_vtnet0="inet 172.16.100.250/24"$' && printf '%s\n' "$out" | grep -q '^defaultrouter="172.16.100.100"$' && printf '%s\n' "$out" | grep -q "ListenAddress %s.* '172.16.100.250'" && printf '%s\n' "$out" | grep -q 'local-data:     "bake.local. A 172.16.100.250"' && printf '%s\n' "$out" | grep -q "service local_unbound reload" && printf '%s\n' "$out" | grep -q "ln -sfn '/data/vm/vm-bake/guest/bake' '/data/vm/vm-bhyve/bake'" && printf '%s\n' "$out" | grep -q 'zfs create "$ds/image"'; then
     pass "switch on the bridge, clone writable, conf from the template, network into the clone by the image's label, unbound told"
   else
     fail "guest emissions: $out"
@@ -1263,7 +1254,7 @@ test_home_plan() {
   fi
   local out
   out=$(run_vmbake guest home write caledonia)
-  if printf '%s\n' "$out" | grep -q "mount '/dev/gpt/x-root' '/data/vm/vm-bake/guest/caledonia/mnt'" && printf '%s\n' "$out" | grep -q "cp -R '$HOME/$HOME_FIXTURE/themes/NsCDE' '/data/vm/vm-bake/guest/caledonia/mnt/home/$(id -un)/$HOME_FIXTURE/themes/NsCDE'" && printf '%s\n' "$out" | grep -q "cp -R '$HOME/$HOME_FIXTURE/config/gtk-3.0' " && printf '%s\n' "$out" | grep -q "chown -R '$(id -u)':\"\$g\" '/data/vm/vm-bake/guest/caledonia/mnt/home/$(id -un)/$HOME_FIXTURE'" && printf '%s\n' "$out" | grep -q 'mdconfig -d -u'; then
+  if printf '%s\n' "$out" | grep -q "mount -t ufs '/dev/gpt/x-root' '/data/vm/vm-bake/guest/caledonia/mnt'" && printf '%s\n' "$out" | grep -q "cp -R '$HOME/$HOME_FIXTURE/themes/NsCDE' '/data/vm/vm-bake/guest/caledonia/mnt/home/$(id -un)/$HOME_FIXTURE/themes/NsCDE'" && printf '%s\n' "$out" | grep -q "cp -R '$HOME/$HOME_FIXTURE/config/gtk-3.0' " && printf '%s\n' "$out" | grep -q "chown -R '$(id -u)':\"\$g\" '/data/vm/vm-bake/guest/caledonia/mnt/home/$(id -un)/$HOME_FIXTURE'" && printf '%s\n' "$out" | grep -q 'mdconfig -d -u'; then
     pass "home write mounts the clone, copies every path into every user's home with the right owner, detaches"
   else
     fail "home write: $out"
@@ -1799,10 +1790,10 @@ test_dump_witness() {
   run_vmbake template add freebsd > /dev/null
   run_vmbake template env add freebsd LANG C.UTF-8 > /dev/null
   run_vmbake template tag add freebsd purpose 'dev with spaces' > /dev/null
-  run_vmbake image record write freebsd img1 > /dev/null
-  printf '%s\n' 0123456789abcdef > "$TEST_DIR/image/img1/digest"
-  run_vmbake image record write freebsd img2 > /dev/null
-  run_vmbake guest record write img1 g1 172.16.100.5/24 > /dev/null
+  run_vmbake image record write freebsd img:dev:v1 > /dev/null
+  printf '%s\n' 0123456789abcdef > "$TEST_DIR/image/img:dev:v1/digest"
+  run_vmbake image record write freebsd img:dev:v2 > /dev/null
+  run_vmbake guest record write img:dev:v1 g1 172.16.100.5/24 > /dev/null
   run_vmbake guest tag add g1 note 'two words' > /dev/null
   run_vmbake guest repo record g1 git/Infrastruktur > /dev/null
   run_vmbake dump > "$TEST_DIR/all.vmb" 2>/dev/null
@@ -1816,7 +1807,7 @@ test_dump_witness() {
   else
     fail "env/tag lines: $(grep 'template env\|template tag' "$TEST_DIR/all.vmb")"
   fi
-  if grep -q "image record restore 'img1' 'freebsd' '[0-9T:Z-]*' '0123456789abcdef'" "$TEST_DIR/all.vmb" && grep -q "image record restore 'img2' 'freebsd' '[0-9T:Z-]*' 'open'" "$TEST_DIR/all.vmb" && grep -q "guest record restore 'g1' 'img1' '172.16.100.5/24' '[0-9T:Z-]*'" "$TEST_DIR/all.vmb" && grep -q "guest tag add 'g1' 'note' 'two words'" "$TEST_DIR/all.vmb" && grep -q "guest repo record 'g1' 'git/Infrastruktur'" "$TEST_DIR/all.vmb"; then
+  if grep -q "image record restore 'img:dev:v1' 'freebsd' '[0-9T:Z-]*' '0123456789abcdef'" "$TEST_DIR/all.vmb" && grep -q "image record restore 'img:dev:v2' 'freebsd' '[0-9T:Z-]*' 'open'" "$TEST_DIR/all.vmb" && grep -q "guest record restore 'g1' 'img:dev:v1' '172.16.100.5/24' '[0-9T:Z-]*'" "$TEST_DIR/all.vmb" && grep -q "guest tag add 'g1' 'note' 'two words'" "$TEST_DIR/all.vmb" && grep -q "guest repo record 'g1' 'git/Infrastruktur'" "$TEST_DIR/all.vmb"; then
     pass "image and guest records are witnesses in the dump, the guest with its own tags and repositories"
   else
     fail "witness lines: $(grep 'record restore\|guest tag' "$TEST_DIR/all.vmb")"
@@ -1826,15 +1817,15 @@ test_dump_witness() {
   VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" bootstrap "test-$TESTS_RUN-second" "$TEST_PROFILE" > /dev/null 2>&1
   VM_BAKE_BASE="$second" "$TEST_SCRIPT" setenv VM_BAKE_TERMINAL_INTERPRETER sh > /dev/null 2>&1
   VM_BAKE_BASE="$second" "$TEST_SCRIPT" restore "$TEST_DIR/all.vmb" > "$TEST_DIR/restore.log" 2>&1
-  if [ "$(cat "$second/image/img1/digest")" = "0123456789abcdef" ] && [ ! -e "$second/image/img2/digest" ] && [ "$(cat "$second/image/img1/dir")" = "/data/vm/vm-bake/image/img1" ] && [ "$(cat "$second/guest/g1/address")" = "172.16.100.5/24" ] && grep -qx 'note two words' "$second/guest/g1/tag"; then
+  if [ "$(cat "$second/image/img:dev:v1/digest")" = "0123456789abcdef" ] && [ ! -e "$second/image/img:dev:v2/digest" ] && [ "$(cat "$second/image/img:dev:v1/dir")" = "/data/vm/vm-bake/image/img:dev:v1" ] && [ "$(cat "$second/guest/g1/address")" = "172.16.100.5/24" ] && grep -qx 'note two words' "$second/guest/g1/tag"; then
     pass "the replay places the records: digest or none, this host's dir, the guest's address and tags"
   else
     fail "restored records: $(tail -5 "$TEST_DIR/restore.log")"
   fi
-  if VM_BAKE_BASE="$second" "$TEST_SCRIPT" restore "$TEST_DIR/all.vmb" > /dev/null 2>&1 && VM_BAKE_BASE="$second" "$TEST_SCRIPT" image record restore img1 other 2026-01-01T00:00:00Z open 2>&1 | grep -q "differs"; then
+  if VM_BAKE_BASE="$second" "$TEST_SCRIPT" restore "$TEST_DIR/all.vmb" > /dev/null 2>&1 && VM_BAKE_BASE="$second" "$TEST_SCRIPT" image record restore img:dev:v1 other 2026-01-01T00:00:00Z open 2>&1 | grep -q "differs"; then
     pass "a second replay keeps identical records (silently); a record that differs is refused"
   else
-    fail "record compare: $(VM_BAKE_BASE="$second" "$TEST_SCRIPT" image record restore img1 other 2026-01-01T00:00:00Z open 2>&1)"
+    fail "record compare: $(VM_BAKE_BASE="$second" "$TEST_SCRIPT" image record restore img:dev:v1 other 2026-01-01T00:00:00Z open 2>&1)"
   fi
 }
 
@@ -1847,8 +1838,8 @@ test_archive_pair() {
   run_vmbake template pkgfile add freebsd foo-1.0.pkg > /dev/null
   run_vmbake template pkgfile add freebsd gone-2.0.pkg > /dev/null
   printf 'package\n' > "$TEST_DIR/pkg/foo-1.0.pkg"
-  run_vmbake image record write freebsd img1 > /dev/null
-  run_vmbake guest record write img1 g1 172.16.100.5/24 > /dev/null
+  run_vmbake image record write freebsd img:dev:v1 > /dev/null
+  run_vmbake guest record write img:dev:v1 g1 172.16.100.5/24 > /dev/null
   run_vmbake guest hostkey ensure g1 > /dev/null 2>&1
   if run_vmbake export pair/dump.sh "$TEST_DIR/pair/bundle.tar.gz" | grep -q "must be absolute"; then
     pass "export refuses a relative path"
@@ -1861,7 +1852,7 @@ test_archive_pair() {
   else
     fail "bundle: $(tar tzf "$TEST_DIR/pair/bundle.tar.gz" 2>&1 | tr '\n' ' '); $(cat "$TEST_DIR/export.log")"
   fi
-  if grep -q "^pkg/foo-1.0.pkg sha256=$(sha256 -q "$TEST_DIR/pkg/foo-1.0.pkg")$" "$TEST_DIR/export/tree/MANIFEST" && [ "$(tail -1 "$TEST_DIR/pair/dump.sh")" = "# Bundle: sha256=$(sha256 -q "$TEST_DIR/pair/bundle.tar.gz") bytes=$(wc -c < "$TEST_DIR/pair/bundle.tar.gz" | tr -d ' ')" ] && grep -q "image record restore 'img1'" "$TEST_DIR/pair/dump.sh"; then
+  if grep -q "^pkg/foo-1.0.pkg sha256=$(sha256 -q "$TEST_DIR/pkg/foo-1.0.pkg")$" "$TEST_DIR/export/tree/MANIFEST" && [ "$(tail -1 "$TEST_DIR/pair/dump.sh")" = "# Bundle: sha256=$(sha256 -q "$TEST_DIR/pair/bundle.tar.gz") bytes=$(wc -c < "$TEST_DIR/pair/bundle.tar.gz" | tr -d ' ')" ] && grep -q "image record restore 'img:dev:v1'" "$TEST_DIR/pair/dump.sh"; then
     pass "the MANIFEST hashes the files, the dump ends with the seal of this bundle and carries the records"
   else
     fail "manifest/seal: $(cat "$TEST_DIR/export/tree/MANIFEST"); $(tail -2 "$TEST_DIR/pair/dump.sh")"
@@ -1871,7 +1862,7 @@ test_archive_pair() {
   VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" bootstrap "test-$TESTS_RUN-second" "$TEST_PROFILE" > /dev/null 2>&1
   VM_BAKE_BASE="$second" "$TEST_SCRIPT" setenv VM_BAKE_TERMINAL_INTERPRETER sh > /dev/null 2>&1
   VM_BAKE_BASE="$second" "$TEST_SCRIPT" setenv VM_BAKE_PKG_DIR "$TEST_DIR/pkg2" > /dev/null 2>&1
-  if VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" import "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" > "$TEST_DIR/import.log" 2>&1 && grep -q "3 files placed, 0 already here" "$TEST_DIR/import.log" && cmp -s "$TEST_DIR/hostkey/g1/key" "$second/hostkey/g1/key" && cmp -s "$TEST_DIR/pkg/foo-1.0.pkg" "$TEST_DIR/pkg2/foo-1.0.pkg" && [ "$(stat -f %Lp "$second/hostkey/g1/key")" = "600" ] && [ "$(cat "$second/guest/g1/image")" = "img1" ] && [ -d "$TEST_BASE_DIR/incoming/bundle" ]; then
+  if VM_BAKE_ROOT="$TEST_BASE_DIR" VM_BAKE_BASE="$second" "$TEST_SCRIPT" import "$TEST_DIR/pair/dump.sh" "$TEST_DIR/pair/bundle.tar.gz" > "$TEST_DIR/import.log" 2>&1 && grep -q "3 files placed, 0 already here" "$TEST_DIR/import.log" && cmp -s "$TEST_DIR/hostkey/g1/key" "$second/hostkey/g1/key" && cmp -s "$TEST_DIR/pkg/foo-1.0.pkg" "$TEST_DIR/pkg2/foo-1.0.pkg" && [ "$(stat -f %Lp "$second/hostkey/g1/key")" = "600" ] && [ "$(cat "$second/guest/g1/image")" = "img:dev:v1" ] && [ -d "$TEST_BASE_DIR/incoming/bundle" ]; then
     pass "import verifies, unpacks into incoming, places the key (0600) and the package file, replays the records"
   else
     fail "import: $(grep -v '^$' "$TEST_DIR/import.log" | tail -8)"
@@ -1904,9 +1895,9 @@ test_hostkey() {
   test_header "hostkey: a key under a name of its own, bound to at most one guest, kept across a guest's rebuild"
   test_setup
   image_chain
-  run_vmbake image record write freebsd-dev img1 > /dev/null
-  run_vmbake guest record write img1 g1 172.16.100.5/24 > /dev/null
-  run_vmbake guest record write img1 g2 172.16.100.6/24 > /dev/null
+  run_vmbake image record write freebsd-dev img:dev:v1 > /dev/null
+  run_vmbake guest record write img:dev:v1 g1 172.16.100.5/24 > /dev/null
+  run_vmbake guest record write img:dev:v1 g2 172.16.100.6/24 > /dev/null
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_guest_hostkey_write"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   if run_vmbake hostkey create k1 > /dev/null 2>&1 && [ "$(stat -f %Lp "$TEST_DIR/hostkey/k1/key")" = "600" ] && [ "$(stat -f %Lp "$TEST_DIR/hostkey/k1/key.pub")" = "644" ] && run_vmbake hostkey list | grep -q "^#   k1 .*SHA256:.* -$"; then
@@ -1963,7 +1954,7 @@ test_hostkey() {
     fail "ensure: $(run_vmbake hostkey list)"
   fi
   run_vmbake guest record remove g1 > /dev/null 2>&1
-  run_vmbake guest record write img1 g1 172.16.100.5/24 > /dev/null
+  run_vmbake guest record write img:dev:v1 g1 172.16.100.5/24 > /dev/null
   if [ -f "$TEST_DIR/hostkey/g1/key" ] && run_vmbake guest hostkey ensure g1 > /dev/null 2>&1 && [ "$(ssh-keygen -l -f "$TEST_DIR/hostkey/g1/key.pub" | cut -d' ' -f2)" = "$fp" ]; then
     pass "the record of the guest goes, the key stays: the guest built anew takes the same identity back"
   else

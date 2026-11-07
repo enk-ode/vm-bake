@@ -39,36 +39,63 @@
 #@end
 
 #@help __image_make_freebsd1
-# @command image make freebsd <template> [<name>]
-# @summary Bake a FreeBSD image from the template; without a name of your own it is called <template>-<yyyymmdd>, and when that name is taken (a record or a directory, read at generation time) <template>-<yyyymmdd>-2, -3, ... the first free one -- a second bake on the same day never stops at 'image create': rewrite to 'image make freebsd <template> <that name>'
+# @command image make freebsd <image>
+# @summary Bake a FreeBSD image by its full name img:<name>:<version> -- three fields, ':' the one separator; the template is the name field, the version the last: both read off the name and handed to 'image make freebsd from'
 # @group   image
-# @param   name  the image's name; left out, the template and today's date, with a counter when the day has an image of that template already
-# @env     VM_BAKE_IMAGE_DIR  the images' directory, where a taken name may live without a record
-# @example vm-bake image make freebsd freebsd-dev
-# @example vm-bake image make freebsd freebsd-x ides-2026-11
-# @see     image make freebsd
+# @param   image  img:<template>:<version>
+# @example vm-bake image make freebsd img:freebsd-dev:v1
+# @see     image make freebsd from
 # @see     image list
 #@end
 __image_make_freebsd1() {
-	local day="" name="" n=1
-	day=$(date -u '+%Y%m%d'); name="$1-$day"
-	while test -e "$VM_BAKE_BASE/image/$name" || test -e "$VM_BAKE_IMAGE_DIR/$name"; do n=$((n + 1)); name="$1-$day-$n"; done
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make freebsd $(sq "$1") $(sq "$name")"
+	local t="${1#img:}"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make freebsd from $(sq "${t%%:*}") $(sq "${1##*:}") $(sq "$1")"
 }
 
-#@help ___image_make_freebsd2
-# @internal arity-2 sibling of 'image make freebsd' (image make freebsd <template> <name>): the template exists, the name is an image name and free; then 'image create', 'image base', 'image burn', 'image close' and 'image seal' in turn (each a command of its own; create decides by the template's base kind). A name of your own is how one template bakes more than one image -- and more than one on the same day
+#@help __image_make_freebsd2
+# @command image make freebsd <template> <version>
+# @summary Bake a FreeBSD image from the template under the version: the image is img:<template>:<version>, handed to 'image make freebsd from' -- a version is yours to choose (v1, v2, v20261107); a name that is taken stops at 'image create', and the next version is the answer
+# @group   image
+# @param   version  the version field of the image name, a word of [A-Za-z0-9_.+-]
+# @example vm-bake image make freebsd freebsd-dev v1
+# @see     image make freebsd from
+# @see     image list
 #@end
-___image_make_freebsd2() {
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image make freebsd: template $1 -> image $2 (create, base, burn, close, seal)")"
+__image_make_freebsd2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make freebsd from $(sq "$1") $(sq "$2") $(sq "img:$1:$2")"
+}
+
+#@help __image_make_freebsd3
+# @command image make freebsd <template> <version> <image>
+# @summary Bake a FreeBSD image from the template under the version, with a name of its own: img:<name>:<version> whose name field is not the template's (one template, several lines of images), handed to 'image make freebsd from'
+# @group   image
+# @param   image  img:<name>:<version>, the name field yours
+# @example vm-bake image make freebsd freebsd-x v1 img:ides:v1
+# @see     image make freebsd from
+# @see     image list
+#@end
+__image_make_freebsd3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make freebsd from $(sq "$1") $(sq "$2") $(sq "$3")"
+}
+
+#@help ___image_make_freebsd_from3
+# @command image make freebsd from <template> <version> <image>
+# @summary The bake behind the three spellings of 'image make freebsd': the template exists, the image name is img:<name>:<version> and free; then 'image create', 'image base', 'image burn', 'image close' and 'image seal' in turn (each a command of its own; create decides by the template's base kind)
+# @group   image
+# @internal
+# @see     image make freebsd
+# @see     image create
+#@end
+___image_make_freebsd_from3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image make freebsd: template $1, version $2 -> image $3 (create, base, burn, close, seal)")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image name valid $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check absent $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image create $(sq "$1") $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image base $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image burn $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image close $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seal $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image name valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check absent $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image create $(sq "$1") $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image base $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image burn $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image close $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seal $(sq "$3")"
 }
 
 #@help __image_create2
@@ -500,19 +527,21 @@ __image_check_resource1() {
 
 #@help __image_name_valid1
 # @command image name valid <image>
-# @summary The image name is a record name ([A-Za-z0-9_.-], not . or ..) of at most 30 characters (the GPT labels <image>-efi and <image>-root must fit 36): a comment line, else an error line
+# @summary The image name is img:<name>:<version> -- three fields, ':' the one separator, name and version words of [A-Za-z0-9_.+-] -- of at most 30 characters (the GPT labels <image>-efi and <image>-root must fit 36): a comment line, else an error line
 # @group   image
 # @internal
 # @see     image create
 #@end
 __image_name_valid1() {
-	local ok=yes
-	case "$1" in ""|.|..|*[!A-Za-z0-9_.-]*) ok=no ;; esac
+	local ok=yes n="" v=""
+	n=${1#img:}; v=${n#*:}; n=${n%%:*}
+	case "$1" in img:?*:?*) ;; *) ok=no ;; esac
+	case "$n$v" in *[!A-Za-z0-9_.+-]*) ok=no ;; esac
 	test ${#1} -le 30 || ok=no
 	if test "$ok" = yes; then
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "image name $1 valid")"
 	else
-		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image create: invalid image name $1 ([A-Za-z0-9_.-], at most 30 characters)")"
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image create: invalid image name $1 (img:<name>:<version>, name and version of [A-Za-z0-9_.+-], at most 30 characters)")"
 	fi
 }
 
@@ -899,7 +928,7 @@ _image_disk_relabel1() {
 #@end
 _image_disk_mount1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
-	printf '%s\n' "mkdir -p '$mnt' && mount '/dev/gpt/$1-root' '$mnt' || exit 1"
+	printf '%s\n' "mkdir -p '$mnt' && mount -t ufs '/dev/gpt/$1-root' '$mnt' || exit 1"
 	printf '%s\n' "mkdir -p '$mnt/boot/efi' && mount -t msdosfs '/dev/gpt/$1-efi' '$mnt/boot/efi' || exit 1"
 	printf '%s\n' "install -d -m 755 '$mnt/dev' && mount -t devfs devfs '$mnt/dev' || exit 1"
 	printf '%s\n' "printf '# image %s: mounted at %s\\n' '$1' '$mnt' >&2"

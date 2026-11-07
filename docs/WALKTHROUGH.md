@@ -152,16 +152,19 @@ An image is the template baked onto a sparse UFS disk under
 `VM_BAKE_IMAGE_DIR/<image>` (a ZFS dataset of its own), from the pkgbase
 repository of the template's release, sealed by the snapshot `@image`.
 The bake is five commands; `image make freebsd` is the chain over them.
-Without a name of your own the image is called `<template>-<yyyymmdd>`, and
-when the day has one of that template already, `<template>-<yyyymmdd>-2`,
-`-3`, the first free name; with a name of your own, a template bakes as
-many images as you like, called what you like:
+An image is called `img:<name>:<version>`: three fields, `:` the one
+separator, the name the template's unless you say otherwise, the version
+yours (`v1`, `v2`, `v20261107`). `image make freebsd <template> <version>`
+composes the name, `image make freebsd img:<template>:<version>` takes it
+whole, `image make freebsd <template> <version> <image>` bakes under a name
+of its own; all three meet in `image make freebsd from`. A name that is
+taken stops at `image create`, and the next version is the answer:
 
-    vm-bake image create freebsd-dev freebsd-dev-20261031   # lock, record, dataset, disk, GPT, newfs, mount
-    vm-bake image base   freebsd-dev-20261031               # keys, pkg -r set-minimal + kernel + pkg, repos, loader, fstab
-    vm-bake image burn   freebsd-dev-20261031               # packages, rc.conf, users with the host key, sshd
-    vm-bake image close  freebsd-dev-20261031               # reports, umount, md detach, sha256
-    vm-bake image seal   freebsd-dev-20261031               # snapshot @image, readonly, lock dropped
+    vm-bake image create freebsd-dev img:freebsd-dev:v1   # lock, record, dataset, disk, GPT, newfs, mount
+    vm-bake image base   img:freebsd-dev:v1               # keys, pkg -r set-minimal + kernel + pkg, repos, loader, fstab
+    vm-bake image burn   img:freebsd-dev:v1               # packages, rc.conf, users with the host key, sshd
+    vm-bake image close  img:freebsd-dev:v1               # reports, umount, md detach, sha256
+    vm-bake image seal   img:freebsd-dev:v1               # snapshot @image, readonly, lock dropped
     vm-bake image list
 
 The acts that need root (zfs, md, gpart, newfs, mount, pkg -r, pw) are
@@ -198,11 +201,11 @@ template's sha256, written, grown, relabelled), baked on the host:
     vm-bake template package add freebsd-builder doas
     vm-bake template rc add freebsd-builder sshd_enable YES
     vm-bake template user add freebsd-builder bake 1010
-    vm-bake image make freebsd freebsd-builder
-    vm-bake guest make freebsd-builder-20261101 bake 172.16.100.250/24
+    vm-bake image make freebsd freebsd-builder v1
+    vm-bake guest make img:freebsd-builder:v1 bake 172.16.100.250/24
     vm-bake image builder use
-    vm-bake image make freebsd freebsd-dev            # Name: freebsd-dev-<datum>
-    vm-bake image make freebsd freebsd-x ides-2026-11 # oder ein eigener Name
+    vm-bake image make freebsd freebsd-dev v1              # Name: img:freebsd-dev:v1
+    vm-bake image make freebsd freebsd-x v1 img:ides:v1    # oder ein eigener Name
 
 A template that lists `doas` gives its users doas without a password; that
 is how the builder's user escalates. `image builder use` sets
@@ -222,8 +225,8 @@ the host's display and runs one program of the guest inside it over
     vm-bake template service add freebsd-x display x
     vm-bake template package add freebsd-x xauth
     vm-bake template package add freebsd-x intellij
-    vm-bake image make freebsd freebsd-x
-    vm-bake guest make freebsd-x-20261102 xenia 172.16.100.102/24
+    vm-bake image make freebsd freebsd-x v1
+    vm-bake guest make img:freebsd-x:v1 xenia 172.16.100.102/24
     vm-bake session create ssh xenia > ~/bin/xenia && chmod +x ~/bin/xenia
     vm-bake session create x xenia idea > ~/bin/xenia-idea && chmod +x ~/bin/xenia-idea
 
@@ -336,7 +339,7 @@ them.
     vm-bake template service add freebsd-dev files view
     vm-bake template user add freebsd-dev brj host
     vm-bake template home add freebsd-dev .vm-bake/db
-    vm-bake guest make freebsd-dev-20261104 dalmatia 172.16.100.101/24
+    vm-bake guest make img:freebsd-dev:v1 dalmatia 172.16.100.101/24
     vm-bake guest start dalmatia
     vm-bake guest view drop dalmatia        # the view and everything in it
 
