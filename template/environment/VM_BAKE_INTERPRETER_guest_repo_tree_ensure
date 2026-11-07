@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest repo tree ensure), pinned to sh: install -d of the mirrors' directory under the invoking user's own home, no root in it.

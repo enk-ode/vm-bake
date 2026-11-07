@@ -540,7 +540,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove repo_show repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -834,13 +834,13 @@ test_guest_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake guest make b bake 172.16.100.250/24)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "20" ] && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest log rotate ensure" && printf '%s\n' "$plan" | grep -q "guest hostkey ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest view ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest hostkey write 'bake'" && printf '%s\n' "$plan" | grep -q "guest link write 'bake'" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 20p | grep -q "guest knownhosts drop 'bake'"; then
-    pass "guest make: image checked, name, free, address, homes, tree, switch, log rotation, record, host key, view, clone, conf, link, network, home, host key, dns, known hosts"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "21" ] && printf '%s\n' "$plan" | sed -n 6p | grep -q "guest repo tree ensure" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest check homes 'bake'" && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest log rotate ensure" && printf '%s\n' "$plan" | grep -q "guest hostkey ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest view ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest hostkey write 'bake'" && printf '%s\n' "$plan" | grep -q "guest link write 'bake'" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 21p | grep -q "guest knownhosts drop 'bake'"; then
+    pass "guest make: image checked, name, free, address, mirrors' directory, homes, tree, switch, log rotation, record, host key, view, clone, conf, link, network, home, host key, dns, known hosts"
   else
     fail "guest make plan: $plan"
   fi
-  if [ "$(run_vmbake guest start bake | grep -c .)" = "9" ] && printf '%s\n' "$(run_vmbake guest start bake)" | sed -n 2p | grep -q "guest check stopped" && printf '%s\n' "$(run_vmbake guest start bake)" | grep -n "guest fetched drop\|guest run\|guest repo ensure" | tr '\n' ' ' | grep -q "7:.*fetched drop.* 8:.*guest run.* 9:.*repo ensure" && [ "$(run_vmbake guest stop bake | grep -c .)" = "6" ] && printf '%s\n' "$(run_vmbake guest stop bake)" | sed -n 2p | grep -q "guest repo hold" && printf '%s\n' "$(run_vmbake guest stop bake)" | sed -n 5p | grep -q "guest vmm release" && [ "$(run_vmbake guest drop bake | grep -c .)" = "10" ]; then
-    pass "start nine lines, the running check second (before any mount and its sudo), the mark dropped before vm start and the clones ensured after; stop six with the hold first and the vm instance released; drop ten"
+  if [ "$(run_vmbake guest start bake | grep -c .)" = "10" ] && printf '%s\n' "$(run_vmbake guest start bake)" | sed -n 2p | grep -q "guest check stopped" && printf '%s\n' "$(run_vmbake guest start bake)" | sed -n 3p | grep -q "guest repo tree ensure" && printf '%s\n' "$(run_vmbake guest start bake)" | sed -n 4p | grep -q "guest check homes 'bake'" && printf '%s\n' "$(run_vmbake guest start bake)" | grep -n "guest fetched drop\|guest run\|guest repo ensure" | tr '\n' ' ' | grep -q "8:.*fetched drop.* 9:.*guest run.* 10:.*repo ensure" && [ "$(run_vmbake guest stop bake | grep -c .)" = "6" ] && printf '%s\n' "$(run_vmbake guest stop bake)" | sed -n 2p | grep -q "guest repo hold" && printf '%s\n' "$(run_vmbake guest stop bake)" | sed -n 5p | grep -q "guest vmm release" && [ "$(run_vmbake guest drop bake | grep -c .)" = "10" ]; then
+    pass "start ten lines, the running check second (before any mount and its sudo), the mirrors' directory third, the mark dropped before vm start and the clones ensured after; stop six with the hold first and the vm instance released; drop ten"
   else
     fail "guest start/stop/drop: $(run_vmbake guest drop bake)"
   fi
@@ -1443,8 +1443,8 @@ test_repo_plan() {
     fail "repo add plan: $plan"
   fi
   plan=$(run_vmbake guest repo fetch caledonia git/Infrastruktur)
-  if printf '%s\n' "$plan" | grep -q "guest check running 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo refs 'caledonia' 'git/Infrastruktur'"; then
-    pass "repo fetch needs the running guest and ends in the refs of the host's repository"
+  if printf '%s\n' "$plan" | grep -q "guest check running 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo refs 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | tail -1 | grep -q "comment 'repository git/Infrastruktur: .*git -C $HOME/git/Infrastruktur merge --ff-only caledonia/main'"; then
+    pass "repo fetch needs the running guest, fetches into the refs of the host's repository and ends in the comment that names the merge"
   else
     fail "repo fetch plan: $plan"
   fi
@@ -1507,15 +1507,21 @@ test_repo_plan() {
     fail "acts not pinned -- not calling them"; return
   fi
   out=$(run_vmbake guest repo mirror git/Infrastruktur)
-  if printf '%s\n' "$out" | grep -q "install -d -m 755 '$HOME/git/views'" && printf '%s\n' "$out" | grep -q "git clone --mirror --no-hardlinks '$HOME/git/Infrastruktur' '$HOME/git/views/Infrastruktur'" && printf '%s\n' "$out" | grep -q "git -C '$HOME/git/views/Infrastruktur' fetch --prune origin" && printf '%s\n' "$out" | grep -q "config --get remote.origin.url"; then
-    pass "the mirror is bare, without hardlinks, refreshed when there, refused when it is of another repository"
+  if ! printf '%s\n' "$out" | grep -q "install -d" && printf '%s\n' "$out" | grep -q "git clone --mirror --no-hardlinks '$HOME/git/Infrastruktur' '$HOME/git/views/Infrastruktur'" && printf '%s\n' "$out" | grep -q "git -C '$HOME/git/views/Infrastruktur' fetch --prune origin" && printf '%s\n' "$out" | grep -q "config --get remote.origin.url"; then
+    pass "the mirror is bare, without hardlinks, refreshed when there, refused when it is of another repository; the directory is not its business"
   else
     fail "repo mirror: $out"
   fi
+  out=$(run_vmbake guest repo tree ensure)
+  if [ "$(printf '%s\n' "$out" | grep -c .)" = "2" ] && printf '%s\n' "$out" | grep -q "^test -d '$HOME/git/views' || install -d -m 755 '$HOME/git/views' || exit 1$"; then
+    pass "the mirrors' directory is made by the tool, in the invoking user's home, when it is missing"
+  else
+    fail "repo tree ensure: $out"
+  fi
   out=$(run_vmbake guest repo clone caledonia git/Infrastruktur)
   lc="git clone \"\$HOME/git/views/Infrastruktur\" '\\''git/local/Infrastruktur'\\''"
-  if printf '%s\n' "$out" | grep -q "^ssh -p 2222 -i '$TEST_DIR/key' .* -o BatchMode=yes '$(id -un)@caledonia.local' " && printf '%s\n' "$out" | grep -qF -- "$lc" && printf '%s\n' "$out" | grep -qF -- "test ! -e '\\''git/local/Infrastruktur'\\''"; then
-    pass "the clone is made over ssh on the guest's disk from the mirror in its view, an existing one left alone"
+  if printf '%s\n' "$out" | grep -q "^ssh -p 2222 -i '$TEST_DIR/key' .* -o BatchMode=yes '$(id -un)@caledonia.local' " && printf '%s\n' "$out" | grep -qF -- "$lc" && printf '%s\n' "$out" | grep -qF -- "if test -e '\\''git/local/Infrastruktur'\\''; then printf '\\''# guest %s: %s is there already" && ! printf '%s\n' "$out" | grep -q "config user.name"; then
+    pass "the clone is made over ssh on the guest's disk from the mirror in its view, an existing one left alone; no identity on the host, none set"
   else
     fail "repo clone: $out"
   fi
