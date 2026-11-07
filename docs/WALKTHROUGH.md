@@ -177,7 +177,8 @@ the lock held is released with `vm-bake image lock drop`.
 
 After an update of the checkout, `vm-bake bootstrap <name> minimal` again:
 the re-run refreshes `.env/default` with the variables of the new version
-(the pins of `image` among them) and leaves `.env/local` alone. `init` and
+(the pins of `image` among them) and leaves `.env/local` alone -- without
+it a terminal that reads a new variable stops with `parameter not set`. `init` and
 `environment init` are its inner lines, not commands to type.
 
 ## The builder
