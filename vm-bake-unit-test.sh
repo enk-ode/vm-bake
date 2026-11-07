@@ -552,7 +552,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -1467,11 +1467,10 @@ test_repo_plan() {
     fail "repo fetch plan: $plan"
   fi
   plan=$(run_vmbake guest repo pull caledonia git/Infrastruktur)
-  out=$(run_vmbake guest repo merge caledonia git/Infrastruktur)
-  if printf '%s\n' "$plan" | grep -q "guest check running 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo refs 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | tail -1 | grep -q "guest repo merge 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$out" | grep -q "git -C '$HOME/git/Infrastruktur' log --oneline 'main..caledonia/main'" && printf '%s\n' "$out" | grep -q "git -C '$HOME/git/Infrastruktur' merge --ff-only 'caledonia/main' >&2 || { printf '# Error: .*does not fast-forward"; then
-    pass "repo pull is the fetch, then repo merge: the commits listed, the host's checked-out branch fast-forwarded onto the guest's, a diverged branch an error"
+  if printf '%s\n' "$plan" | grep -q "guest check running 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo refs 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | tail -1 | grep -q "guest repo merge 'caledonia' 'git/Infrastruktur'"; then
+    pass "repo pull is the fetch of repo fetch, then repo merge"
   else
-    fail "repo pull plan: $plan / merge: $out"
+    fail "repo pull plan: $plan"
   fi
   plan=$(run_vmbake guest repo drop caledonia git/Infrastruktur)
   if printf '%s\n' "$plan" | grep -q "guest repo remove 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo unrecord 'caledonia' 'git/Infrastruktur'"; then
@@ -1556,6 +1555,12 @@ test_repo_plan() {
     pass "the host fetches in its OWN repository, over ssh from the guest's disk, into refs/remotes/<guest>/"
   else
     fail "repo refs: $out"
+  fi
+  out=$(run_vmbake guest repo merge caledonia git/Infrastruktur)
+  if printf '%s\n' "$out" | grep -q "^git -C '$HOME/git/Infrastruktur' log --oneline 'main..caledonia/main' | sed 's/^/# /' >&2$" && printf '%s\n' "$out" | grep -q "^git -C '$HOME/git/Infrastruktur' merge --ff-only 'caledonia/main' >&2 || { printf '# Error: .*does not fast-forward"; then
+    pass "merge lists the guest's commits, then fast-forwards the host's checked-out branch in its OWN repository; a diverged branch is an error"
+  else
+    fail "repo merge: $out"
   fi
   out=$(run_vmbake guest repo remove caledonia git/Infrastruktur)
   if printf '%s\n' "$out" | grep -q "^ssh -p 2222 .* '$(id -un)@caledonia.local' " && printf '%s\n' "$out" | grep -qF -- "rm -rf '\\''git/local/Infrastruktur'\\''"; then
