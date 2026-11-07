@@ -17,6 +17,17 @@ set -u
 TEST_BASE_DIR="${TMPDIR:-/tmp}/vm-bake-unit-test.$$"
 TEST_SCRIPT="./vm-bake.sh"
 
+# The home lines of a template name paths under the invoking user's home,
+# and the generators read that home (~user, not a sandbox) at generation
+# time: so the tests take their home paths from a fixture directory the
+# suite makes in the real home and removes on exit, never from the
+# dotfiles that happen to be there.
+HOME_FIXTURE=".vm-bake-unit-test.$$"
+home_fixture() {
+  mkdir -p "$HOME/$HOME_FIXTURE/config/gtk-3.0" "$HOME/$HOME_FIXTURE/cache" "$HOME/$HOME_FIXTURE/db" "$HOME/$HOME_FIXTURE/themes/NsCDE" "$HOME/$HOME_FIXTURE/ssh"
+}
+trap 'rm -rf "$HOME/$HOME_FIXTURE"' EXIT
+
 MAXPROCS=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 1)
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -85,6 +96,7 @@ test_setup() {
     exit 1
   fi
   VM_BAKE_BASE="$TEST_DIR" "$TEST_SCRIPT" setenv VM_BAKE_TERMINAL_INTERPRETER sh > /dev/null 2>&1
+  home_fixture
 }
 
 # The output is captured before it is printed: a consumer that closes early
@@ -1204,17 +1216,17 @@ test_home_plan() {
   test_setup
   image_chain
   run_vmbake template add freebsd-x freebsd-dev > /dev/null
-  if run_vmbake template home add freebsd-x .themes/NsCDE | grep -q "home + .themes/NsCDE ro" && run_vmbake template home add freebsd-x /etc/passwd | grep -q "invalid path" && run_vmbake template home add freebsd-x ../x | grep -q "invalid path" && run_vmbake template home show freebsd-x | grep -q "^#   freebsd-x  *.themes/NsCDE ro"; then
+  if run_vmbake template home add freebsd-x "$HOME_FIXTURE/themes/NsCDE" | grep -q "home + $HOME_FIXTURE/themes/NsCDE ro" && run_vmbake template home add freebsd-x /etc/passwd | grep -q "invalid path" && run_vmbake template home add freebsd-x ../x | grep -q "invalid path" && run_vmbake template home show freebsd-x | grep -q "^#   freebsd-x  *$HOME_FIXTURE/themes/NsCDE ro"; then
     pass "template home add takes a plain relative path, ro by default, show lists it"
   else
     fail "template home: $(run_vmbake template home show freebsd-x)"
   fi
-  if run_vmbake template home add freebsd-x .themes/NsCDE rw | grep -q "home + .themes/NsCDE rw" && run_vmbake template home add freebsd-x .themes/NsCDE xx | grep -q "ro or rw" && run_vmbake template home drop freebsd-x .themes/NsCDE rw > /dev/null && [ "$(run_vmbake template home show freebsd-x | grep -c NsCDE)" = "1" ]; then
+  if run_vmbake template home add freebsd-x "$HOME_FIXTURE/themes/NsCDE" rw | grep -q "home + $HOME_FIXTURE/themes/NsCDE rw" && run_vmbake template home add freebsd-x "$HOME_FIXTURE/themes/NsCDE" xx | grep -q "ro or rw" && run_vmbake template home drop freebsd-x "$HOME_FIXTURE/themes/NsCDE" rw > /dev/null && [ "$(run_vmbake template home show freebsd-x | grep -c NsCDE)" = "1" ]; then
     pass "the mode rw is a line of its own, another word is refused, drop names the mode"
   else
     fail "home mode: $(run_vmbake template home show freebsd-x)"
   fi
-  run_vmbake template home add freebsd-dev .config/gtk-3.0 > /dev/null
+  run_vmbake template home add freebsd-dev "$HOME_FIXTURE/config/gtk-3.0" > /dev/null
   run_vmbake image record write freebsd-x x > /dev/null
   run_vmbake image record write freebsd-builder b > /dev/null
   run_vmbake guest record write x caledonia 172.16.100.102/24 > /dev/null
@@ -1230,7 +1242,7 @@ test_home_plan() {
   fi
   rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   run_vmbake template home add freebsd-x .no-such-dir-vmbake/x > /dev/null
-  if run_vmbake guest check homes caledonia | grep -q "home path missing under $HOME: .no-such-dir-vmbake/x" && run_vmbake template home drop freebsd-x .no-such-dir-vmbake/x > /dev/null && [ -z "$(run_vmbake guest check homes caledonia | grep -v themes)" ]; then
+  if run_vmbake guest check homes caledonia | grep -q "home path missing under $HOME: .no-such-dir-vmbake/x" && run_vmbake template home drop freebsd-x .no-such-dir-vmbake/x > /dev/null && [ -z "$(run_vmbake guest check homes caledonia)" ]; then
     pass "check homes names a path the host's home lacks"
   else
     fail "check homes: $(run_vmbake guest check homes caledonia)"
@@ -1242,7 +1254,7 @@ test_home_plan() {
   fi
   local out
   out=$(run_vmbake guest home write caledonia)
-  if printf '%s\n' "$out" | grep -q "mount '/dev/gpt/x-root' '/data/vm/vm-bake/guest/caledonia/mnt'" && printf '%s\n' "$out" | grep -q "cp -R '$HOME/.themes/NsCDE' '/data/vm/vm-bake/guest/caledonia/mnt/home/$(id -un)/.themes/NsCDE'" && printf '%s\n' "$out" | grep -q "cp -R '$HOME/.config/gtk-3.0' " && printf '%s\n' "$out" | grep -q "chown -R '$(id -u)':\"\$g\" '/data/vm/vm-bake/guest/caledonia/mnt/home/$(id -un)/.themes'" && printf '%s\n' "$out" | grep -q 'mdconfig -d -u'; then
+  if printf '%s\n' "$out" | grep -q "mount '/dev/gpt/x-root' '/data/vm/vm-bake/guest/caledonia/mnt'" && printf '%s\n' "$out" | grep -q "cp -R '$HOME/$HOME_FIXTURE/themes/NsCDE' '/data/vm/vm-bake/guest/caledonia/mnt/home/$(id -un)/$HOME_FIXTURE/themes/NsCDE'" && printf '%s\n' "$out" | grep -q "cp -R '$HOME/$HOME_FIXTURE/config/gtk-3.0' " && printf '%s\n' "$out" | grep -q "chown -R '$(id -u)':\"\$g\" '/data/vm/vm-bake/guest/caledonia/mnt/home/$(id -un)/$HOME_FIXTURE'" && printf '%s\n' "$out" | grep -q 'mdconfig -d -u'; then
     pass "home write mounts the clone, copies every path into every user's home with the right owner, detaches"
   else
     fail "home write: $out"
@@ -1256,13 +1268,13 @@ test_home_plan() {
 
 
 
-# view_chain - freebsd-dev gets a view and three home lines (.vm-bake/db nested, so the mount makes its parent), freebsd-builder none
+# view_chain - freebsd-dev gets a view and three home lines of the fixture (all nested, so the mount makes their parent), freebsd-builder none
 view_chain() {
   run_vmbake template service add freebsd-dev files view > /dev/null
   run_vmbake template rc add freebsd-dev kld_list nvidia > /dev/null
-  run_vmbake template home add freebsd-dev .config > /dev/null
-  run_vmbake template home add freebsd-dev .cache rw > /dev/null
-  run_vmbake template home add freebsd-dev .vm-bake/db > /dev/null
+  run_vmbake template home add freebsd-dev "$HOME_FIXTURE/config" > /dev/null
+  run_vmbake template home add freebsd-dev "$HOME_FIXTURE/cache" rw > /dev/null
+  run_vmbake template home add freebsd-dev "$HOME_FIXTURE/db" > /dev/null
   run_vmbake image record write freebsd-dev x > /dev/null
   run_vmbake image record write freebsd-builder b > /dev/null
   run_vmbake guest record write x caledonia 172.16.100.102/24 > /dev/null
@@ -1341,7 +1353,7 @@ test_view_acts() {
     fail "view ensure without the service: $(run_vmbake guest view ensure bake)"
   fi
   out=$(run_vmbake guest view mount caledonia)
-  if printf '%s\n' "$out" | grep -q "mount -t nullfs -o ro '$HOME/.config' '$view/caledonia/.config'" && printf '%s\n' "$out" | grep -q "mount -t nullfs -o rw '$HOME/.cache' '$view/caledonia/.cache'" && printf '%s\n' "$out" | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 755 '$view/caledonia/.config'" && printf '%s\n' "$out" | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 755 '$view/caledonia/.vm-bake' '$view/caledonia/.vm-bake/db'"; then
+  if printf '%s\n' "$out" | grep -q "mount -t nullfs -o ro '$HOME/$HOME_FIXTURE/config' '$view/caledonia/$HOME_FIXTURE/config'" && printf '%s\n' "$out" | grep -q "mount -t nullfs -o rw '$HOME/$HOME_FIXTURE/cache' '$view/caledonia/$HOME_FIXTURE/cache'" && printf '%s\n' "$out" | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 755 '$view/caledonia/$HOME_FIXTURE' '$view/caledonia/$HOME_FIXTURE/db'"; then
     pass "view mount hangs every home line in with its own mode, the directory made first"
   else
     fail "view mount: $out"
@@ -1358,14 +1370,14 @@ test_view_acts() {
     fail "view mount with a missing path: $(run_vmbake guest view mount caledonia)"
   fi
   run_vmbake template home drop freebsd-dev .no-such-dir-vmbake > /dev/null
-  printf '%s\n' .ssh >> "$(record_of freebsd-dev)/home"
-  if run_vmbake guest view mount caledonia | grep -q "mount -t nullfs -o ro '$HOME/.ssh' '$view/caledonia/.ssh'"; then
+  printf '%s\n' "$HOME_FIXTURE/ssh" >> "$(record_of freebsd-dev)/home"
+  if run_vmbake guest view mount caledonia | grep -q "mount -t nullfs -o ro '$HOME/$HOME_FIXTURE/ssh' '$view/caledonia/$HOME_FIXTURE/ssh'"; then
     pass "a home line from before the modes (a bare path) counts as ro"
   else
     fail "view mount of a bare path: $(run_vmbake guest view mount caledonia)"
   fi
-  run_vmbake template home drop freebsd-dev .ssh > /dev/null 2>&1
-  printf '%s\n' "$(grep -v '^.ssh$' "$(record_of freebsd-dev)/home")" > "$(record_of freebsd-dev)/home"
+  run_vmbake template home drop freebsd-dev "$HOME_FIXTURE/ssh" > /dev/null 2>&1
+  printf '%s\n' "$(grep -v "^$HOME_FIXTURE/ssh$" "$(record_of freebsd-dev)/home")" > "$(record_of freebsd-dev)/home"
   if run_vmbake guest view unmount caledonia | grep -q "nothing hung into its view" && run_vmbake guest view destroy caledonia | grep -q "zfs destroy -r"; then
     pass "view unmount reads the mount table, view destroy destroys the dataset"
   else
@@ -1406,10 +1418,16 @@ test_view_acts() {
   fi
   local carrier parent
   carrier=$(df "$HOME" 2>/dev/null | awk 'NR == 2 { print $1 }')
-  parent=${carrier%/*}
+  case "$carrier" in */?*) parent=${carrier%/*} ;; *) parent="" ;; esac
   run_vmbake setenv VM_BAKE_VIEW_DIR "$HOME/.vm-bake-view-test/guest" > /dev/null
   out=$(run_vmbake guest view tree ensure)
-  if printf '%s\n' "$out" | grep -q "zfs create -o mountpoint='$HOME/.vm-bake-view-test' '$parent/.vm-bake-view-test'" && printf '%s\n' "$out" | grep -q "zfs create -p '$parent/.vm-bake-view-test/guest'" && printf '%s\n' "$out" | grep -q "chown '$(id -un)':'$(id -gn)' '$HOME/.vm-bake-view-test/guest' && chmod 0700" && printf '%s\n' "$out" | grep -q "zfs list -H -o name '$HOME/.vm-bake-view-test/guest' > /dev/null 2>&1 &&"; then
+  if [ -z "$parent" ]; then
+    if printf '%s\n' "$out" | grep -q "no ZFS dataset below a parent carries $HOME (df says $carrier)"; then
+      pass "view tree ensure refuses where no ZFS dataset below a parent carries the home (here: $carrier), the carrier named"
+    else
+      fail "view tree ensure without a ZFS parent: $out"
+    fi
+  elif printf '%s\n' "$out" | grep -q "zfs create -o mountpoint='$HOME/.vm-bake-view-test' '$parent/.vm-bake-view-test'" && printf '%s\n' "$out" | grep -q "zfs create -p '$parent/.vm-bake-view-test/guest'" && printf '%s\n' "$out" | grep -q "chown '$(id -un)':'$(id -gn)' '$HOME/.vm-bake-view-test/guest' && chmod 0700" && printf '%s\n' "$out" | grep -q "zfs list -H -o name '$HOME/.vm-bake-view-test/guest' > /dev/null 2>&1 &&"; then
     pass "view tree ensure lays the path below the home out as a dataset path beside the home's own, the head carries the mount point, and an existing one is kept"
   else
     fail "view tree ensure: $out"
