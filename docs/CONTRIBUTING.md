@@ -23,7 +23,13 @@ After adding or renaming anchors:
 `make metadata` rewrites the tables in `vm-bake.sh` and in both suites;
 commit the result with the change. The unit suite bootstraps a sandbox
 database per test under `$TMPDIR`; vm-bake execs its own script, so the
-checkout must lie where exec is allowed.
+checkout must lie where exec is allowed. The home lines of its templates
+point into a fixture directory `~/.vm-bake-unit-test.<pid>` the suite
+makes and removes on exit, because the generators read the invoking
+user's real home: the suite assumes nothing about the dotfiles there, and
+where no ZFS dataset below a parent carries the home (a guest's p9fs
+home, say) it asserts the refusal of `guest view tree ensure` instead
+of its plan.
 
 A development install is a wrapper that execs this checkout:
 
