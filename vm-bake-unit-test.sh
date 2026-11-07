@@ -1536,10 +1536,11 @@ test_repo_plan() {
   else
     fail "repo tree ensure: $out"
   fi
-  out=$(run_vmbake guest repo clone caledonia git/Infrastruktur)
-  lc="git clone \"\$HOME/git/views/Infrastruktur\" '\\''git/local/Infrastruktur'\\''"
-  if printf '%s\n' "$out" | grep -q "^ssh -p 2222 -i '$TEST_DIR/key' .* -o BatchMode=yes '$(id -un)@caledonia.local' " && printf '%s\n' "$out" | grep -qF -- "$lc" && printf '%s\n' "$out" | grep -qF -- "if test -e '\\''git/local/Infrastruktur'\\''; then printf '\\''# guest %s: %s is there already" && ! printf '%s\n' "$out" | grep -q "config user.name"; then
-    pass "the clone is made over ssh on the guest's disk from the mirror in its view, an existing one left alone; no identity on the host, none set"
+  git -c init.defaultBranch=main init -q "$HOME/$HOME_FIXTURE/repo" && git -C "$HOME/$HOME_FIXTURE/repo" config user.name 'vm-bake test' && git -C "$HOME/$HOME_FIXTURE/repo" config user.email 'test@vm-bake.invalid'
+  out=$(run_vmbake guest repo clone caledonia "$HOME_FIXTURE/repo")
+  lc="git clone \"\$HOME/git/views/repo\" '\\''git/local/repo'\\''"
+  if printf '%s\n' "$out" | grep -q "^ssh -p 2222 -i '$TEST_DIR/key' .* -o BatchMode=yes '$(id -un)@caledonia.local' " && printf '%s\n' "$out" | grep -qF -- "$lc" && printf '%s\n' "$out" | grep -qF -- "if test -e '\\''git/local/repo'\\''; then printf '\\''# guest %s: %s is there already" && printf '%s\n' "$out" | grep -qF -- "git -C '\\''git/local/repo'\\'' config user.name '\\''vm-bake test'\\'' && git -C '\\''git/local/repo'\\'' config user.email '\\''test@vm-bake.invalid'\\''"; then
+    pass "the clone is made over ssh on the guest's disk from the mirror in its view, an existing one left alone, with the identity that holds in the host's repository (its own, read with the home set)"
   else
     fail "repo clone: $out"
   fi
