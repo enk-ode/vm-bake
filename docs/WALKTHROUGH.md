@@ -428,12 +428,16 @@ repository, `refs/remotes/<guest>/*`, then the mark `fetched` written;
 `guest drop` refuses without that mark (`guest drop unfetched` gives the
 commits up). `guest repo fetch` is the same fetch on demand, and it ends
 in a comment that names the `git log` and the `git merge --ff-only` for
-the branch your repository has checked out -- the continuation to paste;
-git runs only in your repository, never inside the guest's clone.
+the branch your repository has checked out -- the continuation to paste.
+`guest repo pull` does both: the fetch, then `guest repo merge`, the
+fast-forward of your checked-out branch onto the guest's, the commits
+listed first; a branch that diverged stops with an error. git runs only
+in your repository, never inside the guest's clone.
 
     vm-bake guest repo add dalmatia git/Infrastruktur
     vm-bake guest repo show dalmatia
     vm-bake guest repo fetch dalmatia git/Infrastruktur
     git -C ~/git/Infrastruktur log dalmatia/main
     git -C ~/git/Infrastruktur merge --ff-only dalmatia/main
+    vm-bake guest repo pull dalmatia git/Infrastruktur     # fetch and fast-forward in one
     vm-bake guest repo add dalmatia git/Infrastruktur      # refreshes the mirror

@@ -1035,6 +1035,23 @@ ___guest_repo_fetch2() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "repository $2: to take the guest's commits over, in your repository: git -C $home/$2 log --oneline $branch..$1/$branch && git -C $home/$2 merge --ff-only $1/$branch")"
 }
 
+#@help ___guest_repo_pull2
+# @command guest repo pull <guest> <repo>
+# @summary Fetch and take over in one go: the fetch of 'guest repo fetch', then 'guest repo merge' fast-forwards the branch your repository has checked out onto the guest's -- what the fetch's closing comment asks you to paste, done by the tool
+# @group   guest
+# @example vm-bake guest repo pull dalmatia git/Infrastruktur
+# @see     guest repo fetch
+# @see     guest repo merge
+# @see     guest repo hold
+#@end
+___guest_repo_pull2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check running $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo refs $(sq "$1") $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo merge $(sq "$1") $(sq "$2")"
+}
+
 #@help ___guest_repo_drop2
 # @command guest repo drop <guest> <repo>
 # @summary Take the repository from the guest: it has a record and is running, the path is plain; then the clone removed from the guest's disk over ssh and the line taken from its record -- what the guest committed and the host has not fetched is gone with it. The mirror under VM_BAKE_REPO_VIEWS stays, the other guests read it
@@ -1216,6 +1233,26 @@ _guest_repo_refs2() {
 	printf '%s\n' "test -d '$home/$2/.git' || { printf '# Error: %s is no repository of the host\\n' '$home/$2' >&2; exit 1; }"
 	printf '%s\n' "git -C '$home/$2' -c core.sshCommand=$(sq "ssh -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$1 -o StrictHostKeyChecking=accept-new -o BatchMode=yes") fetch --no-tags --prune 'ssh://$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN:$VM_BAKE_SSH_PORT/~/$loc/$name' '+refs/heads/*:refs/remotes/$1/*' || exit 1"
 	printf '%s\n' "printf '# guest %s: its branches are %s/* in %s now\\n' '$1' '$1' '$home/$2' >&2"
+}
+
+#@help _guest_repo_merge2
+# @command guest repo merge <guest> <repo>
+# @summary Act terminal (the invoking user, in their OWN repository): the branch checked out there fast-forwarded onto the guest's fetched branch refs/remotes/<guest>/<branch>, the commits listed first -- no merge commit, no signature asked for; a branch that diverged stops with an error and leaves the repository as it was
+# @group   guest
+# @internal
+# @see     guest repo pull
+# @see     guest repo fetch
+# @see     guest repo refs
+#@end
+_guest_repo_merge2() {
+	local home="" branch=""
+	eval "home=~$(id -un)"
+	branch=$(HOME=$home git -C "$home/$2" symbolic-ref --short HEAD 2>/dev/null || printf main)
+	printf '%s\n' "test -d '$home/$2/.git' || { printf '# Error: %s is no repository of the host\\n' '$home/$2' >&2; exit 1; }"
+	printf '%s\n' "git -C '$home/$2' rev-parse --verify -q '$1/$branch' >/dev/null || { printf '# Error: %s has no branch %s of guest %s (guest repo fetch first)\\n' '$home/$2' '$branch' '$1' >&2; exit 1; }"
+	printf '%s\n' "git -C '$home/$2' log --oneline '$branch..$1/$branch' | sed 's/^/# /' >&2"
+	printf '%s\n' "git -C '$home/$2' merge --ff-only '$1/$branch' >&2 || { printf '# Error: %s: %s does not fast-forward onto %s/%s (the host has commits of its own there; merge by hand)\\n' '$home/$2' '$branch' '$1' '$branch' >&2; exit 1; }"
+	printf '%s\n' "printf '# guest %s: %s of %s is %s/%s now\\n' '$1' '$branch' '$home/$2' '$1' '$branch' >&2"
 }
 
 #@help _guest_repo_remove2

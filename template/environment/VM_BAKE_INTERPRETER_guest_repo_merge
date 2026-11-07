@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest repo merge), pinned to sh: git merge --ff-only in the invoking user's own repository, no root in it; a branch that diverged is an error and nothing is rewritten. Inspect first: vm-bake setintp guest_repo_merge cat.

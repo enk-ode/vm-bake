@@ -1466,6 +1466,13 @@ test_repo_plan() {
   else
     fail "repo fetch plan: $plan"
   fi
+  plan=$(run_vmbake guest repo pull caledonia git/Infrastruktur)
+  out=$(run_vmbake guest repo merge caledonia git/Infrastruktur)
+  if printf '%s\n' "$plan" | grep -q "guest check running 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo refs 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | tail -1 | grep -q "guest repo merge 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$out" | grep -q "git -C '$HOME/git/Infrastruktur' log --oneline 'main..caledonia/main'" && printf '%s\n' "$out" | grep -q "git -C '$HOME/git/Infrastruktur' merge --ff-only 'caledonia/main' >&2 || { printf '# Error: .*does not fast-forward"; then
+    pass "repo pull is the fetch, then repo merge: the commits listed, the host's checked-out branch fast-forwarded onto the guest's, a diverged branch an error"
+  else
+    fail "repo pull plan: $plan / merge: $out"
+  fi
   plan=$(run_vmbake guest repo drop caledonia git/Infrastruktur)
   if printf '%s\n' "$plan" | grep -q "guest repo remove 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo unrecord 'caledonia' 'git/Infrastruktur'"; then
     pass "repo drop removes the clone from the disk and the line from the record"
