@@ -394,24 +394,26 @@ clones live on its own disk, and what the guest reads of the host's
 repositories is a bare mirror it cannot change:
 
 - `VM_BAKE_REPO_VIEWS` (`git/views`) is the mirrors' directory, the same
-  path in your home and in the view. `guest repo add` makes the bare
-  mirror `git/views/<name>` of your repository there (or refreshes it);
-  the template's home line hangs the directory read-only into every view.
-  `guest start` wants the directory to exist before it hangs anything
-  (guest check homes), and `guest repo add` wants the guest running
-  (guest check running) -- so the directory is made once by hand, the
-  guest started, and the repositories added then:
+  path in your home and in the view; `guest make` and `guest start` make
+  it when it is missing (guest repo tree ensure, before the check of the
+  template's home paths -- the one home path the tool owns, no hand makes
+  it). `guest repo add` makes the bare mirror `git/views/<name>` of your
+  repository there (or refreshes it); the template's home line hangs the
+  directory read-only into every view. `guest repo add` wants the guest
+  running (guest check running): the guest is started first, the
+  repositories added then:
 
       vm-bake template home add freebsd-dev git/views
-      install -d ~/git/views
 
 - `VM_BAKE_REPO_LOCAL` (`git/local`) is the clones' directory under the
   guest's home -- the one place in the view that is the guest's disk: the
   image hangs `/var/git` there (`image view write`, a nullfs line in fstab
   after the p9fs line, `failok`), `guest view mount` makes the mount
   point. `guest repo add` clones the mirror into it over ssh, with your
-  git identity; the guest commits there, unsigned, and pulls from the
-  mirror as `origin`.
+  git identity as it holds in that repository of yours (global or the
+  repository's own; a clone that is there already gets it set as well, so
+  a second add or the next `guest start` repairs one made without); the
+  guest commits there, unsigned, and pulls from the mirror as `origin`.
 
 The repository is recorded for the guest (`guest/<guest>/repo`, replayed
 by the dump): `guest start` ends with `guest repo ensure`, which waits for
@@ -420,8 +422,10 @@ guest on a fresh image gets its clones back. `guest stop` begins with
 `guest repo hold`: every recorded repository fetched over ssh into YOUR
 repository, `refs/remotes/<guest>/*`, then the mark `fetched` written;
 `guest drop` refuses without that mark (`guest drop unfetched` gives the
-commits up). `guest repo fetch` is the same fetch on demand; git runs only
-in your repository, never inside the guest's clone.
+commits up). `guest repo fetch` is the same fetch on demand, and it ends
+in a comment that names the `git log` and the `git merge --ff-only` for
+the branch your repository has checked out -- the continuation to paste;
+git runs only in your repository, never inside the guest's clone.
 
     vm-bake guest repo add dalmatia git/Infrastruktur
     vm-bake guest repo show dalmatia
