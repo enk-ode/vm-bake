@@ -1880,9 +1880,9 @@ _image_firstboot_conf_write1() {
 		cur=$p; n=$((n + 1))
 	done
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/resource" && IFS= read -r res < "$VM_BAKE_BASE/template/$a/resource"; done
-	set -- "$1" ${res:-1 1G 0}
+	set -- "$1" ${res:-1 1G 0} "$(printf '%s' "${VM_BAKE_FIRSTBOOT_ADDRESS%/*}" | awk -F. '{ printf "58:9c:fc:%02x:%02x:%02x", $2, $3, $4 }')"
 	printf '%s\n' "install -d -m 755 '$VM_BAKE_GUEST_DIR/$g' && cat > '$conf' <<'EOF_CONF'"
-	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" 'disk0_type="virtio-blk"' "disk0_name=\"$VM_BAKE_IMAGE_DIR/$1/disk0.img\"" 'disk0_dev="custom"' 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_IMAGE_DIR/$1/seed.iso\"" 'disk1_dev="custom"' 'debug="yes"'
+	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" "network0_mac=\"$5\"" 'disk0_type="virtio-blk"' "disk0_name=\"$VM_BAKE_IMAGE_DIR/$1/disk0.img\""'disk0_dev="custom"' 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_IMAGE_DIR/$1/seed.iso\"" 'disk1_dev="custom"' 'debug="yes"'
 	printf '%s\n' "EOF_CONF"
 	printf '%s\n' "printf '# firstboot %s: %s boots %s with seed %s\\n' '$g' '$conf' '$VM_BAKE_IMAGE_DIR/$1/disk0.img' '$VM_BAKE_IMAGE_DIR/$1/seed.iso' >&2"
 }
@@ -1947,6 +1947,26 @@ _image_seed_meta_write1() {
 	printf '%s\n' "cat > '$dir/seed/meta-data' <<'EOF_META'"
 	printf '%s\n' "instance-id: bake-$1" "local-hostname: $VM_BAKE_FIRSTBOOT"
 	printf '%s\n' "EOF_META"
+}
+
+#@help _image_seed_net_write1
+# @command image seed net write <image>
+# @summary Act terminal: the seed's network-config (v2) for the first boot -- the interface matched by the MAC 58:9c:fc:<octets 2-4 of VM_BAKE_FIRSTBOOT_ADDRESS>, that address static, the default route and the nameserver VM_BAKE_GUEST_GATEWAY. Without it cloud-init asks DHCP, the switch has none, and apt resolves nothing: the packages of the template would stay uninstalled
+# @group   image
+# @internal
+# @see     image seed write
+# @see     image firstboot conf write
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_FIRSTBOOT_ADDRESS  the throwaway guest's address with prefix length
+# @env     VM_BAKE_GUEST_GATEWAY  gateway and nameserver of the guests' switch
+#@end
+_image_seed_net_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" addr="$VM_BAKE_FIRSTBOOT_ADDRESS" mac=""
+	mac=$(printf '%s' "${addr%/*}" | awk -F. '{ printf "58:9c:fc:%02x:%02x:%02x", $2, $3, $4 }')
+	printf '%s\n' "cat > '$dir/seed/network-config' <<'EOF_NET'"
+	printf '%s\n' "version: 2" "ethernets:" "  net0:" "    match:" "      macaddress: '$mac'" "    set-name: net0" "    dhcp4: false" "    addresses:" "      - $addr" "    routes:" "      - to: default" "        via: $VM_BAKE_GUEST_GATEWAY" "    nameservers:" "      addresses:" "        - $VM_BAKE_GUEST_GATEWAY"
+	printf '%s\n' "EOF_NET"
+	printf '%s\n' "printf '# image %s: first boot on %s (%s), gateway %s\\n' '$1' '$addr' '$mac' '$VM_BAKE_GUEST_GATEWAY' >&2"
 }
 
 #@help _image_seed_user_write1
@@ -2129,7 +2149,7 @@ __image_check_seed1() {
 
 #@help ___image_seed_write1
 # @command image seed write <image>
-# @summary The NoCloud seed of the bake, VM_BAKE_IMAGE_DIR/<image>/seed.iso: 'image check seed' (a view needs exactly one host-uid user), then five acts -- 'image seed meta write' (meta-data: instance-id bake-<image>, hostname VM_BAKE_FIRSTBOOT), 'image seed user write' (user-data begins: packages and users of the template), 'image seed sshd write' (write_files: sshd on VM_BAKE_SSH_PORT without root or passwords, the authorized key of every user, the env lines as /etc/profile.d/vm-bake.sh), 'image seed view write' (the 9p mounts when the template says 'service files view'), 'image seed pack' (power_state poweroff, makefs). The template's rc lines are FreeBSD's rc.conf and are noted, not written (read at generation time)
+# @summary The NoCloud seed of the bake, VM_BAKE_IMAGE_DIR/<image>/seed.iso: 'image check seed' (a view needs exactly one host-uid user), then six acts -- 'image seed meta write' (meta-data: instance-id bake-<image>, hostname VM_BAKE_FIRSTBOOT), 'image seed net write' (network-config: VM_BAKE_FIRSTBOOT_ADDRESS static on the MAC derived from it, gateway and nameserver VM_BAKE_GUEST_GATEWAY), 'image seed user write' (user-data begins: packages and users of the template), 'image seed sshd write' (write_files: sshd on VM_BAKE_SSH_PORT without root or passwords, the authorized key of every user, the env lines as /etc/profile.d/vm-bake.sh), 'image seed view write' (the 9p mounts when the template says 'service files view'), 'image seed pack' (power_state poweroff, makefs). The template's rc lines are FreeBSD's rc.conf and are noted, not written (read at generation time)
 # @group   image
 # @internal
 # @see     image firstboot
@@ -2151,6 +2171,7 @@ ___image_seed_write1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check seed $(sq "$1")"
 	test -z "$rcl" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image $1: rc lines are FreeBSD's rc.conf, a Linux image ignores them: $(printf '%s' "$rcl" | tr '\n' ' ')")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed meta write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed net write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed user write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed sshd write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed view write $(sq "$1")"

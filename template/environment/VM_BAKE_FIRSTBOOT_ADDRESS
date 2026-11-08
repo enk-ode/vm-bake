@@ -1,0 +1,2 @@
+172.16.100.249/24
+# @summary Address (with prefix length) of the throwaway guest VM_BAKE_FIRSTBOOT during a Linux bake: the seed's network-config sets it static on the MAC 58:9c:fc:<octets 2-4>, gateway and nameserver VM_BAKE_GUEST_GATEWAY -- the switch has no DHCP, and apt needs the way out during the first boot. Free in the guests' network, never a guest's own address.
