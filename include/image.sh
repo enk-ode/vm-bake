@@ -1889,14 +1889,18 @@ _image_firstboot_conf_write1() {
 
 #@help _image_firstboot_gone0
 # @command image firstboot gone
-# @summary Act terminal: wait until no bhyve process of the throwaway guest runs (pgrep), two seconds between looks, 1800 looks (an hour: apt has to download the packages); then an error
+# @summary Act terminal: the first boot waited out -- 'vm start' returns before bhyve runs, so first the wait until the throwaway guest is up (vm-bhyve's run.lock or its bhyve process, one second between looks, 60 looks), then the wait until both are gone (two seconds between looks, 1800 looks -- an hour, apt has to download the packages); each wait ends in an error when its looks are spent
 # @group   image
 # @internal
 # @see     image firstboot
 # @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name
+# @env     VM_BAKE_GUEST_DIR  vm-bhyve's vm_dir, where the guest's run.lock lies
 #@end
 _image_firstboot_gone0() {
-	printf '%s\n' "n=0; while pgrep -q -f 'bhyve: $VM_BAKE_FIRSTBOOT\$'; do n=\$((n + 1)); test \"\$n\" -lt 1800 || { printf '# Error: firstboot %s still runs after an hour\\n' '$VM_BAKE_FIRSTBOOT' >&2; exit 1; }; sleep 2; done"
+	local lock="$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/run.lock" up="test -e '$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/run.lock' || pgrep -q -f 'bhyve: $VM_BAKE_FIRSTBOOT\$'"
+	printf '%s\n' "n=0; until $up; do n=\$((n + 1)); test \"\$n\" -lt 60 || { printf '# Error: firstboot %s did not come up within a minute (no %s, no bhyve)\\n' '$VM_BAKE_FIRSTBOOT' '$lock' >&2; exit 1; }; sleep 1; done"
+	printf '%s\n' "printf '# firstboot %s is up after %s looks\\n' '$VM_BAKE_FIRSTBOOT' \"\$n\" >&2"
+	printf '%s\n' "n=0; while $up; do n=\$((n + 1)); test \"\$n\" -lt 1800 || { printf '# Error: firstboot %s still runs after an hour\\n' '$VM_BAKE_FIRSTBOOT' >&2; exit 1; }; sleep 2; done"
 	printf '%s\n' "printf '# firstboot %s is down after %s looks\\n' '$VM_BAKE_FIRSTBOOT' \"\$n\" >&2"
 }
 

@@ -168,6 +168,26 @@ test_bootstrap_layout() {
   else
     pass "help shows no stage vocabulary"
   fi
+  local prof shown
+  prof=$(ls "$TEST_DIR/.env/default" | sed -n 's/^VM_BAKE_PROFILE_//p' | tr '[:upper:]' '[:lower:]')
+  shown=$(run_vmbake profile show)
+  if [ -n "$prof" ] && printf '%s\n' "$shown" | grep -q "^# profile $prof: [0-9]* variables listed, [0-9]* held in .env/default, [0-9]* shipped by this vm-bake$" && ! printf '%s\n' "$shown" | grep -q "not installed"; then
+    pass "profile show names the database's profile $prof, listed, held and shipped counts agree after bootstrap"
+  else
+    fail "profile show: $shown"
+  fi
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  mv "$TEST_DIR/.env/default/VM_BAKE_PROFILE_$(printf '%s' "$prof" | tr '[:lower:]' '[:upper:]')" "$TEST_DIR/profile.away"
+  local none
+  none=$(run_vmbake environment init; run_vmbake profile show)
+  mv "$TEST_DIR/profile.away" "$TEST_DIR/.env/default/VM_BAKE_PROFILE_$(printf '%s' "$prof" | tr '[:lower:]' '[:upper:]')"
+  if run_vmbake environment init | grep -q "environment init '$prof'\$" && printf '%s\n' "$none" | grep -q "error 'environment init: no profile installed" && printf '%s\n' "$none" | grep -q "^# profile: none installed"; then
+    pass "environment init without a profile rewrites to the database's own, an error when none is installed"
+  else
+    fail "environment init: $(run_vmbake environment init) / $none"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
 }
 
 test_template_add_chain() {
@@ -2108,6 +2128,12 @@ test_linux_plan() {
     pass "image firstboot conf write: the template's resources, the image's disk and seed, under the guests' directory as firstboot"
   else
     fail "firstboot conf: $out"
+  fi
+  out=$(run_vmbake image firstboot gone)
+  if [ "$(printf '%s\n' "$out" | grep -c .)" = "4" ] && printf '%s\n' "$out" | sed -n 1p | grep -q "^n=0; until test -e '$TEST_DIR/gst/firstboot/run.lock' || pgrep -q -f 'bhyve: firstboot\$'; do .* -lt 60 " && printf '%s\n' "$out" | sed -n 3p | grep -q "^n=0; while test -e '$TEST_DIR/gst/firstboot/run.lock' || pgrep -q -f 'bhyve: firstboot\$'; do .* -lt 1800 "; then
+    pass "image firstboot gone: waits for run.lock or bhyve to appear (a minute), then for both to leave (an hour)"
+  else
+    fail "firstboot gone: $out"
   fi
   run_vmbake guest record write img:debian-dev:v1 tirol 172.16.100.110/24 > /dev/null
   run_vmbake image record write freebsd-dev x > /dev/null

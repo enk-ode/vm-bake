@@ -193,20 +193,59 @@ _database_dir_create2() {
         emit_note "Created: $1 (mode $2)"
 }
 
-#@help ___environment_init1
-# @command environment init <profile>
-# @summary Install the profile's template variables into .env/default (a line of init; after an update, bootstrap <name> <profile> again re-syncs them): the profile is shipped, then 'environment install'
+#@help __environment_init0
+# @command environment init [<profile>]
+# @summary Install a profile's template variables into .env/default -- a line of init, and the step after an update of vm-bake: a variable new in template/environment reaches a database only this way (the cache is dropped with it). Without an argument the profile is the database's own, read from .env/default/VM_BAKE_PROFILE_<PROFILE> (profile show): rewrite to 'environment init <profile>'; no profile installed, or more than one, is an error
 # @group   configuration
-# @internal
-# @param   profile  minimal or all
+# @param   profile  minimal or all; the database's own when left out
+# @example vm-bake environment init
 # @example vm-bake environment init all
+# @see     profile show
 # @see     bootstrap
 # @see     environment profile valid
 # @see     environment install
 #@end
+__environment_init0() {
+        local p="" n=0 f=""
+        for f in "$VM_BAKE_BASE"/.env/default/VM_BAKE_PROFILE_*; do
+                test -f "$f" || continue
+                n=$((n + 1)); p=$(printf '%s' "${f##*/VM_BAKE_PROFILE_}" | tr '[:upper:]' '[:lower:]')
+        done
+        case "$n" in
+        1) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" environment init $(sq "$p")" ;;
+        0) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error 'environment init: no profile installed in .env/default (bootstrap <name> <profile>, or environment init <profile>)'" ;;
+        *) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "environment init: $n profiles installed in .env/default (profile show) -- name one: environment init <profile>")" ;;
+        esac
+}
+
+#@help ___environment_init1
+# @internal arity-1 sibling of 'environment init' (environment init <profile>  -- the profile named): the profile is shipped (environment profile valid), then 'environment install'
+#@end
 ___environment_init1() {
         printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" environment profile valid '$1'"
         printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" environment install '$1'"
+}
+
+#@help _profile_show0
+# @command profile show
+# @summary The database's profile: the name from .env/default/VM_BAKE_PROFILE_<PROFILE>, how many variables that list names, how many of them .env/default holds, and how many the shipped list of the same profile names now -- a shipped count above the installed one says 'environment init' is due
+# @group   configuration
+# @example vm-bake profile show
+# @see     environment init
+# @see     environment cache status
+# @env     VM_BAKE_TEMPLATE_DIR  the shipped profiles: environment/VM_BAKE_PROFILE_<PROFILE>
+#@end
+_profile_show0() {
+        local f="" name="" listed=0 held=0 shipped=0 v="" n=0
+        for f in "$VM_BAKE_BASE"/.env/default/VM_BAKE_PROFILE_*; do
+                test -f "$f" || continue
+                n=$((n + 1)); name=$(printf '%s' "${f##*/VM_BAKE_PROFILE_}" | tr '[:upper:]' '[:lower:]')
+                for v in $(head -1 "$f"); do listed=$((listed + 1)); test -f "$VM_BAKE_BASE/.env/default/$v" && held=$((held + 1)); done
+                shipped=$(head -1 "$VM_BAKE_TEMPLATE_DIR/environment/${f##*/}" 2>/dev/null | wc -w | tr -d ' ')
+                printf '# profile %s: %s variables listed, %s held in .env/default, %s shipped by this vm-bake\n' "$name" "$listed" "$held" "$shipped"
+                test "$shipped" -le "$held" || printf '# profile %s: %s shipped variables are not installed -- environment init\n' "$name" "$((shipped - held))"
+        done
+        test "$n" -gt 0 || printf '# profile: none installed in .env/default (bootstrap <name> <profile>)\n'
 }
 
 #@help _environment_install1
