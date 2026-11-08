@@ -378,7 +378,7 @@ _guest_conf_write1() {
 	printf '%s\n' "cat > '$conf' <<'EOF_CONF'"
 	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" "cpu_sockets=$(printf '%s' "$top" | cut -d' ' -f1)" "cpu_cores=$(printf '%s' "$top" | cut -d' ' -f2)" "cpu_threads=$(printf '%s' "$top" | cut -d' ' -f3)" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" 'disk0_type="virtio-blk"' 'disk0_name="disk0.img"' 'debug="yes"'
 	test "$view" = no || printf '%s\n' "bhyve_options=\"-s $VM_BAKE_VIEW_SLOT,virtio-9p,home=$dir/$1\""
-	test "$bake" != cloud-init || printf '%s\n' "network0_mac=\"$mac\"" 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_GUEST_DIR/$1/seed.iso\"" 'disk1_dev="custom"'
+	case "$bake" in cloud-init|autoinstall) printf '%s\n' "network0_mac=\"$mac\"" 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_GUEST_DIR/$1/seed.iso\"" 'disk1_dev="custom"' ;; esac
 	printf '%s\n' "EOF_CONF"
 	printf '%s\n' "printf '# guest %s: %s (cpu %s as %s, memory %s, view $view)\\n' '$1' '$conf' '$2' $(sq "$top") '$3' >&2"
 }
@@ -1477,6 +1477,20 @@ _guest_run1() {
 	printf '%s\n' "printf '# guest %s started\\n' $(sq "$1") >&2"
 }
 
+#@help _guest_install2
+# @command guest install <guest> <iso>
+# @summary Act terminal (root): vm install <guest> <iso> -- vm-bhyve runs the guest with the ISO as a CD for this one run; when the guest reboots, vm-bhyve starts it again without the ISO, and a UEFI guest comes up from its disk
+# @group   guest
+# @internal
+# @completion iso files
+# @see     image install
+# @see     guest run
+#@end
+_guest_install2() {
+	printf '%s\n' "vm install $(sq "$1") $(sq "$2") || exit 1"
+	printf '%s\n' "printf '# guest %s started from %s\\n' $(sq "$1") $(sq "$2") >&2"
+}
+
 #@help _guest_halt1
 # @command guest halt <guest>
 # @summary Act terminal (root): vm stop <guest> (ACPI shutdown; the guest decides how fast)
@@ -1726,8 +1740,8 @@ _guest_record_place4() {
 }
 
 
-#@help _guest_seed_write1
-# @command guest seed write <guest>
+#@help _guest_seed_write_cloud_init1
+# @command guest seed write cloud-init <guest>
 # @summary Act terminal: the guest's NoCloud seed VM_BAKE_GUEST_DIR/<guest>/seed.iso (makefs cd9660, label cidata) -- meta-data with instance-id and local-hostname <guest>; network-config (version 2) with the guest's address from its record on the interface of the MAC 'guest conf write' gives it (58:9c:fc and the last three octets of the address), gateway and resolver VM_BAKE_GUEST_GATEWAY; user-data with no users of its own (users: [] keeps cloud-init from creating the distribution's default user; the bake's users and keys are on the disk) and the ssh host key the guest carries (the binding of its record, read at generation time; the key file is read when the act runs, never emitted) -- a new instance-id makes cloud-init apply hostname, network and host key at the guest's first start. 'guest conf write' hangs the seed on the guest as disk1
 # @group   guest
 # @internal
@@ -1737,7 +1751,7 @@ _guest_record_place4() {
 # @env     VM_BAKE_GUEST_DIR  the guests' directory
 # @env     VM_BAKE_GUEST_GATEWAY  the host's address on the bridge: gateway and resolver of the guests
 #@end
-_guest_seed_write1() {
+_guest_seed_write_cloud_init1() {
 	local dir="$VM_BAKE_GUEST_DIR/$1" addr="" mac="" hk="" k=""
 	IFS= read -r addr 2>/dev/null < "$VM_BAKE_BASE/guest/$1/address" || addr=""
 	IFS= read -r hk 2>/dev/null < "$VM_BAKE_BASE/guest/$1/hostkey" || hk=""
@@ -1760,16 +1774,48 @@ _guest_seed_write1() {
 	printf '%s\n' "printf '# guest %s: seed.iso -- %s on %s, gateway %s, hostkey %s\\n' '$1' '$addr' '$mac' '$VM_BAKE_GUEST_GATEWAY' $(sq "$hk") >&2"
 }
 
-#@help ___guest_disk_write1
+#@help _guest_seed_write_autoinstall1
+# @command guest seed write autoinstall <guest>
+# @summary Act terminal: the guest's seed VM_BAKE_GUEST_DIR/<guest>/seed.iso for an OpenBSD image (makefs cd9660, label vmbakeseed) -- the marker vm-bake-seed, myname <guest>.VM_BAKE_GUEST_DOMAIN, address and netmask from the guest's record, mygate and resolv.conf from VM_BAKE_GUEST_GATEWAY, and the ssh host key the guest carries (the binding of its record, read at generation time; the key files are copied when the act runs, never emitted). The image's /etc/hostname.vio0 runs /usr/local/libexec/vm-bake-seed (image site write), which applies the seed at every boot before sshd starts. 'guest conf write' hangs the seed on the guest as disk1
+# @group   guest
+# @internal
+# @see     guest disk write
+# @see     guest conf write
+# @see     image site write
+# @env     VM_BAKE_GUEST_DIR  the guests' directory
+# @env     VM_BAKE_GUEST_GATEWAY  the host's address on the bridge: gateway and resolver of the guests
+# @env     VM_BAKE_GUEST_DOMAIN  the domain the guest names live in
+#@end
+_guest_seed_write_autoinstall1() {
+	local dir="$VM_BAKE_GUEST_DIR/$1" addr="" mask="" hk="" k=""
+	IFS= read -r addr 2>/dev/null < "$VM_BAKE_BASE/guest/$1/address" || addr=""
+	IFS= read -r hk 2>/dev/null < "$VM_BAKE_BASE/guest/$1/hostkey" || hk=""
+	test -n "$hk" || { generate_error "guest seed write: the guest $1 carries no ssh host key (guest hostkey use $1 <hostkey>)"; return 0; }
+	k="$VM_BAKE_BASE/hostkey/$hk/key"
+	test -f "$k" || { generate_error "guest seed write: the guest $1 carries the hostkey $hk, which is not kept (hostkey list)"; return 0; }
+	mask=$(printf '%s\n' "${addr#*/}" | awk '{ m = $1 ? 4294967296 - 2 ^ (32 - $1) : 0; printf "%d.%d.%d.%d", int(m / 16777216) % 256, int(m / 65536) % 256, int(m / 256) % 256, m % 256 }')
+	printf '%s\n' "install -d -m 700 '$dir/seed' && : > '$dir/seed/vm-bake-seed' || exit 1"
+	printf '%s\n' "printf '%s\\n' '$1.$VM_BAKE_GUEST_DOMAIN' > '$dir/seed/myname'"
+	printf '%s\n' "printf '%s\\n' '${addr%/*}' > '$dir/seed/address'"
+	printf '%s\n' "printf '%s\\n' '$mask' > '$dir/seed/netmask'"
+	printf '%s\n' "printf '%s\\n' '$VM_BAKE_GUEST_GATEWAY' > '$dir/seed/mygate'"
+	printf '%s\n' "printf '%s\\n' 'search $VM_BAKE_GUEST_DOMAIN' 'nameserver $VM_BAKE_GUEST_GATEWAY' 'lookup file bind' > '$dir/seed/resolv.conf'"
+	printf '%s\n' "cp '$k' '$dir/seed/ssh_host_ed25519_key' && cp '$k.pub' '$dir/seed/ssh_host_ed25519_key.pub' && chmod 600 '$dir/seed/ssh_host_ed25519_key' || exit 1"
+	printf '%s\n' "rm -f '$dir/seed.iso' && makefs -t cd9660 -o rockridge -o label=vmbakeseed '$dir/seed.iso' '$dir/seed' && chmod 600 '$dir/seed.iso' || exit 1"
+	printf '%s\n' "printf '# guest %s: seed.iso -- %s netmask %s, gateway %s, hostkey %s\\n' '$1' '${addr%/*}' '$mask' '$VM_BAKE_GUEST_GATEWAY' $(sq "$hk") >&2"
+}
+
+#@help __guest_disk_write1
 # @command guest disk write <guest>
-# @summary What the host writes into a new guest before its first start, by the bake of its image's template (read at generation time): a chroot-baked FreeBSD disk is mounted and gets its network (rc.conf), the home paths of the template and its ssh host key ('guest network write', 'guest home write', 'guest hostkey write'); a cloud-init image is never mounted on the host and gets a seed of its own instead ('guest seed write': network, hostname and host key for cloud-init; the home paths stay with the view)
+# @summary What the host writes into a new guest before its first start, by the bake of its image's template (read at generation time; no bake record is chroot): rewrite to 'guest disk write chroot <guest>' (the FreeBSD disk mounted: network, home paths, host key), 'guest disk write cloud-init <guest>' or 'guest disk write autoinstall <guest>' (never mounted on the host: a seed of its own with network, hostname and host key; the home paths stay with the view)
 # @group   guest
 # @internal
 # @see     guest make
-# @see     guest network write
-# @see     guest seed write
+# @see     guest disk write chroot
+# @see     guest seed write cloud-init
+# @see     guest seed write autoinstall
 #@end
-___guest_disk_write1() {
+__guest_disk_write1() {
 	local img="" t="" cur="" chain="" p="" n=0 a="" bake=""
 	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
@@ -1780,11 +1826,42 @@ ___guest_disk_write1() {
 		cur=$p; n=$((n + 1))
 	done
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/bake" && IFS= read -r bake < "$VM_BAKE_BASE/template/$a/bake"; done
-	if test "$bake" = cloud-init; then
-		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest seed write $(sq "$1")"
-	else
-		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest network write $(sq "$1")"
-		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest home write $(sq "$1")"
-		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey write $(sq "$1")"
-	fi
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest disk write $(sq "${bake:-chroot}") $(sq "$1")"
+}
+
+#@help ___guest_disk_write_chroot1
+# @command guest disk write chroot <guest>
+# @summary The chroot case of 'guest disk write': the clone is mounted and gets its network (rc.conf), the home paths of the template and its ssh host key -- 'guest network write', 'guest home write', 'guest hostkey write'
+# @group   guest
+# @internal
+# @see     guest disk write
+# @see     guest network write
+# @see     guest home write
+# @see     guest hostkey write
+#@end
+___guest_disk_write_chroot1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest network write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest home write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey write $(sq "$1")"
+}
+
+#@help __guest_disk_write_cloud_init1
+# @internal the cloud-init case of 'guest disk write <guest>' (guest disk write cloud-init <guest>): rewrite to 'guest seed write cloud-init <guest>'
+#@end
+__guest_disk_write_cloud_init1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest seed write cloud-init $(sq "$1")"
+}
+
+#@help __guest_disk_write_autoinstall1
+# @internal the autoinstall case of 'guest disk write <guest>' (guest disk write autoinstall <guest>): rewrite to 'guest seed write autoinstall <guest>'
+#@end
+__guest_disk_write_autoinstall1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest seed write autoinstall $(sq "$1")"
+}
+
+#@help __guest_disk_write2
+# @internal dispatch fallback of 'guest disk write <bake> <guest>' for a bake that is neither chroot, cloud-init nor autoinstall: an error line
+#@end
+__guest_disk_write2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest disk write: the image of $2 was baked by $1, which has no disk write (chroot | cloud-init | autoinstall)")"
 }

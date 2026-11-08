@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest install), pinned to sudo sh: vm-bhyve needs root. Inspect first: vm-bake setintp guest_install cat.

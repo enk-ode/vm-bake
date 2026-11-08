@@ -571,8 +571,8 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_sshd_write seed_view_write seed_pack firstboot_conf_write firstboot_gone firstboot_conf_drop disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write seed_write home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_sshd_write seed_view_write seed_pack firstboot_conf_write firstboot_gone firstboot_conf_drop response_write site_write site_pack console_drive_tmux console_drive_nmdm disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write seed_write_cloud_init seed_write_autoinstall home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run install halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -2126,7 +2126,15 @@ test_linux_plan() {
   else
     fail "image disk place: $out"
   fi
-  out=$(run_vmbake image firstboot conf write img:debian-dev:v1)
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake image firstboot conf img:debian-dev:v1 | grep -q "image firstboot conf 'cloud-init' 'img:debian-dev:v1'" && run_vmbake image firstboot conf cloud-init img:debian-dev:v1 | grep -q "image firstboot conf write 'img:debian-dev:v1' '$TEST_DIR/img/img:debian-dev:v1/seed.iso'" && run_vmbake image firstboot conf chroot img:debian-dev:v1 | grep -q "cloud-init | autoinstall"; then
+    pass "image firstboot conf: the bake word from the template, cloud-init hangs the seed.iso on, another word is an error"
+  else
+    fail "image firstboot conf: $(run_vmbake image firstboot conf img:debian-dev:v1)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  out=$(run_vmbake image firstboot conf write img:debian-dev:v1 "$TEST_DIR/img/img:debian-dev:v1/seed.iso")
   if printf '%s\n' "$out" | grep -q '^cpu=4$' && printf '%s\n' "$out" | grep -q '^memory=8G$' && printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:f9"$' && printf '%s\n' "$out" | grep -q "^disk0_name=\"$TEST_DIR/img/img:debian-dev:v1/disk0.img\"$" && printf '%s\n' "$out" | grep -q '^disk1_type="ahci-cd"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/img:debian-dev:v1/seed.iso\"$" && printf '%s\n' "$out" | grep -q "$TEST_DIR/gst/firstboot/firstboot.conf" && [ "$(printf '%s\n' "$out" | sed -n "/<<'EOF_CONF'/,/^EOF_CONF/p" | grep -c '^[a-z0-9_]*=')" = "13" ]; then
     pass "image firstboot conf write: the template's resources, the image's disk and seed, under the guests' directory as firstboot"
   else
@@ -2143,32 +2151,187 @@ test_linux_plan() {
   run_vmbake guest record write x caledonia 172.16.100.102/24 > /dev/null
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  out=$(run_vmbake guest disk write chroot caledonia)
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   disk=$(run_vmbake guest disk write tirol)
-  out=$(run_vmbake guest disk write caledonia)
-  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  if [ "$(printf '%s\n' "$disk" | grep -c .)" = "1" ] && printf '%s\n' "$disk" | grep -q "guest seed write 'tirol'" && [ "$(printf '%s\n' "$out" | grep -c .)" = "3" ] && printf '%s\n' "$out" | grep -n "network write\|home write\|hostkey write" | tr '\n' ' ' | grep -q "1:.*network write.* 2:.*home write.* 3:.*hostkey write"; then
-    pass "guest disk write: a cloud-init guest gets its seed, a chroot guest network, home and host key"
+  if [ "$(printf '%s\n' "$disk" | grep -c .)" = "1" ] && printf '%s\n' "$disk" | grep -q "guest disk write 'cloud-init' 'tirol'" && run_vmbake guest disk write cloud-init tirol | grep -q "guest seed write cloud-init 'tirol'" && run_vmbake guest disk write caledonia | grep -q "guest disk write 'chroot' 'caledonia'" && run_vmbake guest disk write foo caledonia | grep -q "chroot | cloud-init | autoinstall" && [ "$(printf '%s\n' "$out" | grep -c .)" = "3" ] && printf '%s\n' "$out" | grep -n "network write\|home write\|hostkey write" | tr '\n' ' ' | grep -q "1:.*network write.* 2:.*home write.* 3:.*hostkey write"; then
+    pass "guest disk write: the bake word from the template (none is chroot); cloud-init rewrites to its seed, chroot to network, home and host key, another word is an error"
   else
     fail "guest disk write: $disk / $out"
   fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   out=$(run_vmbake guest conf write tirol)
   if printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:6e"$' && printf '%s\n' "$out" | grep -q '^disk1_type="ahci-cd"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/gst/tirol/seed.iso\"$" && ! run_vmbake guest conf write caledonia | grep -q network0_mac; then
     pass "guest conf write: a cloud-init guest carries the MAC of its address and the seed as disk1, a chroot guest neither"
   else
     fail "guest conf write cloud: $out"
   fi
-  if run_vmbake guest seed write tirol 2>&1 | grep -q "carries no ssh host key"; then
+  if run_vmbake guest seed write cloud-init tirol 2>&1 | grep -q "carries no ssh host key"; then
     pass "guest seed write without a host key is an error"
   else
-    fail "seed without key: $(run_vmbake guest seed write tirol 2>&1 | tail -2)"
+    fail "seed without key: $(run_vmbake guest seed write cloud-init tirol 2>&1 | tail -2)"
   fi
   run_vmbake hostkey create k1 > /dev/null 2>&1
   run_vmbake guest hostkey use tirol k1 > /dev/null
-  out=$(run_vmbake guest seed write tirol 2>&1)
+  out=$(run_vmbake guest seed write cloud-init tirol 2>&1)
   if printf '%s\n' "$out" | grep -q "^instance-id: tirol$" && printf '%s\n' "$out" | grep -q "^      macaddress: '58:9c:fc:10:64:6e'$" && printf '%s\n' "$out" | grep -q "^      - 172.16.100.110/24$" && printf '%s\n' "$out" | grep -q "^        via: 172.16.100.100$" && printf '%s\n' "$out" | grep -q "^users: \[\]$" && printf '%s\n' "$out" | grep -q "sed 's/^/    /' '$TEST_DIR/hostkey/k1/key'" && ! printf '%s\n' "$out" | grep -q "PRIVATE KEY" && printf '%s\n' "$out" | grep -q "label=cidata '$TEST_DIR/gst/tirol/seed.iso'"; then
     pass "guest seed write: hostname, the address on the MAC's interface, gateway and resolver, no users, the host key read when it runs and never emitted"
   else
     fail "guest seed write: $out"
+  fi
+}
+
+# openbsd_chain - an OpenBSD chain beside the others: the install ISO as
+# base (an empty file in the sandbox), autoinstall as bake, a dev template
+# with packages (doas among them, the escalation word), an env line and
+# the host-uid user
+openbsd_chain() {
+  : > "$TEST_DIR/install80.iso"
+  run_vmbake template add openbsd > /dev/null
+  run_vmbake template add openbsd-8.0 openbsd > /dev/null
+  run_vmbake template base iso openbsd-8.0 amd64 "$TEST_DIR/install80.iso" 0000000000000000000000000000000000000000000000000000000000000000 > /dev/null
+  run_vmbake template bake autoinstall openbsd-8.0 > /dev/null
+  run_vmbake template add openbsd-dev openbsd-8.0 > /dev/null
+  run_vmbake template resource openbsd-dev 4 4G 40G > /dev/null
+  run_vmbake template package add openbsd-dev git > /dev/null
+  run_vmbake template package add openbsd-dev doas > /dev/null
+  run_vmbake template env add openbsd-dev EDITOR vi > /dev/null
+  run_vmbake template user add openbsd-dev "$(id -un)" host > /dev/null
+}
+
+test_openbsd_plan() {
+  test_header "openbsd: image make openbsd as plans, the response file, the site set, the console driver, the guest's seed"
+  test_setup
+  image_chain
+  openbsd_chain
+  local plan out img="img:openbsd-dev:v1"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake template bake autoinstall openbsd-8.0 | grep -q "template leaf record 'openbsd-8.0' bake autoinstall" && run_vmbake template bake foo openbsd-8.0 | grep -q "chroot | cloud-init | autoinstall"; then
+    pass "template bake autoinstall records the bake, an unknown way names the three"
+  else
+    fail "template bake autoinstall: $(run_vmbake template bake foo openbsd-8.0)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  plan=$(run_vmbake image make openbsd openbsd-dev v1)
+  if printf '%s\n' "$plan" | grep -q "image make openbsd from 'openbsd-dev' 'v1' '$img'" && run_vmbake image make openbsd $img | grep -q "image make openbsd from 'openbsd-dev' 'v1' '$img'" && run_vmbake image make openbsd openbsd-dev v1 img:k8s:v1 | grep -q "image make openbsd from 'openbsd-dev' 'v1' 'img:k8s:v1'"; then
+    pass "the three spellings of image make openbsd rewrite to image make openbsd from"
+  else
+    fail "image make openbsd spellings: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  plan=$(run_vmbake image make openbsd from openbsd-dev v1 $img)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "8" ] && printf '%s\n' "$plan" | sed -n 5p | grep -q "image create iso 'openbsd-dev' '$img'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image install '$img'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "image close iso '$img'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image seal '$img'"; then
+    pass "image make openbsd from: note, template, name, free, then create iso, install, close iso, seal"
+  else
+    fail "image make openbsd from plan: $plan"
+  fi
+  plan=$(run_vmbake image create iso openbsd-dev $img)
+  if printf '%s\n' "$plan" | grep -q "image check autoinstall 'openbsd-dev'" && printf '%s\n' "$plan" | tail -1 | grep -q "image disk create '$img' '40G'" && printf '%s\n' "$plan" | grep -n "image record write\|image dataset create\|image disk create" | tr '\n' ' ' | grep -q "record write.* dataset create.* disk create" && ! printf '%s\n' "$plan" | grep -q "image fetch"; then
+    pass "image create iso: the autoinstall check, the record, the dataset, an empty disk of the template's disk size, nothing fetched"
+  else
+    fail "image create iso plan: $plan"
+  fi
+  run_vmbake image record write openbsd-dev $img > /dev/null
+  plan=$(run_vmbake image install $img)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image response write '$img'" && printf '%s\n' "$plan" | sed -n 4p | grep -q "image site pack '$img'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image firstboot conf '$img'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest install 'firstboot' '$TEST_DIR/install80.iso'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image console drive '$img'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | sed -n 11p | grep -q "image firstboot conf drop"; then
+    pass "image install: record, response, site, pack, conf, link, install from the ISO, console, gone, link drop, conf drop"
+  else
+    fail "image install plan: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  mv "$TEST_DIR/install80.iso" "$TEST_DIR/install80.iso.away"
+  if run_vmbake image check autoinstall freebsd-dev 2>&1 | grep -q "Error" && run_vmbake image check autoinstall debian-dev 2>&1 | grep -q "Error" && run_vmbake image check autoinstall openbsd-dev 2>&1 | grep -q "Error" && mv "$TEST_DIR/install80.iso.away" "$TEST_DIR/install80.iso" && [ -z "$(run_vmbake image check autoinstall openbsd-dev 2>&1 | grep -v '^#')" ]; then
+    pass "image check autoinstall: a release base, a cloud image and a missing ISO are errors, a readable install ISO with the bake autoinstall passes"
+  else
+    fail "image check autoinstall: $(run_vmbake image check autoinstall openbsd-dev 2>&1 | tail -2)"
+  fi
+  if pin_image_cat; then
+    pass "every image and guest act is pinned to cat in the sandbox"
+  else
+    fail "acts not pinned to cat -- not calling them"; return
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_guest_hostkey_bind" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
+  run_vmbake setenv VM_BAKE_GUEST_DIR "$TEST_DIR/gst" > /dev/null
+  printf 'ssh-ed25519 AAAATEST test@host\n' > "$TEST_DIR/key.pub"
+  run_vmbake setenv VM_BAKE_HOST_KEY "$TEST_DIR/key.pub" > /dev/null
+  out=$(run_vmbake image response write $img 2>&1)
+  if printf '%s\n' "$out" | grep -q "^System hostname = firstboot$" && printf '%s\n' "$out" | grep -q "^IPv4 address for vio0 = 172.16.100.249$" && printf '%s\n' "$out" | grep -q "^Netmask for vio0 = 255.255.255.0$" && printf '%s\n' "$out" | grep -q "^Default IPv4 route = 172.16.100.100$" && printf '%s\n' "$out" | grep -q "^Setup a user = no$" && printf '%s\n' "$out" | grep -q "^Do you expect to run the X Window System = no$" && printf '%s\n' "$out" | grep -q "^Location of sets = @INSTCD@$" && printf '%s\n' "$out" | grep -q "^Location of sets = @SITECD@$" && printf '%s\n' "$out" | grep -q "^Pathname to the sets = 8.0/amd64/$" && printf '%s\n' "$out" | grep -n "^Set name(s) = " | tr '\n' ' ' | grep -q "= -x\*.* = done.* = site80.tgz.* = done" && printf '%s\n' "$out" | grep -q "install -d -m 700 '$TEST_DIR/img/$img/site/8.0/amd64'"; then
+    pass "image response write: the bake's hostname and static address, no user, no X, the sets from the install CD without X, the site set from the site CD, the release directory from the ISO's name"
+  else
+    fail "image response write: $out"
+  fi
+  out=$(run_vmbake image site write $img 2>&1)
+  if printf '%s\n' "$out" | grep -q "^Port 2222$" && printf '%s\n' "$out" | grep -q "^useradd -m -u $(id -u) -G wheel -s /bin/ksh '$(id -un)'$" && printf '%s\n' "$out" | grep -q "ssh-ed25519 AAAATEST test@host' > '/etc/ssh/authorized_keys/$(id -un)'" && printf '%s\n' "$out" | grep -q "^permit nopass keepenv $(id -un) as root$" && printf '%s\n' "$out" | grep -q "^pkg_add -I git 2>&1" && ! printf '%s\n' "$out" | grep -q "pkg_add.*doas" && printf '%s\n' "$out" | grep -q '^export EDITOR="vi"$' && printf '%s\n' "$out" | grep -q "^usermod -p '\*' root$" && printf '%s\n' "$out" | grep -q "'!/usr/local/libexec/vm-bake-seed' > /etc/hostname.vio0" && printf '%s\n' "$out" | grep -q "^shutdown -p now$" && ! printf '%s\n' "$out" | grep -q "X11Forwarding"; then
+    pass "image site write: sshd on the port, the host-uid user with the key, doas from the word (not a package), the env line, root locked, the seed hook as hostname.vio0, the packages and the power-off at the first boot, no X11"
+  else
+    fail "image site write: $out"
+  fi
+  out=$(run_vmbake image site pack $img 2>&1)
+  if printf '%s\n' "$out" | grep -q "bsdtar -czf '$TEST_DIR/img/$img/site/8.0/amd64/site80.tgz' --uid 0 --gid 0 --uname root --gname wheel -C '$TEST_DIR/img/$img/site.d' install.site" && printf '%s\n' "$out" | grep -q "sha256 site80.tgz > SHA256" && printf '%s\n' "$out" | grep -q "label=vmbakesite '$TEST_DIR/img/$img/site.iso' '$TEST_DIR/img/$img/site'"; then
+    pass "image site pack: the set as root:wheel under the release directory, its SHA256, the site directory as site.iso"
+  else
+    fail "image site pack: $out"
+  fi
+  out=$(run_vmbake image firstboot conf write $img "$TEST_DIR/img/$img/site.iso")
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if printf '%s\n' "$out" | grep -q '^cpu=4$' && printf '%s\n' "$out" | grep -q '^memory=4G$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/$img/site.iso\"$" && ! printf '%s\n' "$out" | grep -q "install80" && run_vmbake image firstboot conf $img | grep -q "image firstboot conf 'autoinstall' '$img'" && run_vmbake image firstboot conf autoinstall $img | grep -q "image firstboot conf write '$img' '$TEST_DIR/img/$img/site.iso'"; then
+    pass "image firstboot conf: autoinstall hangs the site.iso on as the one CD, the install ISO is not in the configuration"
+  else
+    fail "firstboot conf autoinstall: $out"
+  fi
+  if run_vmbake image console drive $img | grep -q "image console drive 'nmdm' '$img'" && run_vmbake setenv VM_BAKE_CONSOLE tmux > /dev/null && run_vmbake image console drive $img | grep -q "image console drive 'tmux' '$img'" && run_vmbake image console drive foo $img | grep -q "tmux | nmdm"; then
+    pass "image console drive: VM_BAKE_CONSOLE picks the driver, nmdm by default, another word is an error"
+  else
+    fail "image console drive: $(run_vmbake image console drive $img)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  out=$(run_vmbake image console drive tmux $img 2>&1)
+  plan=$(run_vmbake image console drive nmdm $img 2>&1)
+  if printf '%s\n' "$out" | grep -q "^g='firstboot'$" && printf '%s\n' "$out" | grep -q 'tmux send-keys -t "$g"' && printf '%s\n' "$out" | grep -q "^wait_for 'boot>' 120$" && printf '%s\n' "$out" | grep -q "s/@INSTCD@/\$i/;s/@SITECD@/\$s/" && printf '%s\n' "$out" | grep -q "^send 'a'$" && printf '%s\n' "$out" | grep -q "^wait_for 'CONGRATULATIONS' 1800$" && printf '%s\n' "$plan" | grep -q "dev='/dev/nmdm-firstboot.1B' log='$TEST_DIR/gst/firstboot/console.log'" && printf '%s\n' "$plan" | grep -q "^wait_for 'CONGRATULATIONS' 1800$" && [ "$(printf '%s\n' "$out" | grep -c '^send \|^wait_')" = "$(printf '%s\n' "$plan" | grep -c '^send \|^wait_')" ]; then
+    pass "image console drive tmux and nmdm: the same dialogue -- com0, boot, the shell fills the CD names into the response file, autoinstall, CONGRATULATIONS -- over the session or the device"
+  else
+    fail "console drive: $out / $plan"
+  fi
+  run_vmbake guest record write $img istria 172.16.100.120/24 > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake guest disk write istria | grep -q "guest disk write 'autoinstall' 'istria'" && run_vmbake guest disk write autoinstall istria | grep -q "guest seed write autoinstall 'istria'"; then
+    pass "guest disk write: an autoinstall guest gets the autoinstall seed"
+  else
+    fail "guest disk write autoinstall: $(run_vmbake guest disk write istria)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  out=$(run_vmbake guest conf write istria)
+  if printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:78"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/gst/istria/seed.iso\"$"; then
+    pass "guest conf write: an autoinstall guest carries the MAC of its address and the seed as disk1"
+  else
+    fail "guest conf write autoinstall: $out"
+  fi
+  if run_vmbake guest seed write autoinstall istria 2>&1 | grep -q "carries no ssh host key"; then
+    pass "guest seed write autoinstall without a host key is an error"
+  else
+    fail "autoinstall seed without key: $(run_vmbake guest seed write autoinstall istria 2>&1 | tail -2)"
+  fi
+  run_vmbake hostkey create k1 > /dev/null 2>&1
+  run_vmbake guest hostkey use istria k1 > /dev/null
+  out=$(run_vmbake guest seed write autoinstall istria 2>&1)
+  if printf '%s\n' "$out" | grep -q "'istria.local' > '$TEST_DIR/gst/istria/seed/myname'" && printf '%s\n' "$out" | grep -q "'172.16.100.120' > '$TEST_DIR/gst/istria/seed/address'" && printf '%s\n' "$out" | grep -q "'255.255.255.0' > '$TEST_DIR/gst/istria/seed/netmask'" && printf '%s\n' "$out" | grep -q "'172.16.100.100' > '$TEST_DIR/gst/istria/seed/mygate'" && printf '%s\n' "$out" | grep -q "cp '$TEST_DIR/hostkey/k1/key' '$TEST_DIR/gst/istria/seed/ssh_host_ed25519_key'" && ! printf '%s\n' "$out" | grep -q "PRIVATE KEY" && printf '%s\n' "$out" | grep -q "label=vmbakeseed '$TEST_DIR/gst/istria/seed.iso'"; then
+    pass "guest seed write autoinstall: the marker, myname in the domain, address and netmask, gateway, the host key copied when it runs and never emitted"
+  else
+    fail "guest seed write autoinstall: $out"
+  fi
+  out=$(run_vmbake guest install firstboot /x/install80.iso)
+  if printf '%s\n' "$out" | grep -q "^vm install 'firstboot' '/x/install80.iso' || exit 1$"; then
+    pass "guest install: vm install with the ISO for this one run"
+  else
+    fail "guest install: $out"
   fi
 }
 
@@ -2209,6 +2372,7 @@ main() {
   should_run_test test_dowry_place
   should_run_test test_hostkey
   should_run_test test_linux_plan
+  should_run_test test_openbsd_plan
   should_run_test test_dump_witness
   should_run_test test_archive_pair
 

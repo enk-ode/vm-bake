@@ -1,0 +1,2 @@
+nmdm
+# @summary How vm-bhyve offers the guests' serial console, the word vm-bhyve's console= in VM_BAKE_VM_DIR/.config/system.conf says: nmdm (its default: /dev/nmdm-<guest>.1B, what 'vm console' attaches to) or tmux (a tmux session per guest, run by root). An autoinstall bake types into that console (image console drive) and must know which.

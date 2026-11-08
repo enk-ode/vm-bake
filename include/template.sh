@@ -412,11 +412,25 @@ ___template_bake_cloud_init1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf record $(sq "$1") bake cloud-init"
 }
 
+#@help ___template_bake_autoinstall1
+# @command template bake autoinstall <template>
+# @summary The image is installed by OpenBSD's autoinstall(8) in a throwaway guest: the base is the install ISO (template base iso), the response file and a site set rendered from the template answer the installer, the first boot adds the packages and powers off, then the disk is sealed: the template exists; then the record
+# @group   template
+# @example vm-bake template bake autoinstall openbsd
+# @see     template bake chroot
+# @see     template bake cloud-init
+# @see     image make openbsd
+#@end
+___template_bake_autoinstall1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf record $(sq "$1") bake autoinstall"
+}
+
 #@help __template_bake2
-# @internal dispatch fallback of 'template bake <word> <template>' for a word that is neither chroot nor cloud-init: an error line
+# @internal dispatch fallback of 'template bake <word> <template>' for a word that is neither chroot, cloud-init nor autoinstall: an error line
 #@end
 __template_bake2() {
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template bake: unknown way $1 (chroot | cloud-init)")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template bake: unknown way $1 (chroot | cloud-init | autoinstall)")"
 }
 
 #@help ___template_bake_drop1

@@ -1844,13 +1844,13 @@ _image_disk_place3() {
 # @example vm-bake image firstboot img:debian-dev:v1
 # @see     image make linux
 # @see     image seed write
-# @see     image firstboot conf write
+# @see     image firstboot conf
 # @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name
 #@end
 ___image_firstboot1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed write $(sq "$1")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link write $(sq "$VM_BAKE_FIRSTBOOT")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest run $(sq "$VM_BAKE_FIRSTBOOT")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot gone"
@@ -1859,19 +1859,63 @@ ___image_firstboot1() {
 }
 
 
-#@help _image_firstboot_conf_write1
-# @command image firstboot conf write <image>
-# @summary Act terminal (the invoking user: the directory is theirs): the throwaway guest's vm-bhyve configuration VM_BAKE_GUEST_DIR/<firstboot>/<firstboot>.conf -- UEFI, cpu and memory from the image's template (read at generation time), the switch, the image's disk0.img as disk0 (custom path) and its seed.iso as disk1 (ahci-cd); no dataset and no clone: the guest boots the image itself, once
+#@help __image_firstboot_conf1
+# @command image firstboot conf <image>
+# @summary The throwaway guest's vm-bhyve configuration, by the bake of the image's template (read at generation time): rewrite to 'image firstboot conf cloud-init <image>' (the seed.iso as the CD) or 'image firstboot conf autoinstall <image>' (the site.iso as the CD; the install ISO comes with 'guest install'); both end in 'image firstboot conf write <image> <cd>'
 # @group   image
 # @internal
+# @see     image firstboot
+# @see     image install
+#@end
+__image_firstboot_conf1() {
+	local t="" cur="" chain="" p="" n=0 a="" bake=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/bake" && IFS= read -r bake < "$VM_BAKE_BASE/template/$a/bake"; done
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf $(sq "${bake:-none}") $(sq "$1")"
+}
+
+#@help __image_firstboot_conf_cloud_init1
+# @internal the cloud-init case of 'image firstboot conf <image>' (image firstboot conf cloud-init <image>): rewrite to 'image firstboot conf write <image> <seed.iso>'
+#@end
+__image_firstboot_conf_cloud_init1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf write $(sq "$1") $(sq "$VM_BAKE_IMAGE_DIR/$1/seed.iso")"
+}
+
+#@help __image_firstboot_conf_autoinstall1
+# @internal the autoinstall case of 'image firstboot conf <image>' (image firstboot conf autoinstall <image>): rewrite to 'image firstboot conf write <image> <site.iso>' -- the install ISO is not in the configuration: 'guest install' hangs it on the first run only, so the reboot after the installation comes up from the disk
+#@end
+__image_firstboot_conf_autoinstall1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf write $(sq "$1") $(sq "$VM_BAKE_IMAGE_DIR/$1/site.iso")"
+}
+
+#@help __image_firstboot_conf2
+# @internal dispatch fallback of 'image firstboot conf <bake> <image>' for a bake that is neither cloud-init nor autoinstall: an error line
+#@end
+__image_firstboot_conf2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image firstboot conf: the template of $2 bakes by $1, which has no first boot (cloud-init | autoinstall)")"
+}
+
+#@help _image_firstboot_conf_write2
+# @command image firstboot conf write <image> <cd>
+# @summary Act terminal (the invoking user: the directory is theirs): the throwaway guest's vm-bhyve configuration VM_BAKE_GUEST_DIR/<firstboot>/<firstboot>.conf -- UEFI, cpu and memory from the image's template (read at generation time), the switch, the MAC of VM_BAKE_FIRSTBOOT_ADDRESS, the image's disk0.img as disk0 (custom path) and <cd> as disk1 (ahci-cd: the seed.iso of a cloud-init bake, the site.iso of an autoinstall bake); no dataset and no clone: the guest boots the image itself, once
+# @group   image
+# @internal
+# @completion cd files
 # @see     image firstboot
 # @env     VM_BAKE_GUEST_DIR  the guests' directory
 # @env     VM_BAKE_GUEST_SWITCH  the vm-bhyve switch the guests hang on
 # @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name
+# @env     VM_BAKE_FIRSTBOOT_ADDRESS  the throwaway guest's address, the MAC is derived from it
 # @env     VM_BAKE_IMAGE_DIR  the image's directory
 #@end
-_image_firstboot_conf_write1() {
-	local g="$VM_BAKE_FIRSTBOOT" conf="$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/$VM_BAKE_FIRSTBOOT.conf" t="" cur="" chain="" p="" n=0 a="" res=""
+_image_firstboot_conf_write2() {
+	local g="$VM_BAKE_FIRSTBOOT" conf="$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/$VM_BAKE_FIRSTBOOT.conf" t="" cur="" chain="" p="" n=0 a="" res="" cd="$2"
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
 	cur=$t
 	while test "$cur" != empty && test "$n" -lt 32; do
@@ -1882,9 +1926,9 @@ _image_firstboot_conf_write1() {
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/resource" && IFS= read -r res < "$VM_BAKE_BASE/template/$a/resource"; done
 	set -- "$1" ${res:-1 1G 0} "$(printf '%s' "${VM_BAKE_FIRSTBOOT_ADDRESS%/*}" | awk -F. '{ printf "58:9c:fc:%02x:%02x:%02x", $2, $3, $4 }')"
 	printf '%s\n' "install -d -m 755 '$VM_BAKE_GUEST_DIR/$g' && cat > '$conf' <<'EOF_CONF'"
-	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" "network0_mac=\"$5\"" 'disk0_type="virtio-blk"' "disk0_name=\"$VM_BAKE_IMAGE_DIR/$1/disk0.img\"" 'disk0_dev="custom"' 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_IMAGE_DIR/$1/seed.iso\"" 'disk1_dev="custom"' 'debug="yes"'
+	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" "network0_mac=\"$5\"" 'disk0_type="virtio-blk"' "disk0_name=\"$VM_BAKE_IMAGE_DIR/$1/disk0.img\"" 'disk0_dev="custom"' 'disk1_type="ahci-cd"' "disk1_name=\"$cd\"" 'disk1_dev="custom"' 'debug="yes"'
 	printf '%s\n' "EOF_CONF"
-	printf '%s\n' "printf '# firstboot %s: %s boots %s with seed %s\\n' '$g' '$conf' '$VM_BAKE_IMAGE_DIR/$1/disk0.img' '$VM_BAKE_IMAGE_DIR/$1/seed.iso' >&2"
+	printf '%s\n' "printf '# firstboot %s: %s boots %s with %s\\n' '$g' '$conf' '$VM_BAKE_IMAGE_DIR/$1/disk0.img' '$cd' >&2"
 }
 
 #@help _image_firstboot_gone0
@@ -1927,6 +1971,385 @@ _image_firstboot_conf_drop0() {
 # @see     image seal
 #@end
 ___image_close_cloud1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image digest write $(sq "$1")"
+}
+
+#@help __image_make_openbsd1
+# @internal arity-1 sibling of 'image make openbsd' (image make openbsd <image>  -- the full name img:<template>:<version>): rewrite to 'image make openbsd from <template> <version> <image>'
+#@end
+__image_make_openbsd1() {
+	local t="${1#img:}"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make openbsd from $(sq "${t%%:*}") $(sq "${1##*:}") $(sq "$1")"
+}
+
+#@help __image_make_openbsd2
+# @command image make openbsd <template> <version>
+# @summary Bake an OpenBSD image from the template under the version: the image is img:<template>:<version>, handed to 'image make openbsd from' -- the same three spellings as 'image make linux' (the full name alone, or a name of its own as third word)
+# @group   image
+# @param   version  the version field of the image name, a word of [A-Za-z0-9_.+-]
+# @example vm-bake image make openbsd openbsd-dev v1
+# @see     image make openbsd from
+# @see     image make linux
+# @see     image list
+#@end
+__image_make_openbsd2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make openbsd from $(sq "$1") $(sq "$2") $(sq "img:$1:$2")"
+}
+
+#@help __image_make_openbsd3
+# @internal arity-3 sibling of 'image make openbsd' (image make openbsd <template> <version> <image>  -- a name of its own): rewrite to 'image make openbsd from <template> <version> <image>'
+#@end
+__image_make_openbsd3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make openbsd from $(sq "$1") $(sq "$2") $(sq "$3")"
+}
+
+#@help ___image_make_openbsd_from3
+# @command image make openbsd from <template> <version> <image>
+# @summary The bake behind the three spellings of 'image make openbsd': the template exists, the image name is img:<name>:<version> and free; then 'image create iso' (an empty disk0.img of the resource's size), 'image install' (the response file and the site set of the template as site.iso, one run of the throwaway guest VM_BAKE_FIRSTBOOT from the install ISO, its console driven into autoinstall(8); the installed system boots once more, adds the packages and powers off), 'image close iso' (the digest) and 'image seal' -- no builder and no chroot: an OpenBSD disk is never mounted on the host
+# @group   image
+# @internal
+# @see     image make openbsd
+# @see     image create iso
+# @see     image install
+#@end
+___image_make_openbsd_from3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image make openbsd: template $1, version $2 -> image $3 (create iso, install, close iso, seal)")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image name valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check absent $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image create iso $(sq "$1") $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image install $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image close iso $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seal $(sq "$3")"
+}
+
+#@help __image_check_autoinstall1
+# @command image check autoinstall <template>
+# @summary The template's resolved base is of kind iso, its file is named install<NN>.iso (the release NN and the set directory are read from that name) and readable, and its resolved bake is autoinstall (all read at generation time): a comment line, else an error line
+# @group   image
+# @internal
+# @see     image create iso
+# @see     template base iso
+# @see     template bake autoinstall
+#@end
+__image_check_autoinstall1() {
+	local cur="$1" chain="" p="" n=0 a="" base="" bake="" kind="" path="" f=""
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/bake" && IFS= read -r bake < "$VM_BAKE_BASE/template/$a/bake"; done
+	kind=${base%% *}; path=$(printf '%s' "$base" | awk '{ print $3 }'); f=${path##*/}
+	case "$f" in install[0-9][0-9].iso) ;; *) f="" ;; esac
+	if test "$kind" = iso && test "$bake" = autoinstall && test -n "$f" && test -r "$path"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "image: $1 installs from $path by autoinstall")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image create iso: template $1 needs a readable base of kind iso named install<NN>.iso (has ${base:-none}) and the bake autoinstall (has ${bake:-none}): template base iso, template bake autoinstall")"
+	fi
+}
+
+#@help ___image_create_iso2
+# @command image create iso <template> <image>
+# @summary Step 1 of the OpenBSD bake, the disk: the template exists with a resource, its base is an install ISO and its bake autoinstall, the image name is free; then the bake lock, the record, the dataset and an empty disk0.img of the resource's disk size (image disk create) -- the installer partitions and fills it
+# @group   image
+# @internal
+# @see     image make openbsd
+# @see     image install
+# @env     VM_BAKE_IMAGE_DIR  where the image's dataset is created
+#@end
+___image_create_iso2() {
+	local cur="$1" chain="" p="" n=0 a="" size=""
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/resource" && IFS= read -r size < "$VM_BAKE_BASE/template/$a/resource"; done
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check resource $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check autoinstall $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image name valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check absent $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image lock take $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image record write $(sq "$1") $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image tree ensure"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image dataset create $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk create $(sq "$2") $(sq "${size##* }")"
+}
+
+#@help ___image_install1
+# @command image install <image>
+# @summary Step 2 of the OpenBSD bake, the installation: the image has a record; then the response file (image response write) and the site set (image site write) rendered from the template and packed as site.iso (image site pack), the throwaway guest VM_BAKE_FIRSTBOOT configured with the image's disk and the site.iso (image firstboot conf), linked where vm-bhyve looks, run from the template's install ISO (guest install: the ISO rides along for this one run), its console typed into autoinstall(8) (image console drive), waited for until bhyve is gone (the installer reboots, the installed system adds the packages and powers off), its link and configuration removed again
+# @group   image
+# @example vm-bake image install img:openbsd-dev:v1
+# @see     image make openbsd
+# @see     image response write
+# @see     image site write
+# @see     image console drive
+# @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name
+#@end
+___image_install1() {
+	local t="" cur="" chain="" p="" n=0 a="" base="" iso=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
+	iso=$(printf '%s' "$base" | awk '{ print $3 }')
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image response write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site pack $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link write $(sq "$VM_BAKE_FIRSTBOOT")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest install $(sq "$VM_BAKE_FIRSTBOOT") $(sq "$iso")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image console drive $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot gone"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link drop $(sq "$VM_BAKE_FIRSTBOOT")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf drop"
+}
+
+#@help _image_response_write1
+# @command image response write <image>
+# @summary Act terminal: the response file of autoinstall(8), VM_BAKE_IMAGE_DIR/<image>/site/install.conf -- hostname VM_BAKE_FIRSTBOOT, vio0 static on VM_BAKE_FIRSTBOOT_ADDRESS, route and nameserver VM_BAKE_GUEST_GATEWAY, domain VM_BAKE_GUEST_DOMAIN, root with a throwaway password (install.site locks it) and no key, sshd on, no root login, the X sets only when the template says 'service display x', com0 at 115200, no user (install.site makes the template's users with their host uids), the host's timezone (/var/db/zoneinfo, else UTC), sd0 whole-disk GPT with the auto layout; the sets from the install CD, then the site set from the site CD -- the installer numbers the CDs, so the console driver fills in @INSTCD@ and @SITECD@ when it copies the file. The template is read at generation time
+# @group   image
+# @internal
+# @see     image install
+# @see     image site write
+# @see     image console drive
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, the hostname of the installation
+# @env     VM_BAKE_FIRSTBOOT_ADDRESS  the installation's address, with prefix length
+# @env     VM_BAKE_GUEST_GATEWAY  route and nameserver of the installation
+# @env     VM_BAKE_GUEST_DOMAIN  its DNS domain
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_response_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 a="" base="" svc="" x=no nn="" rel="" arch="" mask="" tz=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
+	svc=$(awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	printf '%s\n' "$svc" | grep -qx 'display x' && x=yes
+	arch=$(printf '%s' "$base" | awk '{ print $2 }'); nn=$(printf '%s' "$base" | awk '{ print $3 }'); nn=${nn##*/install}; nn=${nn%.iso}; rel="${nn%?}.${nn#?}"
+	mask=$(printf '%s\n' "${VM_BAKE_FIRSTBOOT_ADDRESS#*/}" | awk '{ m = $1 ? 4294967296 - 2 ^ (32 - $1) : 0; printf "%d.%d.%d.%d", int(m / 16777216) % 256, int(m / 65536) % 256, int(m / 256) % 256, m % 256 }')
+	IFS= read -r tz 2>/dev/null < /var/db/zoneinfo || tz=UTC
+	printf '%s\n' "install -d -m 700 '$dir/site/$rel/$arch' || exit 1"
+	printf '%s\n' "cat > '$dir/site/install.conf' <<'EOF_RESPONSE'"
+	printf '%s\n' "System hostname = $VM_BAKE_FIRSTBOOT" "Which network interface do you wish to configure = vio0" "IPv4 address for vio0 = ${VM_BAKE_FIRSTBOOT_ADDRESS%/*}" "Netmask for vio0 = $mask" "IPv6 address for vio0 = none" "Which network interface do you wish to configure = done" "Default IPv4 route = $VM_BAKE_GUEST_GATEWAY" "DNS domain name = $VM_BAKE_GUEST_DOMAIN" "DNS nameservers = $VM_BAKE_GUEST_GATEWAY" "Password for root account = *************" "Public ssh key for root account = none" "Start sshd(8) by default = yes" "Do you expect to run the X Window System = $x" "Change the default console to com0 = yes" "Which speed should com0 use = 115200" "Setup a user = no" "Allow root ssh login = no" "What timezone are you in = $tz" "Which disk is the root disk = sd0" "Encrypt the root disk with a passphrase = no" "Encrypt the root disk with a (p)assphrase or (k)eydisk = no" "Use (W)hole disk MBR, whole disk (G)PT or (E)dit = gpt" "Use (A)uto layout, (E)dit auto layout, or create (C)ustom layout = a" "Location of sets = @INSTCD@" "Pathname to the sets = $rel/$arch/"
+	test "$x" = yes || printf '%s\n' "Set name(s) = -x*"
+	printf '%s\n' "Set name(s) = done" "Location of sets = @SITECD@" "Pathname to the sets = $rel/$arch/" "Set name(s) = site$nn.tgz" "Set name(s) = done" "Directory does not contain SHA256.sig. Continue without verification = yes" "Location of sets = done"
+	printf '%s\n' "EOF_RESPONSE"
+	printf '%s\n' "printf '# image %s: install.conf -- %s on %s netmask %s, sets %s/%s from the install CD and site%s.tgz from the site CD, X %s, timezone %s\\n' $(sq "$1") '$VM_BAKE_FIRSTBOOT' '${VM_BAKE_FIRSTBOOT_ADDRESS%/*}' '$mask' '$rel' '$arch' '$nn' '$x' '$tz' >&2"
+}
+
+#@help _image_site_write1
+# @command image site write <image>
+# @summary Act terminal: the site set's one file, VM_BAKE_IMAGE_DIR/<image>/site.d/install.site, which autoinstall(8) runs chrooted in the installed system at the end -- sshd on VM_BAKE_SSH_PORT without root or passwords, AuthorizedKeysFile /etc/ssh/authorized_keys/%u before the home, X11Forwarding when the template says 'service display x'; the template's users with their host uids in wheel, each with VM_BAKE_HOST_KEY as authorized key; /etc/doas.conf permitting them without a password when the template's packages name doas (doas is in OpenBSD's base: the word switches the escalation on and is not handed to pkg_add); the env lines appended to /etc/profile; /etc/installurl; root's password locked; the address and netmask of the bake under /etc/vm-bake and /usr/local/libexec/vm-bake-seed as the only line of /etc/hostname.vio0 (at every boot it mounts a seed CD when there is one -- guest seed write autoinstall -- and names, addresses and keys the guest, else addresses the bake); /etc/rc.firsttime extended by pkg_add of the packages and the power-off. The template is read at generation time
+# @group   image
+# @internal
+# @see     image install
+# @see     image site pack
+# @see     guest seed write autoinstall
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_HOST_KEY  the public key file; a leading ~/ is the invoking user's home
+# @env     VM_BAKE_SSH_PORT  the port sshd listens on in every guest of this image
+# @env     VM_BAKE_FIRSTBOOT_ADDRESS  the bake's address, the fallback of the seed script
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_site_write1() {
+	local name="$1" dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 pkgs="" users="" envl="" svc="" key="$VM_BAKE_HOST_KEY" keytext="" line="" u="" s="" uid="" doas=no x11=no mask=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	pkgs=$(awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	envl=$(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | sed 's/^\([^=]*\)=\(.*\)$/export \1="\2"/')
+	svc=$(awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	printf '%s\n' "$pkgs" | grep -qx doas && doas=yes
+	pkgs=$(printf '%s\n' "$pkgs" | grep -vx doas || true)
+	printf '%s\n' "$svc" | grep -qx 'display x' && x11=yes
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	keytext=$(cat "$key" 2>/dev/null || true)
+	mask=$(printf '%s\n' "${VM_BAKE_FIRSTBOOT_ADDRESS#*/}" | awk '{ m = $1 ? 4294967296 - 2 ^ (32 - $1) : 0; printf "%d.%d.%d.%d", int(m / 16777216) % 256, int(m / 65536) % 256, int(m / 256) % 256, m % 256 }')
+	printf '%s\n' "install -d -m 700 '$dir/site.d' || exit 1"
+	printf '%s\n' "cat > '$dir/site.d/install.site' <<'EOF_SITE'"
+	printf '%s\n' '#!/bin/sh' '# written by vm-bake (image site write) -- run by autoinstall(8), chrooted in the installed system' 'set -e'
+	printf '%s\n' 'install -d -m 755 /etc/ssh/authorized_keys /etc/vm-bake /usr/local/libexec'
+	printf '%s\n' "cat >> /etc/ssh/sshd_config <<'EOF_SSHD'" "Port $VM_BAKE_SSH_PORT" "PermitRootLogin no" "PasswordAuthentication no" "KbdInteractiveAuthentication no" "AuthorizedKeysFile /etc/ssh/authorized_keys/%u .ssh/authorized_keys"
+	test "$x11" = no || printf '%s\n' "X11Forwarding yes"
+	printf '%s\n' "EOF_SSHD"
+	if test -n "$users"; then
+		IFS='
+'; set -- $users; IFS='
+'
+		for line; do
+			u=${line%% *}; s=${line#* }; uid=$s
+			test "$s" != host || uid=$(id -u "$u" 2>/dev/null || true)
+			printf '%s\n' "useradd -m${uid:+ -u $uid} -G wheel -s /bin/ksh '$u'"
+			printf '%s\n' "printf '%s\\n' '$keytext' > '/etc/ssh/authorized_keys/$u' && chmod 644 '/etc/ssh/authorized_keys/$u'"
+		done
+		if test "$doas" = yes; then
+			printf '%s\n' "cat > /etc/doas.conf <<'EOF_DOAS'"
+			for line; do printf '%s\n' "permit nopass keepenv ${line%% *} as root"; done
+			printf '%s\n' "EOF_DOAS" "chmod 600 /etc/doas.conf"
+		fi
+	fi
+	if test -n "$envl"; then
+		printf '%s\n' "cat >> /etc/profile <<'EOF_ENV'" "# written by vm-bake (template env) -- the sessions' environment"
+		printf '%s\n' "$envl"
+		printf '%s\n' "EOF_ENV"
+	fi
+	printf '%s\n' "printf '%s\\n' 'https://cdn.openbsd.org/pub/OpenBSD' > /etc/installurl"
+	printf '%s\n' "usermod -p '*' root"
+	printf '%s\n' "printf '%s\\n' '${VM_BAKE_FIRSTBOOT_ADDRESS%/*}' > /etc/vm-bake/address" "printf '%s\\n' '$mask' > /etc/vm-bake/netmask"
+	printf '%s\n' "cat > /usr/local/libexec/vm-bake-seed <<'EOF_SEED'" '#!/bin/sh' "# written by vm-bake (image site write) -- the one line of /etc/hostname.vio0: a seed CD (guest seed write autoinstall) names, addresses and keys this guest; without one, the address of the bake" 'a=$(cat /etc/vm-bake/address) m=$(cat /etc/vm-bake/netmask)' 'for c in cd0 cd1; do' '	mount -r -t cd9660 /dev/${c}a /mnt 2>/dev/null || continue' '	if test -f /mnt/vm-bake-seed; then' '		a=$(cat /mnt/address) m=$(cat /mnt/netmask)' '		cp /mnt/myname /mnt/mygate /mnt/resolv.conf /etc/' '		install -m 600 /mnt/ssh_host_ed25519_key /etc/ssh/ssh_host_ed25519_key' '		install -m 644 /mnt/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ed25519_key.pub' '		hostname "$(cat /etc/myname)"' '	fi' '	umount /mnt' 'done' 'ifconfig vio0 inet "$a" netmask "$m" up' "EOF_SEED"
+	printf '%s\n' "chmod 755 /usr/local/libexec/vm-bake-seed" "printf '%s\\n' '!/usr/local/libexec/vm-bake-seed' > /etc/hostname.vio0"
+	printf '%s\n' "cat >> /etc/rc.firsttime <<'EOF_FIRST'" "# written by vm-bake (image site write) -- the bake's first boot: the packages, then power off; the host seals the disk"
+	test -z "$pkgs" || printf '%s\n' "pkg_add -I $(printf '%s\n' "$pkgs" | tr '\n' ' ')2>&1 | tee /dev/console"
+	printf '%s\n' "pkg_info -q > /etc/vm-bake/packages" "shutdown -p now" "EOF_FIRST"
+	printf '%s\n' "EOF_SITE"
+	printf '%s\n' "chmod 755 '$dir/site.d/install.site'"
+	printf '%s\n' "printf '# image %s: install.site -- sshd on %s, users %s, doas %s, X11 %s, %s packages at the first boot\\n' $(sq "$name") '$VM_BAKE_SSH_PORT' $(sq "$(printf '%s\n' "$users" | awk '{ print $1 }' | tr '\n' ' ' | sed 's/ $//')") '$doas' '$x11' '$(printf '%s\n' "$pkgs" | grep -c . || true)' >&2"
+}
+
+#@help _image_site_pack1
+# @command image site pack <image>
+# @summary Act terminal: install.site packed as the site set VM_BAKE_IMAGE_DIR/<image>/site/<release>/<arch>/site<NN>.tgz (bsdtar, owned by root:wheel) with its SHA256 beside it, then the site directory -- install.conf at its root, the set under the release directory the installer expects -- becomes site.iso (makefs cd9660, rockridge, label vmbakesite), the CD the throwaway guest carries besides the install ISO
+# @group   image
+# @internal
+# @see     image install
+# @see     image site write
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+#@end
+_image_site_pack1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 a="" base="" nn="" rel="" arch=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
+	arch=$(printf '%s' "$base" | awk '{ print $2 }'); nn=$(printf '%s' "$base" | awk '{ print $3 }'); nn=${nn##*/install}; nn=${nn%.iso}; rel="${nn%?}.${nn#?}"
+	printf '%s\n' "bsdtar -czf '$dir/site/$rel/$arch/site$nn.tgz' --uid 0 --gid 0 --uname root --gname wheel -C '$dir/site.d' install.site || exit 1"
+	printf '%s\n' "(cd '$dir/site/$rel/$arch' && sha256 site$nn.tgz > SHA256) || exit 1"
+	printf '%s\n' "rm -f '$dir/site.iso' && makefs -t cd9660 -o rockridge -o label=vmbakesite '$dir/site.iso' '$dir/site' && chmod 600 '$dir/site.iso' || exit 1"
+	printf '%s\n' "printf '# image %s: site.iso -- install.conf and %s/%s/site%s.tgz\\n' $(sq "$1") '$rel' '$arch' '$nn' >&2"
+}
+
+#@help __image_console_drive1
+# @command image console drive <image>
+# @summary The throwaway guest's serial console typed into autoinstall(8), by VM_BAKE_CONSOLE (the way vm-bhyve offers consoles): rewrite to 'image console drive tmux <image>' or 'image console drive nmdm <image>'
+# @group   image
+# @internal
+# @see     image install
+# @env     VM_BAKE_CONSOLE  tmux or nmdm, vm-bhyve's console= setting
+#@end
+__image_console_drive1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image console drive $(sq "$VM_BAKE_CONSOLE") $(sq "$1")"
+}
+
+#@help __image_console_drive2
+# @internal dispatch fallback of 'image console drive <console> <image>' for a console that is neither tmux nor nmdm: an error line
+#@end
+__image_console_drive2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image console drive: VM_BAKE_CONSOLE is $1, which is no console of vm-bhyve (tmux | nmdm)")"
+}
+
+#@help _image_console_drive_tmux1
+# @command image console drive tmux <image>
+# @summary Act terminal (root): the installer of the throwaway guest answered over vm-bhyve's tmux session (capture-pane reads, send-keys types) -- the loader told to use com0 and to boot; the installer sent into its shell, where it mounts the two CDs, finds install.conf on the site CD, writes it as /auto_install.conf with the CD names filled in (@INSTCD@, @SITECD@) and leaves the shell; then (A)utoinstall, which takes the local file; the act returns when the installer reports CONGRATULATIONS and reboots -- what follows is the first boot, waited for by 'image firstboot gone'. Every wait has its seconds and ends in an error with the last screen
+# @group   image
+# @internal
+# @see     image console drive
+# @see     image response write
+# @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, the tmux session
+#@end
+_image_console_drive_tmux1() {
+	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT")"
+	printf '%s\n' 'pane() { tmux capture-pane -p -t "$g" 2>/dev/null || true; }'
+	printf '%s\n' 'send() { tmux send-keys -t "$g" "$1" Enter; }'
+	printf '%s\n' 'n=0; until tmux has-session -t "$g" 2>/dev/null; do n=$((n + 1)); test "$n" -lt 60 || { printf "# Error: console %s: no tmux session within a minute (VM_BAKE_CONSOLE says tmux; vm-bhyve console= in system.conf?)\n" "$g" >&2; exit 1; }; sleep 1; done'
+	cat <<'EOF_STEPS'
+wait_for() { n=0; until pane | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || { printf '# Error: console %s: no %s within %s s\n' "$g" "$1" "$2" >&2; pane | tail -15 >&2; exit 1; }; sleep 1; done; }
+wait_last() { n=0; until pane | grep . | tail -1 | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || { printf '# Error: console %s: no %s as last line within %s s\n' "$g" "$1" "$2" >&2; pane | tail -15 >&2; exit 1; }; sleep 1; done; }
+wait_for 'boot>' 120
+send 'set tty com0'; sleep 1; send 'boot'
+wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
+send 's'; sleep 2
+send 'cd /dev && sh MAKEDEV cd0 cd1; cd /'
+send 's=; for d in cd0 cd1; do mount_cd9660 -r /dev/${d}a /mnt 2>/dev/null || continue; test -f /mnt/install.conf && s=$d; umount /mnt; done'
+send 'case $s in cd0) i=cd1 ;; *) i=cd0 ;; esac; mount_cd9660 -r /dev/${s}a /mnt && sed "s/@INSTCD@/$i/;s/@SITECD@/$s/" /mnt/install.conf > /auto_install.conf && umount /mnt && echo "response file from $s, sets from $i"'
+wait_for 'response file from cd' 30
+send 'exit'
+wait_last '(S)hell?' 60
+send 'a'
+wait_for 'CONGRATULATIONS' 1800
+printf '# console %s: installed, the guest reboots into its first boot\n' "$g" >&2
+EOF_STEPS
+}
+
+#@help _image_console_drive_nmdm1
+# @command image console drive nmdm <image>
+# @summary Act terminal (root): the same dialogue as 'image console drive tmux', over vm-bhyve's nmdm pair -- /dev/nmdm-<firstboot>.1B is read into VM_BAKE_GUEST_DIR/<firstboot>/console.log by a cat in the background (the last forty lines stand for the screen) and written with a carriage return per line; the device appears when bhyve runs, waited for a minute
+# @group   image
+# @internal
+# @see     image console drive
+# @see     image console drive tmux
+# @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, in the device name
+# @env     VM_BAKE_GUEST_DIR  the guests' directory, where the console log lies
+#@end
+_image_console_drive_nmdm1() {
+	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT") dev=$(sq "/dev/nmdm-$VM_BAKE_FIRSTBOOT.1B") log=$(sq "$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/console.log")"
+	printf '%s\n' 'n=0; until test -c "$dev"; do n=$((n + 1)); test "$n" -lt 60 || { printf "# Error: console %s: no %s within a minute (VM_BAKE_CONSOLE says nmdm; vm-bhyve console= in system.conf?)\n" "$g" "$dev" >&2; exit 1; }; sleep 1; done'
+	printf '%s\n' ': > "$log"; cat "$dev" >> "$log" & rd=$!' 'trap '"'"'kill "$rd" 2>/dev/null'"'"' EXIT'
+	printf '%s\n' 'pane() { tail -n 40 "$log" 2>/dev/null | tr -d "\r"; }'
+	printf '%s\n' 'send() { printf "%s\r" "$1" > "$dev"; }'
+	cat <<'EOF_STEPS'
+wait_for() { n=0; until pane | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || { printf '# Error: console %s: no %s within %s s\n' "$g" "$1" "$2" >&2; pane | tail -15 >&2; exit 1; }; sleep 1; done; }
+wait_last() { n=0; until pane | grep . | tail -1 | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || { printf '# Error: console %s: no %s as last line within %s s\n' "$g" "$1" "$2" >&2; pane | tail -15 >&2; exit 1; }; sleep 1; done; }
+wait_for 'boot>' 120
+send 'set tty com0'; sleep 1; send 'boot'
+wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
+send 's'; sleep 2
+send 'cd /dev && sh MAKEDEV cd0 cd1; cd /'
+send 's=; for d in cd0 cd1; do mount_cd9660 -r /dev/${d}a /mnt 2>/dev/null || continue; test -f /mnt/install.conf && s=$d; umount /mnt; done'
+send 'case $s in cd0) i=cd1 ;; *) i=cd0 ;; esac; mount_cd9660 -r /dev/${s}a /mnt && sed "s/@INSTCD@/$i/;s/@SITECD@/$s/" /mnt/install.conf > /auto_install.conf && umount /mnt && echo "response file from $s, sets from $i"'
+wait_for 'response file from cd' 30
+send 'exit'
+wait_last '(S)hell?' 60
+send 'a'
+wait_for 'CONGRATULATIONS' 1800
+printf '# console %s: installed, the guest reboots into its first boot\n' "$g" >&2
+EOF_STEPS
+}
+
+#@help ___image_close_iso1
+# @command image close iso <image>
+# @summary Step 3 of the OpenBSD bake, the disk closed: the image has a record; then the sha256 of disk0.img written beside it and into the record -- nothing was mounted, the installer and the first boot wrote the disk from inside
+# @group   image
+# @internal
+# @see     image make openbsd
+# @see     image seal
+#@end
+___image_close_iso1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image digest write $(sq "$1")"
 }
