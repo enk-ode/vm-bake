@@ -1477,7 +1477,7 @@ test_repo_plan() {
   view="$TEST_DIR/view"
   mkdir -p "$view/caledonia"
   plan=$(run_vmbake guest repo add caledonia git/Infrastruktur)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "7" ] && printf '%s\n' "$plan" | grep -q "guest check view 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest check running 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo valid 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo mirror 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo record 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest repo clone 'caledonia' 'git/Infrastruktur'"; then
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "7" ] && printf '%s\n' "$plan" | grep -q "guest check view 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest check running 'caledonia'" && printf '%s\n' "$plan" | grep -q "guest repo valid 'git/Infrastruktur'" && printf '%s\n' "$plan" | grep -q "guest repo mirror 'git/Infrastruktur'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "guest repo clone 'caledonia' 'git/Infrastruktur'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest repo record 'caledonia' 'git/Infrastruktur'"; then
     pass "repo add checks record, view, running guest and path, then mirror, record, clone"
   else
     fail "repo add plan: $plan"

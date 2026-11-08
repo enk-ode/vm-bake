@@ -999,7 +999,7 @@ __guest_check_fetched1() {
 
 #@help ___guest_repo_add2
 # @command guest repo add <guest> <repo>
-# @summary Give the guest a clone of one of the invoking user's repositories to commit in: the guest has a record and a view and is running, the path is plain and relative to the home; then the host's bare mirror of it under VM_BAKE_REPO_VIEWS made or refreshed (the template's home line hangs that directory read-only into every view, so the guest pulls from the mirror and can touch nothing of it), the repository recorded for the guest, and the clone made over ssh under VM_BAKE_REPO_LOCAL on the guest's own disk, where git can write its objects -- the view cannot take them, p9fs refuses to create a read-only file for writing. A second add of the same repository refreshes the mirror and leaves the clone alone
+# @summary Give the guest a clone of one of the invoking user's repositories to commit in: the guest has a record and a view and is running, the path is plain and relative to the home; then the host's bare mirror of it under VM_BAKE_REPO_VIEWS made or refreshed (the template's home line hangs that directory read-only into every view, so the guest pulls from the mirror and can touch nothing of it), the clone made over ssh under VM_BAKE_REPO_LOCAL on the guest's own disk, where git can write its objects -- the view cannot take them, p9fs refuses to create a read-only file for writing -- and only then the repository recorded for the guest: a clone that fails (the view shows no mirror, no home line git/views) leaves no record behind, which 'guest stop' would otherwise try to hold. A second add of the same repository refreshes the mirror and leaves the clone alone
 # @group   guest
 # @example vm-bake guest repo add dalmatia git/Infrastruktur
 # @see     guest repo fetch
@@ -1013,8 +1013,8 @@ ___guest_repo_add2() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check running $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo valid $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo mirror $(sq "$2")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo record $(sq "$1") $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo clone $(sq "$1") $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo record $(sq "$1") $(sq "$2")"
 }
 
 #@help ___guest_repo_fetch2
