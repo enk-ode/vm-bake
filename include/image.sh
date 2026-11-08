@@ -1882,7 +1882,7 @@ _image_firstboot_conf_write1() {
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/resource" && IFS= read -r res < "$VM_BAKE_BASE/template/$a/resource"; done
 	set -- "$1" ${res:-1 1G 0} "$(printf '%s' "${VM_BAKE_FIRSTBOOT_ADDRESS%/*}" | awk -F. '{ printf "58:9c:fc:%02x:%02x:%02x", $2, $3, $4 }')"
 	printf '%s\n' "install -d -m 755 '$VM_BAKE_GUEST_DIR/$g' && cat > '$conf' <<'EOF_CONF'"
-	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" "network0_mac=\"$5\"" 'disk0_type="virtio-blk"' "disk0_name=\"$VM_BAKE_IMAGE_DIR/$1/disk0.img\""'disk0_dev="custom"' 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_IMAGE_DIR/$1/seed.iso\"" 'disk1_dev="custom"' 'debug="yes"'
+	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" "network0_mac=\"$5\"" 'disk0_type="virtio-blk"' "disk0_name=\"$VM_BAKE_IMAGE_DIR/$1/disk0.img\"" 'disk0_dev="custom"' 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_IMAGE_DIR/$1/seed.iso\"" 'disk1_dev="custom"' 'debug="yes"'
 	printf '%s\n' "EOF_CONF"
 	printf '%s\n' "printf '# firstboot %s: %s boots %s with seed %s\\n' '$g' '$conf' '$VM_BAKE_IMAGE_DIR/$1/disk0.img' '$VM_BAKE_IMAGE_DIR/$1/seed.iso' >&2"
 }

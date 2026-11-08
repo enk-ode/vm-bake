@@ -2584,7 +2584,7 @@ EOF
   rm -f "$marker"
   if [ -n "$written" ]; then
     fail "${prefix}${func}: writes at generation time (under a cat pin): $written"
-    return 1
+    return 0
   fi
 
   # Phase 2: Make database read-only

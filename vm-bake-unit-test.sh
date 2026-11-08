@@ -2127,7 +2127,7 @@ test_linux_plan() {
     fail "image disk place: $out"
   fi
   out=$(run_vmbake image firstboot conf write img:debian-dev:v1)
-  if printf '%s\n' "$out" | grep -q '^cpu=4$' && printf '%s\n' "$out" | grep -q '^memory=8G$' && printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:f9"$' && printf '%s\n' "$out" | grep -q "disk0_name=\"$TEST_DIR/img/img:debian-dev:v1/disk0.img\"" && printf '%s\n' "$out" | grep -q '^disk1_type="ahci-cd"$' && printf '%s\n' "$out" | grep -q "disk1_name=\"$TEST_DIR/img/img:debian-dev:v1/seed.iso\"" && printf '%s\n' "$out" | grep -q "$TEST_DIR/gst/firstboot/firstboot.conf"; then
+  if printf '%s\n' "$out" | grep -q '^cpu=4$' && printf '%s\n' "$out" | grep -q '^memory=8G$' && printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:f9"$' && printf '%s\n' "$out" | grep -q "^disk0_name=\"$TEST_DIR/img/img:debian-dev:v1/disk0.img\"$" && printf '%s\n' "$out" | grep -q '^disk1_type="ahci-cd"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/img:debian-dev:v1/seed.iso\"$" && printf '%s\n' "$out" | grep -q "$TEST_DIR/gst/firstboot/firstboot.conf" && [ "$(printf '%s\n' "$out" | sed -n "/<<'EOF_CONF'/,/^EOF_CONF/p" | grep -c '^[a-z0-9_]*=')" = "13" ]; then
     pass "image firstboot conf write: the template's resources, the image's disk and seed, under the guests' directory as firstboot"
   else
     fail "firstboot conf: $out"
