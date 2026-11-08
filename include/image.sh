@@ -1903,7 +1903,7 @@ __image_firstboot_conf2() {
 
 #@help _image_firstboot_conf_write2
 # @command image firstboot conf write <image> <cd>
-# @summary Act terminal (the invoking user: the directory is theirs): the throwaway guest's vm-bhyve configuration VM_BAKE_GUEST_DIR/<firstboot>/<firstboot>.conf -- UEFI, cpu and memory from the image's template (read at generation time), the switch, the MAC of VM_BAKE_FIRSTBOOT_ADDRESS, the image's disk0.img as disk0 (custom path) and <cd> as disk1 (ahci-cd: the seed.iso of a cloud-init bake, the site.iso of an autoinstall bake); no dataset and no clone: the guest boots the image itself, once
+# @summary Act terminal (the invoking user: the directory is theirs): the throwaway guest's vm-bhyve configuration VM_BAKE_GUEST_DIR/<firstboot>/<firstboot>.conf -- UEFI, cpu and memory from the image's template (read at generation time), the switch, the MAC of VM_BAKE_FIRSTBOOT_ADDRESS, the image's disk0.img as disk0 (custom path) and <cd> as disk1 (ahci-cd: the seed.iso of a cloud-init bake, the site.iso of an autoinstall bake), bhyve_options -w (bhyve ignores the MSRs a guest kernel touches and bhyve does not implement -- OpenBSD's kernel dies without it, Linux does not mind); no dataset and no clone: the guest boots the image itself, once
 # @group   image
 # @internal
 # @completion cd files
@@ -1926,7 +1926,7 @@ _image_firstboot_conf_write2() {
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/resource" && IFS= read -r res < "$VM_BAKE_BASE/template/$a/resource"; done
 	set -- "$1" ${res:-1 1G 0} "$(printf '%s' "${VM_BAKE_FIRSTBOOT_ADDRESS%/*}" | awk -F. '{ printf "58:9c:fc:%02x:%02x:%02x", $2, $3, $4 }')"
 	printf '%s\n' "install -d -m 755 '$VM_BAKE_GUEST_DIR/$g' && cat > '$conf' <<'EOF_CONF'"
-	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" "network0_mac=\"$5\"" 'disk0_type="virtio-blk"' "disk0_name=\"$VM_BAKE_IMAGE_DIR/$1/disk0.img\"" 'disk0_dev="custom"' 'disk1_type="ahci-cd"' "disk1_name=\"$cd\"" 'disk1_dev="custom"' 'debug="yes"'
+	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" "network0_mac=\"$5\"" 'disk0_type="virtio-blk"' "disk0_name=\"$VM_BAKE_IMAGE_DIR/$1/disk0.img\"" 'disk0_dev="custom"' 'disk1_type="ahci-cd"' "disk1_name=\"$cd\"" 'disk1_dev="custom"' 'bhyve_options="-w"' 'debug="yes"'
 	printf '%s\n' "EOF_CONF"
 	printf '%s\n' "printf '# firstboot %s: %s boots %s with %s\\n' '$g' '$conf' '$VM_BAKE_IMAGE_DIR/$1/disk0.img' '$cd' >&2"
 }

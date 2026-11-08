@@ -2135,7 +2135,7 @@ test_linux_plan() {
   fi
   rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   out=$(run_vmbake image firstboot conf write img:debian-dev:v1 "$TEST_DIR/img/img:debian-dev:v1/seed.iso")
-  if printf '%s\n' "$out" | grep -q '^cpu=4$' && printf '%s\n' "$out" | grep -q '^memory=8G$' && printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:f9"$' && printf '%s\n' "$out" | grep -q "^disk0_name=\"$TEST_DIR/img/img:debian-dev:v1/disk0.img\"$" && printf '%s\n' "$out" | grep -q '^disk1_type="ahci-cd"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/img:debian-dev:v1/seed.iso\"$" && printf '%s\n' "$out" | grep -q "$TEST_DIR/gst/firstboot/firstboot.conf" && [ "$(printf '%s\n' "$out" | sed -n "/<<'EOF_CONF'/,/^EOF_CONF/p" | grep -c '^[a-z0-9_]*=')" = "13" ]; then
+  if printf '%s\n' "$out" | grep -q '^cpu=4$' && printf '%s\n' "$out" | grep -q '^memory=8G$' && printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:f9"$' && printf '%s\n' "$out" | grep -q "^disk0_name=\"$TEST_DIR/img/img:debian-dev:v1/disk0.img\"$" && printf '%s\n' "$out" | grep -q '^disk1_type="ahci-cd"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/img:debian-dev:v1/seed.iso\"$" && printf '%s\n' "$out" | grep -q "$TEST_DIR/gst/firstboot/firstboot.conf" && [ "$(printf '%s\n' "$out" | sed -n "/<<'EOF_CONF'/,/^EOF_CONF/p" | grep -c '^[a-z0-9_]*=')" = "14" ]; then
     pass "image firstboot conf write: the template's resources, the image's disk and seed, under the guests' directory as firstboot"
   else
     fail "firstboot conf: $out"
@@ -2162,7 +2162,7 @@ test_linux_plan() {
   fi
   rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   out=$(run_vmbake guest conf write tirol)
-  if printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:6e"$' && printf '%s\n' "$out" | grep -q '^disk1_type="ahci-cd"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/gst/tirol/seed.iso\"$" && ! run_vmbake guest conf write caledonia | grep -q network0_mac; then
+  if printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:6e"$' && printf '%s\n' "$out" | grep -q '^disk1_type="ahci-cd"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/gst/tirol/seed.iso\"$" && ! run_vmbake guest conf write caledonia | grep -q network0_mac && ! printf '%s\n' "$out" | grep -q 'bhyve_options=.*-w'; then
     pass "guest conf write: a cloud-init guest carries the MAC of its address and the seed as disk1, a chroot guest neither"
   else
     fail "guest conf write cloud: $out"
@@ -2281,7 +2281,7 @@ test_openbsd_plan() {
   out=$(run_vmbake image firstboot conf write $img "$TEST_DIR/img/$img/site.iso")
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  if printf '%s\n' "$out" | grep -q '^cpu=4$' && printf '%s\n' "$out" | grep -q '^memory=4G$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/$img/site.iso\"$" && ! printf '%s\n' "$out" | grep -q "install80" && run_vmbake image firstboot conf $img | grep -q "image firstboot conf 'autoinstall' '$img'" && run_vmbake image firstboot conf autoinstall $img | grep -q "image firstboot conf write '$img' '$TEST_DIR/img/$img/site.iso'"; then
+  if printf '%s\n' "$out" | grep -q '^cpu=4$' && printf '%s\n' "$out" | grep -q '^memory=4G$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/$img/site.iso\"$" && printf '%s\n' "$out" | grep -q '^bhyve_options="-w"$' && ! printf '%s\n' "$out" | grep -q "install80" && run_vmbake image firstboot conf $img | grep -q "image firstboot conf 'autoinstall' '$img'" && run_vmbake image firstboot conf autoinstall $img | grep -q "image firstboot conf write '$img' '$TEST_DIR/img/$img/site.iso'"; then
     pass "image firstboot conf: autoinstall hangs the site.iso on as the one CD, the install ISO is not in the configuration"
   else
     fail "firstboot conf autoinstall: $out"
@@ -2309,7 +2309,7 @@ test_openbsd_plan() {
   fi
   rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   out=$(run_vmbake guest conf write istria)
-  if printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:78"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/gst/istria/seed.iso\"$"; then
+  if printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:78"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/gst/istria/seed.iso\"$" && printf '%s\n' "$out" | grep -q '^bhyve_options="-w"$'; then
     pass "guest conf write: an autoinstall guest carries the MAC of its address and the seed as disk1"
   else
     fail "guest conf write autoinstall: $out"

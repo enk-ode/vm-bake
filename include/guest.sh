@@ -343,7 +343,7 @@ _guest_clone1() {
 
 #@help _guest_conf_write1
 # @command guest conf write <guest>
-# @summary Act terminal (the invoking user: the clone is theirs): the vm-bhyve configuration VM_BAKE_GUEST_DIR/<guest>/<guest>.conf: UEFI, cpu and memory from the image's template (read at generation time), the cpu layout as cpu_sockets, cpu_cores and cpu_threads (the template's topology record, else 1 socket of <cpu> cores with 1 thread each -- without it bhyve invents two threads per core and the guest's scheduler believes in SMT that is not there; the product has to be the cpu count, else an error), disk0.img as virtio-blk, one virtio-net on VM_BAKE_GUEST_SWITCH, debug="yes" (vm-bhyve then keeps what bhyve says in <guest>/bhyve.log instead of throwing it away -- it costs nothing, bhyve writes only when it has something to report, and without it a bhyve that dies at startup leaves no reason behind), and when the template says 'service files view' the share home on VM_BAKE_VIEW_SLOT as bhyve_options (vm-bhyve hands that option to bhyve raw), which the image mounts as its home
+# @summary Act terminal (the invoking user: the clone is theirs): the vm-bhyve configuration VM_BAKE_GUEST_DIR/<guest>/<guest>.conf: UEFI, cpu and memory from the image's template (read at generation time), the cpu layout as cpu_sockets, cpu_cores and cpu_threads (the template's topology record, else 1 socket of <cpu> cores with 1 thread each -- without it bhyve invents two threads per core and the guest's scheduler believes in SMT that is not there; the product has to be the cpu count, else an error), disk0.img as virtio-blk, one virtio-net on VM_BAKE_GUEST_SWITCH, debug="yes" (vm-bhyve then keeps what bhyve says in <guest>/bhyve.log instead of throwing it away -- it costs nothing, bhyve writes only when it has something to report, and without it a bhyve that dies at startup leaves no reason behind), and when the template says 'service files view' the share home on VM_BAKE_VIEW_SLOT as bhyve_options (vm-bhyve hands that option to bhyve raw), which the image mounts as its home; an autoinstall guest (OpenBSD) gets -w among the bhyve_options -- bhyve then ignores the MSRs OpenBSD's kernel touches and bhyve does not implement, without it bhyve dies at the kernel's first instructions
 # @group   guest
 # @internal
 # @see     guest make
@@ -356,7 +356,7 @@ _guest_clone1() {
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _guest_conf_write1() {
-	local conf="$VM_BAKE_GUEST_DIR/$1/$1.conf" img="" t="" cur="" chain="" p="" n=0 a="" res="" top="" dir="$VM_BAKE_VIEW_DIR" view=no bake="" addr="" mac=""
+	local conf="$VM_BAKE_GUEST_DIR/$1/$1.conf" img="" t="" cur="" chain="" p="" n=0 a="" res="" top="" dir="$VM_BAKE_VIEW_DIR" view=no bake="" addr="" mac="" opts=""
 	case "$dir" in "~/"*) eval "dir=~$(id -un)${dir#\~}" ;; esac
 	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
@@ -377,7 +377,9 @@ _guest_conf_write1() {
 	test "$(printf '%s' "$top" | awk '{ print $1 * $2 * $3 }')" = "$2" || { generate_error "guest conf write: the topology of $t is '$top', whose product is not the cpu count $2 of its resource record (template topology $t <sockets> <cores> <threads>, or template resource)"; return 0; }
 	printf '%s\n' "cat > '$conf' <<'EOF_CONF'"
 	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" "cpu_sockets=$(printf '%s' "$top" | cut -d' ' -f1)" "cpu_cores=$(printf '%s' "$top" | cut -d' ' -f2)" "cpu_threads=$(printf '%s' "$top" | cut -d' ' -f3)" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" 'disk0_type="virtio-blk"' 'disk0_name="disk0.img"' 'debug="yes"'
-	test "$view" = no || printf '%s\n' "bhyve_options=\"-s $VM_BAKE_VIEW_SLOT,virtio-9p,home=$dir/$1\""
+	test "$view" = no || opts="-s $VM_BAKE_VIEW_SLOT,virtio-9p,home=$dir/$1"
+	test "$bake" != autoinstall || opts="${opts:+$opts }-w"
+	test -z "$opts" || printf '%s\n' "bhyve_options=\"$opts\""
 	case "$bake" in cloud-init|autoinstall) printf '%s\n' "network0_mac=\"$mac\"" 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_GUEST_DIR/$1/seed.iso\"" 'disk1_dev="custom"' ;; esac
 	printf '%s\n' "EOF_CONF"
 	printf '%s\n' "printf '# guest %s: %s (cpu %s as %s, memory %s, view $view)\\n' '$1' '$conf' '$2' $(sq "$top") '$3' >&2"
