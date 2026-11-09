@@ -1143,8 +1143,8 @@ test_tag_plan() {
   else
     fail "tag mask/drop: $(run_vmbake template tag show freebsd-x)"
   fi
-  if run_vmbake template find can intellij | grep -q "^#   freebsd-x  *freebsd-x  *can intellij" && run_vmbake template find can claude | grep -q "^#   freebsd-dev " && ! run_vmbake template find can claude | grep -q "^#   freebsd-x " && run_vmbake template find owner . | grep -q "(none)"; then
-    pass "template find matches key and pattern over the resolved tags, masks respected"
+  if run_vmbake template find can intellij | grep -q "^#   freebsd-x  *freebsd-x  *can intellij" && run_vmbake template find can claude | grep -q "^#   freebsd-dev " && ! run_vmbake template find can claude | grep -q "^#   freebsd-x " && run_vmbake template find owner . | grep -q "(none)" && run_vmbake template find can freebsd | grep -q "(none)" && run_vmbake template find can | grep -q "^#   freebsd-x  *freebsd-x  *can intellij" && run_vmbake template find can '^intellij$' | grep -q "^#   freebsd-x " && run_vmbake template find can '^intelli$' | grep -q "(none)"; then
+    pass "template find matches key and pattern over the resolved tags, masks respected; the pattern meets the text alone, anchors make it exact, no pattern lists every text"
   else
     fail "template find: $(run_vmbake template find can intellij; run_vmbake template find can claude)"
   fi
@@ -1164,8 +1164,8 @@ test_tag_plan() {
   else
     fail "guest tag drop: $(run_vmbake guest tag show caledonia)"
   fi
-  if run_vmbake guest find can intellij | grep -q "^#   caledonia  *x  *freebsd-x  *can intellij" && ! run_vmbake guest find can intellij | grep -q dalmatia && run_vmbake guest find purpose claude | grep -q caledonia && run_vmbake guest find purpose claude | grep -q dalmatia && run_vmbake guest find note 'first' | grep -q "^#   caledonia  *x  *caledonia  *note first X guest"; then
-    pass "guest find answers from own and inherited tags, by key and pattern"
+  if run_vmbake guest find can intellij | grep -q "^#   caledonia  *x  *freebsd-x  *can intellij" && ! run_vmbake guest find can intellij | grep -q dalmatia && run_vmbake guest find purpose claude | grep -q caledonia && run_vmbake guest find purpose claude | grep -q dalmatia && run_vmbake guest find note 'first' | grep -q "^#   caledonia  *x  *caledonia  *note first X guest" && run_vmbake guest find can caledonia | grep -q "(none)" && run_vmbake guest find can | grep -q "^#   caledonia  *x  *freebsd-x  *can intellij" && run_vmbake guest find can '^intellij$' | grep -q caledonia && run_vmbake guest find can '^intelli$' | grep -q "(none)"; then
+    pass "guest find answers from own and inherited tags, by key and pattern; the pattern meets the text alone, not the guest's name, anchors make it exact, no pattern lists every text"
   else
     fail "guest find: $(run_vmbake guest find can intellij; run_vmbake guest find purpose claude)"
   fi

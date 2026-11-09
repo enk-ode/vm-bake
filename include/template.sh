@@ -911,9 +911,22 @@ ___template_tag_show1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") tag"
 }
 
+#@help _template_find1
+# @command template find <key>
+# @summary Display terminal: every template whose resolved tags hold the key, whatever the text -- 'template find <key> .'
+# @group   template
+# @example vm-bake template find purpose
+# @see     template tag add
+# @see     guest find
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_template_find1() {
+	_template_find2 "$1" .
+}
+
 #@help _template_find2
 # @command template find <key> <pattern>
-# @summary Display terminal: every template whose resolved tags (read over its chain) hold the key with a text matching the pattern (a case-insensitive grep pattern; '.' for any): one line per hit, template, origin of the tag, the tag
+# @summary Display terminal: every template whose resolved tags (read over its chain) hold the key with a text matching the pattern -- an extended regular expression, case-insensitive, searched in the text alone and not in the names around it ('.' for any text, '^15\.1$' for exactly that value): one line per hit, template, origin of the tag, the tag
 # @group   template
 # @example vm-bake template find can intellij
 # @example vm-bake template find purpose .
@@ -931,7 +944,7 @@ _template_find2() {
 			IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
 			cur=$p; n=$((n + 1))
 		done
-		hit=$(awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | awk -v k="$1" '$3 == k' | grep -i -- "$2" || true)
+		hit=$(awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | VM_BAKE_PATTERN=$2 awk -v k="$1" 'BEGIN { p = tolower(ENVIRON["VM_BAKE_PATTERN"]) } $3 == k { t = $0; sub(/^#   [^ ]+ +[^ ]+ +/, "", t); if (tolower(t) ~ p) print }' || true)
 		test -z "$hit" || { printf '%s\n' "$hit" | sed "s/^#   /#   $(printf '%-16s' "$t") /"; found=$((found + 1)); }
 	done
 	test "$found" -gt 0 || printf '%s\n' "#   (none)"

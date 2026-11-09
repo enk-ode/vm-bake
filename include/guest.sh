@@ -568,9 +568,22 @@ _guest_tag_table1() {
 	awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -v '(none)' || true
 }
 
+#@help _guest_find1
+# @command guest find <key>
+# @summary Display terminal: every guest whose tags, own or inherited from its image's template, hold the key, whatever the text -- 'guest find <key> .'
+# @group   guest
+# @example vm-bake guest find purpose
+# @see     guest tag add
+# @see     template find
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_find1() {
+	_guest_find2 "$1" .
+}
+
 #@help _guest_find2
 # @command guest find <key> <pattern>
-# @summary Display terminal: every guest whose tags, own or inherited from its image's template, hold the key with a text matching the pattern (case-insensitive grep pattern; '.' for any): one line per hit, guest, image, origin, the tag -- answered from the records, no guest is started
+# @summary Display terminal: every guest whose tags, own or inherited from its image's template, hold the key with a text matching the pattern -- an extended regular expression, case-insensitive, searched in the text alone and not in the names around it ('.' for any text, '^8\.0$' for exactly that value): one line per hit, guest, image, origin, the tag -- answered from the records, no guest is started
 # @group   guest
 # @example vm-bake guest find can intellij
 # @example vm-bake guest find purpose .
@@ -592,7 +605,7 @@ _guest_find2() {
 			cur=$p; n=$((n + 1))
 		done
 		own=$(awk -v g="$g" '{ printf "#   %-16s %s\n", g, $0 }' "$d/tag" 2>/dev/null || true)
-		hit=$( { printf '%s\n' "$own"; awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk"; } | awk -v k="$1" '$3 == k' | grep -i -- "$2" || true)
+		hit=$( { printf '%s\n' "$own"; awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk"; } | VM_BAKE_PATTERN=$2 awk -v k="$1" 'BEGIN { p = tolower(ENVIRON["VM_BAKE_PATTERN"]) } $3 == k { t = $0; sub(/^#   [^ ]+ +[^ ]+ +/, "", t); if (tolower(t) ~ p) print }' || true)
 		test -z "$hit" || { printf '%s\n' "$hit" | sed "s/^#   /#   $(printf '%-12s %-26s' "$g" "$img") /"; found=$((found + 1)); }
 	done
 	test "$found" -gt 0 || printf '%s\n' "#   (none)"
