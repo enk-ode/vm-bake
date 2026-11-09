@@ -2275,7 +2275,7 @@ __image_console_drive2() {
 
 #@help _image_console_drive_tmux1
 # @command image console drive tmux <image>
-# @summary Act terminal (root): the installer of the throwaway guest answered over vm-bhyve's tmux session (capture-pane reads, send-keys types) -- the loader told to use com0 and to boot; the installer sent into its shell, where it mounts the two CDs, finds install.conf on the site CD, writes it as /auto_install.conf with the CD names filled in (@INSTCD@, @SITECD@) and leaves the shell; then (A)utoinstall, which takes the local file; the act returns when the installer reports CONGRATULATIONS and reboots -- what follows is the first boot, waited for by 'image firstboot gone'. Every wait has its seconds and ends in an error with the last screen and the guest powered off (vm poweroff -f): a guest whose install went wrong sits in vm-bhyve's restart loop otherwise, and the next 'guest install' would find it running
+# @summary Act terminal (root): the installer of the throwaway guest answered over vm-bhyve's tmux session (capture-pane reads, send-keys types) -- the loader told to use com0, then to boot: after the switch the loader reads the serial port directly while the firmware console keeps reading it too, so typed bytes split between the two (a bake on illyria saw a lone b), and boot is sent up to five times, each followed by five seconds of looking for the loader's booting line, a row of backspaces clearing what got through before; the installer sent into its shell, where it mounts the two CDs, finds install.conf on the site CD, writes it as /auto_install.conf with the CD names filled in (@INSTCD@, @SITECD@) and leaves the shell; then (A)utoinstall, which takes the local file; the act returns when the installer reports CONGRATULATIONS and reboots -- what follows is the first boot, waited for by 'image firstboot gone'. Every wait has its seconds and ends in an error with the last screen and the guest powered off (vm poweroff -f): a guest whose install went wrong sits in vm-bhyve's restart loop otherwise, and the next 'guest install' would find it running
 # @group   image
 # @internal
 # @see     image console drive
@@ -2292,7 +2292,10 @@ give_up() { printf '# Error: console %s: %s\n' "$g" "$1" >&2; pane | tail -15 >&
 wait_for() { n=0; until pane | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 within $2 s"; sleep 1; done; }
 wait_last() { n=0; until pane | grep . | tail -1 | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 as last line within $2 s"; sleep 1; done; }
 wait_for 'boot>' 120
-send 'set tty com0'; sleep 1; send 'boot'
+send 'set tty com0'; sleep 1
+bs=$(printf '\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b')
+booting() { pane | grep -q 'booting '; }
+n=0; until booting; do n=$((n + 1)); test "$n" -le 5 || give_up "no booting after $((n - 1)) boot commands"; send "${bs}boot"; m=0; until booting || test "$m" -ge 5; do m=$((m + 1)); sleep 1; done; done
 wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
 send 's'; sleep 2
 send 'cd /dev && sh MAKEDEV cd0 cd1; cd /'
@@ -2329,7 +2332,10 @@ give_up() { printf '# Error: console %s: %s\n' "$g" "$1" >&2; pane | tail -15 >&
 wait_for() { n=0; until pane | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 within $2 s"; sleep 1; done; }
 wait_last() { n=0; until pane | grep . | tail -1 | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 as last line within $2 s"; sleep 1; done; }
 wait_for 'boot>' 120
-send 'set tty com0'; sleep 1; send 'boot'
+send 'set tty com0'; sleep 1
+bs=$(printf '\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b')
+booting() { pane | grep -q 'booting '; }
+n=0; until booting; do n=$((n + 1)); test "$n" -le 5 || give_up "no booting after $((n - 1)) boot commands"; send "${bs}boot"; m=0; until booting || test "$m" -ge 5; do m=$((m + 1)); sleep 1; done; done
 wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
 send 's'; sleep 2
 send 'cd /dev && sh MAKEDEV cd0 cd1; cd /'
