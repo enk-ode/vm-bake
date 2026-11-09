@@ -2296,8 +2296,8 @@ send 'set tty com0'; sleep 1; send 'boot'
 wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
 send 's'; sleep 2
 send 'cd /dev && sh MAKEDEV cd0 cd1; cd /'
-send 's=; for d in cd0 cd1; do mount_cd9660 -r /dev/${d}a /mnt 2>/dev/null || continue; test -f /mnt/install.conf && s=$d; umount /mnt; done'
-send 'case $s in cd0) i=cd1 ;; *) i=cd0 ;; esac; mount_cd9660 -r /dev/${s}a /mnt && sed "s/@INSTCD@/$i/;s/@SITECD@/$s/" /mnt/install.conf > /auto_install.conf && umount /mnt && echo "response file from $s, sets from $i"'
+send 's=; for d in cd0 cd1; do mount_cd9660 /dev/${d}a /mnt 2>/dev/null || continue; test -f /mnt/install.conf && s=$d; umount /mnt; done'
+send 'case $s in cd0) i=cd1 ;; *) i=cd0 ;; esac; mount_cd9660 /dev/${s}a /mnt && sed "s/@INSTCD@/$i/;s/@SITECD@/$s/" /mnt/install.conf > /auto_install.conf && umount /mnt && echo "response file from $s, sets from $i"'
 wait_for 'response file from cd' 30
 send 'exit'
 wait_last '(S)hell?' 60
@@ -2333,8 +2333,8 @@ send 'set tty com0'; sleep 1; send 'boot'
 wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
 send 's'; sleep 2
 send 'cd /dev && sh MAKEDEV cd0 cd1; cd /'
-send 's=; for d in cd0 cd1; do mount_cd9660 -r /dev/${d}a /mnt 2>/dev/null || continue; test -f /mnt/install.conf && s=$d; umount /mnt; done'
-send 'case $s in cd0) i=cd1 ;; *) i=cd0 ;; esac; mount_cd9660 -r /dev/${s}a /mnt && sed "s/@INSTCD@/$i/;s/@SITECD@/$s/" /mnt/install.conf > /auto_install.conf && umount /mnt && echo "response file from $s, sets from $i"'
+send 's=; for d in cd0 cd1; do mount_cd9660 /dev/${d}a /mnt 2>/dev/null || continue; test -f /mnt/install.conf && s=$d; umount /mnt; done'
+send 'case $s in cd0) i=cd1 ;; *) i=cd0 ;; esac; mount_cd9660 /dev/${s}a /mnt && sed "s/@INSTCD@/$i/;s/@SITECD@/$s/" /mnt/install.conf > /auto_install.conf && umount /mnt && echo "response file from $s, sets from $i"'
 wait_for 'response file from cd' 30
 send 'exit'
 wait_last '(S)hell?' 60
