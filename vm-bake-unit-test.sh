@@ -2243,6 +2243,14 @@ test_openbsd_plan() {
   else
     fail "image install plan: $plan"
   fi
+  printf '%s\n' 'env VM_BAKE_PIN_PROBE=1 $VM_BAKE_BATCH_COMBINATOR_INTERPRETER' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_install"
+  out=$(run_vmbake image install $img)
+  if [ "$out" = "$plan" ]; then
+    pass "image install pin: a pin naming \$VM_BAKE_BATCH_COMBINATOR_INTERPRETER expands to the class default before it runs -- 'sudo -E \$VM_BAKE_BATCH_COMBINATOR_INTERPRETER' puts the whole bake under one sudo"
+  else
+    fail "image install pin: $out"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_install"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   mv "$TEST_DIR/install80.iso" "$TEST_DIR/install80.iso.away"
   if run_vmbake image check autoinstall freebsd-dev 2>&1 | grep -q "Error" && run_vmbake image check autoinstall debian-dev 2>&1 | grep -q "Error" && run_vmbake image check autoinstall openbsd-dev 2>&1 | grep -q "Error" && mv "$TEST_DIR/install80.iso.away" "$TEST_DIR/install80.iso" && [ -z "$(run_vmbake image check autoinstall openbsd-dev 2>&1 | grep -v '^#')" ]; then
