@@ -2309,7 +2309,7 @@ wait_for 'CONGRATULATIONS' 1800
 wait_for 'rebooted by root' 120
 n=0; until vm list | grep "^$g  *.*Stopped" >/dev/null; do n=$((n + 1)); test "$n" -le 30 || give_up "still running a minute after the install's reboot"; vm poweroff -f "$g" >/dev/null 2>&1; sleep 2; done
 vm start "$g" >&2 || give_up "vm start failed after the install"
-printf '# console %s: installed, powered off at the installer's reboot and started again from its disk for the first boot\n' "$g" >&2
+printf '# console %s: installed, powered off at its reboot and started again from its disk for the first boot\n' "$g" >&2
 EOF_STEPS
 }
 
@@ -2352,7 +2352,7 @@ wait_for 'CONGRATULATIONS' 1800
 wait_for 'rebooted by root' 120
 n=0; until vm list | grep "^$g  *.*Stopped" >/dev/null; do n=$((n + 1)); test "$n" -le 30 || give_up "still running a minute after the install's reboot"; vm poweroff -f "$g" >/dev/null 2>&1; sleep 2; done
 vm start "$g" >&2 || give_up "vm start failed after the install"
-printf '# console %s: installed, powered off at the installer's reboot and started again from its disk for the first boot\n' "$g" >&2
+printf '# console %s: installed, powered off at its reboot and started again from its disk for the first boot\n' "$g" >&2
 EOF_STEPS
 }
 
