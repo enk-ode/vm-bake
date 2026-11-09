@@ -2275,7 +2275,7 @@ __image_console_drive2() {
 
 #@help _image_console_drive_tmux1
 # @command image console drive tmux <image>
-# @summary Act terminal (root): the installer of the throwaway guest answered over vm-bhyve's tmux session (capture-pane reads, send-keys types) -- the loader told to use com0 and to boot; the installer sent into its shell, where it mounts the two CDs, finds install.conf on the site CD, writes it as /auto_install.conf with the CD names filled in (@INSTCD@, @SITECD@) and leaves the shell; then (A)utoinstall, which takes the local file; the act returns when the installer reports CONGRATULATIONS and reboots -- what follows is the first boot, waited for by 'image firstboot gone'. Every wait has its seconds and ends in an error with the last screen
+# @summary Act terminal (root): the installer of the throwaway guest answered over vm-bhyve's tmux session (capture-pane reads, send-keys types) -- the loader told to use com0 and to boot; the installer sent into its shell, where it mounts the two CDs, finds install.conf on the site CD, writes it as /auto_install.conf with the CD names filled in (@INSTCD@, @SITECD@) and leaves the shell; then (A)utoinstall, which takes the local file; the act returns when the installer reports CONGRATULATIONS and reboots -- what follows is the first boot, waited for by 'image firstboot gone'. Every wait has its seconds and ends in an error with the last screen and the guest powered off (vm poweroff -f): a guest whose install went wrong sits in vm-bhyve's restart loop otherwise, and the next 'guest install' would find it running
 # @group   image
 # @internal
 # @see     image console drive
@@ -2288,8 +2288,9 @@ _image_console_drive_tmux1() {
 	printf '%s\n' 'send() { tmux send-keys -t "$g" "$1" Enter; }'
 	printf '%s\n' 'n=0; until tmux has-session -t "$g" 2>/dev/null; do n=$((n + 1)); test "$n" -lt 60 || { printf "# Error: console %s: no tmux session within a minute (VM_BAKE_CONSOLE says tmux; vm-bhyve console= in system.conf?)\n" "$g" >&2; exit 1; }; sleep 1; done'
 	cat <<'EOF_STEPS'
-wait_for() { n=0; until pane | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || { printf '# Error: console %s: no %s within %s s\n' "$g" "$1" "$2" >&2; pane | tail -15 >&2; exit 1; }; sleep 1; done; }
-wait_last() { n=0; until pane | grep . | tail -1 | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || { printf '# Error: console %s: no %s as last line within %s s\n' "$g" "$1" "$2" >&2; pane | tail -15 >&2; exit 1; }; sleep 1; done; }
+give_up() { printf '# Error: console %s: %s\n' "$g" "$1" >&2; pane | tail -15 >&2; vm poweroff -f "$g" >/dev/null 2>&1; printf '# console %s: powered off\n' "$g" >&2; exit 1; }
+wait_for() { n=0; until pane | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 within $2 s"; sleep 1; done; }
+wait_last() { n=0; until pane | grep . | tail -1 | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 as last line within $2 s"; sleep 1; done; }
 wait_for 'boot>' 120
 send 'set tty com0'; sleep 1; send 'boot'
 wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
@@ -2308,7 +2309,7 @@ EOF_STEPS
 
 #@help _image_console_drive_nmdm1
 # @command image console drive nmdm <image>
-# @summary Act terminal (root): the same dialogue as 'image console drive tmux', over vm-bhyve's nmdm pair -- /dev/nmdm-<firstboot>.1B is read into VM_BAKE_GUEST_DIR/<firstboot>/console.log by a cat in the background (the last forty lines stand for the screen) and written with a carriage return per line; the device appears when bhyve runs, waited for a minute
+# @summary Act terminal (root): the same dialogue as 'image console drive tmux', over vm-bhyve's nmdm pair -- /dev/nmdm-<firstboot>.1B is opened once on descriptor 3 and put into raw mode without echo (a freshly opened tty has echo and canonical mode, which sends every byte the guest prints back into the guest as keystrokes and turns each line end into an Enter -- the loader then shows prompt after prompt; the settings hold as long as the descriptor stays open), read into VM_BAKE_GUEST_DIR/<firstboot>/console.log by a cat in the background (the last forty lines stand for the screen) and written with a carriage return per line; the device appears when bhyve runs, waited for a minute
 # @group   image
 # @internal
 # @see     image console drive
@@ -2319,12 +2320,14 @@ EOF_STEPS
 _image_console_drive_nmdm1() {
 	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT") dev=$(sq "/dev/nmdm-$VM_BAKE_FIRSTBOOT.1B") log=$(sq "$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/console.log")"
 	printf '%s\n' 'n=0; until test -c "$dev"; do n=$((n + 1)); test "$n" -lt 60 || { printf "# Error: console %s: no %s within a minute (VM_BAKE_CONSOLE says nmdm; vm-bhyve console= in system.conf?)\n" "$g" "$dev" >&2; exit 1; }; sleep 1; done'
-	printf '%s\n' ': > "$log"; cat "$dev" >> "$log" & rd=$!' 'trap '"'"'kill "$rd" 2>/dev/null'"'"' EXIT'
+	printf '%s\n' 'exec 3<> "$dev"; stty raw -echo <&3'
+	printf '%s\n' ': > "$log"; cat <&3 >> "$log" & rd=$!' 'trap '"'"'kill "$rd" 2>/dev/null'"'"' EXIT'
 	printf '%s\n' 'pane() { tail -n 40 "$log" 2>/dev/null | tr -d "\r"; }'
-	printf '%s\n' 'send() { printf "%s\r" "$1" > "$dev"; }'
+	printf '%s\n' 'send() { printf "%s\r" "$1" >&3; }'
 	cat <<'EOF_STEPS'
-wait_for() { n=0; until pane | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || { printf '# Error: console %s: no %s within %s s\n' "$g" "$1" "$2" >&2; pane | tail -15 >&2; exit 1; }; sleep 1; done; }
-wait_last() { n=0; until pane | grep . | tail -1 | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || { printf '# Error: console %s: no %s as last line within %s s\n' "$g" "$1" "$2" >&2; pane | tail -15 >&2; exit 1; }; sleep 1; done; }
+give_up() { printf '# Error: console %s: %s\n' "$g" "$1" >&2; pane | tail -15 >&2; vm poweroff -f "$g" >/dev/null 2>&1; printf '# console %s: powered off\n' "$g" >&2; exit 1; }
+wait_for() { n=0; until pane | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 within $2 s"; sleep 1; done; }
+wait_last() { n=0; until pane | grep . | tail -1 | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 as last line within $2 s"; sleep 1; done; }
 wait_for 'boot>' 120
 send 'set tty com0'; sleep 1; send 'boot'
 wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
