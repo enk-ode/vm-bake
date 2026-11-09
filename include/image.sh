@@ -2309,7 +2309,7 @@ EOF_STEPS
 
 #@help _image_console_drive_nmdm1
 # @command image console drive nmdm <image>
-# @summary Act terminal (root): the same dialogue as 'image console drive tmux', over vm-bhyve's nmdm pair -- /dev/nmdm-<firstboot>.1B is opened once on descriptor 3 and put into raw mode without echo (a freshly opened tty has echo and canonical mode, which sends every byte the guest prints back into the guest as keystrokes and turns each line end into an Enter -- the loader then shows prompt after prompt; the settings hold as long as the descriptor stays open), read into VM_BAKE_GUEST_DIR/<firstboot>/console.log by a cat in the background (the last forty lines stand for the screen) and written with a carriage return per line; the device appears when bhyve runs, waited for a minute
+# @summary Act terminal (root): the same dialogue as 'image console drive tmux', over vm-bhyve's nmdm pair -- /dev/nmdm-<firstboot>.1B is opened once on descriptor 3 and put into raw mode without echo (a freshly opened tty has echo and canonical mode, which sends every byte the guest prints back into the guest as keystrokes and turns each line end into an Enter -- the loader then shows prompt after prompt; the settings hold as long as the descriptor stays open), read into VM_BAKE_GUEST_DIR/<firstboot>/console.log by a cat in the background (the last forty lines stand for the screen, through cat -v: the firmware and the loader emit terminal control sequences, one of them resizes an xterm) and written with a carriage return per line; the device appears when bhyve runs, waited for a minute
 # @group   image
 # @internal
 # @see     image console drive
@@ -2322,7 +2322,7 @@ _image_console_drive_nmdm1() {
 	printf '%s\n' 'n=0; until test -c "$dev"; do n=$((n + 1)); test "$n" -lt 60 || { printf "# Error: console %s: no %s within a minute (VM_BAKE_CONSOLE says nmdm; vm-bhyve console= in system.conf?)\n" "$g" "$dev" >&2; exit 1; }; sleep 1; done'
 	printf '%s\n' 'exec 3<> "$dev"; stty raw -echo <&3'
 	printf '%s\n' ': > "$log"; cat <&3 >> "$log" & rd=$!' 'trap '"'"'kill "$rd" 2>/dev/null'"'"' EXIT'
-	printf '%s\n' 'pane() { tail -n 40 "$log" 2>/dev/null | tr -d "\r"; }'
+	printf '%s\n' 'pane() { tail -n 40 "$log" 2>/dev/null | tr -d "\r" | cat -v; }'
 	printf '%s\n' 'send() { printf "%s\r" "$1" >&3; }'
 	cat <<'EOF_STEPS'
 give_up() { printf '# Error: console %s: %s\n' "$g" "$1" >&2; pane | tail -15 >&2; vm poweroff -f "$g" >/dev/null 2>&1; printf '# console %s: powered off\n' "$g" >&2; exit 1; }
