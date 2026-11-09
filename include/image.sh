@@ -2117,7 +2117,7 @@ ___image_install1() {
 
 #@help _image_response_write1
 # @command image response write <image>
-# @summary Act terminal: the response file of autoinstall(8), VM_BAKE_IMAGE_DIR/<image>/site/install.conf -- hostname VM_BAKE_FIRSTBOOT, vio0 static on VM_BAKE_FIRSTBOOT_ADDRESS, route and nameserver VM_BAKE_GUEST_GATEWAY, domain VM_BAKE_GUEST_DOMAIN, root with a throwaway password (install.site locks it) and no key, sshd on, no root login, the X sets only when the template says 'service display x', com0 at 115200, no user (install.site makes the template's users with their host uids), the host's timezone (/var/db/zoneinfo, else UTC), sd0 whole-disk GPT with the auto layout; the sets from the install CD, then the site set from the site CD -- the installer numbers the CDs, so the console driver fills in @INSTCD@ and @SITECD@ when it copies the file. The template is read at generation time
+# @summary Act terminal: the response file of autoinstall(8), VM_BAKE_IMAGE_DIR/<image>/site/install.conf -- hostname VM_BAKE_FIRSTBOOT, vio0 static on VM_BAKE_FIRSTBOOT_ADDRESS, route and nameserver VM_BAKE_GUEST_GATEWAY, domain VM_BAKE_GUEST_DOMAIN, root with a throwaway password (install.site locks it) and no key, sshd on, no root login, the X sets only when the template says 'service display x', com0 at 115200, no user (install.site makes the template's users with their host uids), the host's timezone (/var/db/zoneinfo, else UTC), sd0 whole-disk GPT with the auto layout; the sets from the install CD, then the site set from the site CD (which carries no INSTALL.<arch>, so the installer asks whether to use it anyway: yes) -- the installer numbers the CDs, so the console driver fills in @INSTCD@ and @SITECD@ when it copies the file. The template is read at generation time
 # @group   image
 # @internal
 # @see     image install
@@ -2149,7 +2149,7 @@ _image_response_write1() {
 	printf '%s\n' "cat > '$dir/site/install.conf' <<'EOF_RESPONSE'"
 	printf '%s\n' "System hostname = $VM_BAKE_FIRSTBOOT" "Which network interface do you wish to configure = vio0" "IPv4 address for vio0 = ${VM_BAKE_FIRSTBOOT_ADDRESS%/*}" "Netmask for vio0 = $mask" "IPv6 address for vio0 = none" "Which network interface do you wish to configure = done" "Default IPv4 route = $VM_BAKE_GUEST_GATEWAY" "DNS domain name = $VM_BAKE_GUEST_DOMAIN" "DNS nameservers = $VM_BAKE_GUEST_GATEWAY" "Password for root account = *************" "Public ssh key for root account = none" "Start sshd(8) by default = yes" "Do you expect to run the X Window System = $x" "Change the default console to com0 = yes" "Which speed should com0 use = 115200" "Setup a user = no" "Allow root ssh login = no" "What timezone are you in = $tz" "Which disk is the root disk = sd0" "Encrypt the root disk with a passphrase = no" "Encrypt the root disk with a (p)assphrase or (k)eydisk = no" "Use (W)hole disk MBR, whole disk (G)PT or (E)dit = gpt" "Use (A)uto layout, (E)dit auto layout, or create (C)ustom layout = a" "Location of sets = @INSTCD@" "Pathname to the sets = $rel/$arch/"
 	test "$x" = yes || printf '%s\n' "Set name(s) = -x*"
-	printf '%s\n' "Set name(s) = done" "Location of sets = @SITECD@" "Pathname to the sets = $rel/$arch/" "Set name(s) = site$nn.tgz" "Set name(s) = done" "Directory does not contain SHA256.sig. Continue without verification = yes" "Location of sets = done"
+	printf '%s\n' "Set name(s) = done" "Location of sets = @SITECD@" "Pathname to the sets = $rel/$arch/" "INSTALL.$arch not found. Use sets found here anyway = yes" "Set name(s) = site$nn.tgz" "Set name(s) = done" "Directory does not contain SHA256.sig. Continue without verification = yes" "Location of sets = done"
 	printf '%s\n' "EOF_RESPONSE"
 	printf '%s\n' "printf '# image %s: install.conf -- %s on %s netmask %s, sets %s/%s from the install CD and site%s.tgz from the site CD, X %s, timezone %s\\n' $(sq "$1") '$VM_BAKE_FIRSTBOOT' '${VM_BAKE_FIRSTBOOT_ADDRESS%/*}' '$mask' '$rel' '$arch' '$nn' '$x' '$tz' >&2"
 }
@@ -2275,7 +2275,7 @@ __image_console_drive2() {
 
 #@help _image_console_drive_tmux1
 # @command image console drive tmux <image>
-# @summary Act terminal (root): the installer of the throwaway guest answered over vm-bhyve's tmux session (capture-pane reads, send-keys types) -- the loader told to use com0, then to boot: after the switch the loader reads the serial port directly while the firmware console keeps reading it too, so typed bytes split between the two (a bake on illyria saw a lone b), and boot is sent up to five times, each followed by five seconds of looking for the loader's booting line, a row of backspaces clearing what got through before; the installer sent into its shell, where it mounts the two CDs, finds install.conf on the site CD, writes it as /auto_install.conf with the CD names filled in (@INSTCD@, @SITECD@) and leaves the shell; then (A)utoinstall, which takes the local file; the act returns when the installer reports CONGRATULATIONS and reboots -- what follows is the first boot, waited for by 'image firstboot gone'. Every wait has its seconds and ends in an error with the last screen and the guest powered off (vm poweroff -f): a guest whose install went wrong sits in vm-bhyve's restart loop otherwise, and the next 'guest install' would find it running
+# @summary Act terminal (root): the installer of the throwaway guest answered over vm-bhyve's tmux session (capture-pane reads, send-keys types) -- the loader told to use com0, then to boot: after the switch the loader reads the serial port directly while the firmware console keeps reading it too, so typed bytes split between the two (a bake on illyria saw a lone b), and boot is sent up to five times, each followed by five seconds of looking for the loader's booting line, a row of backspaces clearing what got through before; the installer sent into its shell, where it mounts the two CDs, finds install.conf on the site CD, writes it as /auto_install.conf with the CD names filled in (@INSTCD@, @SITECD@) and leaves the shell; then (A)utoinstall, which takes the local file; when the installer reports CONGRATULATIONS and the kernel its reboot, the guest is powered off and started again with 'vm start', from its disk (vm-bhyve keeps the install ISO first in the boot order through every restart of its run loop, so the reboot would run the installer once more) -- that is the first boot, waited for by 'image firstboot gone'. Every wait has its seconds and ends in an error with the last screen and the guest powered off (vm poweroff -f): a guest whose install went wrong sits in vm-bhyve's restart loop otherwise, and the next 'guest install' would find it running
 # @group   image
 # @internal
 # @see     image console drive
@@ -2289,12 +2289,12 @@ _image_console_drive_tmux1() {
 	printf '%s\n' 'n=0; until tmux has-session -t "$g" 2>/dev/null; do n=$((n + 1)); test "$n" -lt 60 || { printf "# Error: console %s: no tmux session within a minute (VM_BAKE_CONSOLE says tmux; vm-bhyve console= in system.conf?)\n" "$g" >&2; exit 1; }; sleep 1; done'
 	cat <<'EOF_STEPS'
 give_up() { printf '# Error: console %s: %s\n' "$g" "$1" >&2; pane | tail -15 >&2; vm poweroff -f "$g" >/dev/null 2>&1; printf '# console %s: powered off\n' "$g" >&2; exit 1; }
-wait_for() { n=0; until pane | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 within $2 s"; sleep 1; done; }
+wait_for() { n=0; until pane | grep -- "$1" >/dev/null; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 within $2 s"; sleep 1; done; }
 wait_last() { n=0; until pane | grep . | tail -1 | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 as last line within $2 s"; sleep 1; done; }
 wait_for 'boot>' 120
 send 'set tty com0'; sleep 1
 bs=$(printf '\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b')
-booting() { pane | grep -q 'booting '; }
+booting() { pane | grep 'booting ' >/dev/null; }
 n=0; until booting; do n=$((n + 1)); test "$n" -le 5 || give_up "no booting after $((n - 1)) boot commands"; send "${bs}boot"; m=0; until booting || test "$m" -ge 5; do m=$((m + 1)); sleep 1; done; done
 wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
 send 's'; sleep 2
@@ -2306,13 +2306,16 @@ send 'exit'
 wait_last '(S)hell?' 60
 send 'a'
 wait_for 'CONGRATULATIONS' 1800
-printf '# console %s: installed, the guest reboots into its first boot\n' "$g" >&2
+wait_for 'rebooted by root' 120
+n=0; until vm list | grep "^$g  *.*Stopped" >/dev/null; do n=$((n + 1)); test "$n" -le 30 || give_up "still running a minute after the install's reboot"; vm poweroff -f "$g" >/dev/null 2>&1; sleep 2; done
+vm start "$g" >&2 || give_up "vm start failed after the install"
+printf '# console %s: installed, powered off at the installer's reboot and started again from its disk for the first boot\n' "$g" >&2
 EOF_STEPS
 }
 
 #@help _image_console_drive_nmdm1
 # @command image console drive nmdm <image>
-# @summary Act terminal (root): the same dialogue as 'image console drive tmux', over vm-bhyve's nmdm pair -- /dev/nmdm-<firstboot>.1B is opened once on descriptor 3 and put into raw mode without echo (a freshly opened tty has echo and canonical mode, which sends every byte the guest prints back into the guest as keystrokes and turns each line end into an Enter -- the loader then shows prompt after prompt; the settings hold as long as the descriptor stays open), read into VM_BAKE_GUEST_DIR/<firstboot>/console.log by a cat in the background (the last forty lines stand for the screen, through cat -v: the firmware and the loader emit terminal control sequences, one of them resizes an xterm) and written with a carriage return per line; the device appears when bhyve runs, waited for a minute
+# @summary Act terminal (root): the same dialogue as 'image console drive tmux', over vm-bhyve's nmdm pair -- /dev/nmdm-<firstboot>.1B is opened once on descriptor 3 and put into raw mode without echo (a freshly opened tty has echo and canonical mode, which sends every byte the guest prints back into the guest as keystrokes and turns each line end into an Enter -- the loader then shows prompt after prompt; the settings hold as long as the descriptor stays open), read into VM_BAKE_GUEST_DIR/<firstboot>/console.log by a cat in the background (the last forty lines stand for the screen, through cat -v, read by a grep that takes all its input so that no writer gets a broken pipe: the firmware and the loader emit terminal control sequences, one of them resizes an xterm) and written with a carriage return per line; the device appears when bhyve runs, waited for a minute
 # @group   image
 # @internal
 # @see     image console drive
@@ -2329,12 +2332,12 @@ _image_console_drive_nmdm1() {
 	printf '%s\n' 'send() { printf "%s\r" "$1" >&3; }'
 	cat <<'EOF_STEPS'
 give_up() { printf '# Error: console %s: %s\n' "$g" "$1" >&2; pane | tail -15 >&2; vm poweroff -f "$g" >/dev/null 2>&1; printf '# console %s: powered off\n' "$g" >&2; exit 1; }
-wait_for() { n=0; until pane | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 within $2 s"; sleep 1; done; }
+wait_for() { n=0; until pane | grep -- "$1" >/dev/null; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 within $2 s"; sleep 1; done; }
 wait_last() { n=0; until pane | grep . | tail -1 | grep -q -- "$1"; do n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 as last line within $2 s"; sleep 1; done; }
 wait_for 'boot>' 120
 send 'set tty com0'; sleep 1
 bs=$(printf '\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b')
-booting() { pane | grep -q 'booting '; }
+booting() { pane | grep 'booting ' >/dev/null; }
 n=0; until booting; do n=$((n + 1)); test "$n" -le 5 || give_up "no booting after $((n - 1)) boot commands"; send "${bs}boot"; m=0; until booting || test "$m" -ge 5; do m=$((m + 1)); sleep 1; done; done
 wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
 send 's'; sleep 2
@@ -2346,7 +2349,10 @@ send 'exit'
 wait_last '(S)hell?' 60
 send 'a'
 wait_for 'CONGRATULATIONS' 1800
-printf '# console %s: installed, the guest reboots into its first boot\n' "$g" >&2
+wait_for 'rebooted by root' 120
+n=0; until vm list | grep "^$g  *.*Stopped" >/dev/null; do n=$((n + 1)); test "$n" -le 30 || give_up "still running a minute after the install's reboot"; vm poweroff -f "$g" >/dev/null 2>&1; sleep 2; done
+vm start "$g" >&2 || give_up "vm start failed after the install"
+printf '# console %s: installed, powered off at the installer's reboot and started again from its disk for the first boot\n' "$g" >&2
 EOF_STEPS
 }
 
