@@ -2269,7 +2269,7 @@ _image_site_write1() {
 
 #@help _image_site_pack1
 # @command image site pack <image>
-# @summary Act terminal: the whole site.d -- install.site and the files of the template's file lines at their paths (image site files place) -- packed as the site set VM_BAKE_IMAGE_DIR/<image>/site/<release>/<arch>/site<NN>.tgz (bsdtar, owned by root:wheel, the installer unpacks it over the installed system) with its SHA256 beside it, then the site directory -- install.conf at its root, the set under the release directory the installer expects -- becomes site.iso (makefs cd9660, rockridge, label vmbakesite), the CD the throwaway guest carries besides the install ISO
+# @summary Act terminal: the files of site.d -- install.site and the files of the template's file lines at their paths (image site files place) -- packed as the site set VM_BAKE_IMAGE_DIR/<image>/site/<release>/<arch>/site<NN>.tgz (bsdtar from a find -type f list, owned by root:wheel; the files alone, no directory entry: the installer unpacks the set with -p over the installed system, and a directory entry would set its mode on / or /etc -- the sixth bake of openbsd-dev packed '.' of a site.d made 0700 and came out with / unreadable for every user but root, pkg_add could not even fetch) with its SHA256 beside it, then the site directory -- install.conf at its root, the set under the release directory the installer expects -- becomes site.iso (makefs cd9660, rockridge, label vmbakesite), the CD the throwaway guest carries besides the install ISO
 # @group   image
 # @internal
 # @see     image install
@@ -2288,7 +2288,7 @@ _image_site_pack1() {
 	done
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
 	arch=$(printf '%s' "$base" | awk '{ print $2 }'); nn=$(printf '%s' "$base" | awk '{ print $3 }'); nn=${nn##*/install}; nn=${nn%.iso}; rel="${nn%?}.${nn#?}"
-	printf '%s\n' "bsdtar -czf '$dir/site/$rel/$arch/site$nn.tgz' --uid 0 --gid 0 --uname root --gname wheel -C '$dir/site.d' . || exit 1"
+	printf '%s\n' "(cd '$dir/site.d' && find . -type f | sed 's|^\\./||' | bsdtar -czf '$dir/site/$rel/$arch/site$nn.tgz' --uid 0 --gid 0 --uname root --gname wheel -n -T -) || exit 1"
 	printf '%s\n' "(cd '$dir/site/$rel/$arch' && sha256 site$nn.tgz > SHA256) || exit 1"
 	printf '%s\n' "rm -f '$dir/site.iso' && makefs -t cd9660 -o rockridge -o label=vmbakesite '$dir/site.iso' '$dir/site' && chmod 600 '$dir/site.iso' || exit 1"
 	printf '%s\n' "printf '# image %s: site.iso -- install.conf and %s/%s/site%s.tgz\\n' $(sq "$1") '$rel' '$arch' '$nn' >&2"

@@ -2451,8 +2451,8 @@ quoted default ran" ]; then
     fail "image site write, the first boot's check: $out"
   fi
   out=$(run_vmbake image site pack $img 2>&1)
-  if printf '%s\n' "$out" | grep -q "bsdtar -czf '$TEST_DIR/img/$img/site/8.0/amd64/site80.tgz' --uid 0 --gid 0 --uname root --gname wheel -C '$TEST_DIR/img/$img/site.d' \. || exit 1" && printf '%s\n' "$out" | grep -q "sha256 site80.tgz > SHA256" && printf '%s\n' "$out" | grep -q "label=vmbakesite '$TEST_DIR/img/$img/site.iso' '$TEST_DIR/img/$img/site'"; then
-    pass "image site pack: the whole site.d as root:wheel under the release directory, its SHA256, the site directory as site.iso"
+  if printf '%s\n' "$out" | grep -qF "(cd '$TEST_DIR/img/$img/site.d' && find . -type f | sed 's|^\./||' | bsdtar -czf '$TEST_DIR/img/$img/site/8.0/amd64/site80.tgz' --uid 0 --gid 0 --uname root --gname wheel -n -T -) || exit 1" && printf '%s\n' "$out" | grep -q "sha256 site80.tgz > SHA256" && printf '%s\n' "$out" | grep -q "label=vmbakesite '$TEST_DIR/img/$img/site.iso' '$TEST_DIR/img/$img/site'"; then
+    pass "image site pack: the files of site.d as root:wheel under the release directory, no directory entry, its SHA256, the site directory as site.iso"
   else
     fail "image site pack: $out"
   fi
