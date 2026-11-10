@@ -857,6 +857,37 @@ test_image_record_lock_list() {
   fi
 }
 
+test_image_prune() {
+  test_header "image prune: the sealed images without a guest get their drop lines, open ones a note, nothing to drop a comment"
+  test_setup
+  image_chain
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake image record write freebsd-dev x > /dev/null
+  out=$(run_vmbake image prune)
+  if printf '%s\n' "$out" | grep -q "note 'image prune: x is open (no digest), left alone'" && printf '%s\n' "$out" | grep -q "comment 'image prune: every sealed image has a guest, nothing to drop'" && ! printf '%s\n' "$out" | grep -q "image drop"; then
+    pass "an open image is left with a note, and with nothing to drop the batch is a comment"
+  else
+    fail "prune open: $out"
+  fi
+  printf '%s\n' 0123456789abcdef > "$TEST_DIR/image/x/digest"
+  run_vmbake image record write freebsd-dev y > /dev/null
+  printf '%s\n' fedcba9876543210 > "$TEST_DIR/image/y/digest"
+  run_vmbake guest record write x istria 172.16.100.120/24 > /dev/null
+  out=$(run_vmbake image prune)
+  if [ "$(printf '%s\n' "$out" | grep -c .)" = "1" ] && printf '%s\n' "$out" | grep -q "image drop 'y'$"; then
+    pass "of two sealed images the one a guest is made from stays, the other gets its drop line, nothing else"
+  else
+    fail "prune two: $out"
+  fi
+  run_vmbake guest record write y achaia 172.16.100.121/24 > /dev/null
+  if run_vmbake image prune | grep -q "nothing to drop"; then
+    pass "every sealed image with a guest: the comment"
+  else
+    fail "prune none: $(run_vmbake image prune)"
+  fi
+}
+
 test_guest_plan() {
   test_header "guests: make, start, stop, drop as plans; the records; the guards"
   test_setup
@@ -2383,6 +2414,7 @@ main() {
   should_run_test test_image_guards
   should_run_test test_image_emissions
   should_run_test test_image_record_lock_list
+  should_run_test test_image_prune
   should_run_test test_guest_plan
   should_run_test test_session_plan
   should_run_test test_port_plan

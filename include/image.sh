@@ -424,6 +424,32 @@ ___image_drop1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image lock release $(sq "$1")"
 }
 
+#@help ___image_prune0
+# @command image prune
+# @summary Drop every image no guest is made from: the image records and the image file of every guest record read at generation time; a sealed image (it has a digest) that no guest names gets its 'image drop' line, an open image (no digest: a bake under way, or one that died with the lock -- image lock drop, then image drop by name) is left with a note; every image in use is a comment
+# @group   image
+# @example vm-bake image prune
+# @see     image drop
+# @see     image list
+#@end
+___image_prune0() {
+	local d="" g="" n="" img="" used="" dropped=0
+	for g in "$VM_BAKE_BASE"/guest/*/; do
+		IFS= read -r img 2>/dev/null < "$g/image" || continue
+		used="$used
+$img"
+	done
+	for d in "$VM_BAKE_BASE"/image/*/; do
+		test -f "$d/template" || continue
+		n=$(basename "$d")
+		test -f "$d/digest" || { printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image prune: $n is open (no digest), left alone")"; continue; }
+		printf '%s\n' "$used" | grep -qxF -- "$n" && continue
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image drop $(sq "$n")"
+		dropped=$((dropped + 1))
+	done
+	test "$dropped" -gt 0 || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'image prune: every sealed image has a guest, nothing to drop'"
+}
+
 #@help ___image_builder_use0
 # @command image builder use
 # @summary Bake in the builder guest from now on: VM_BAKE_BAKE_IN=builder, and the content terminals (disk mount, keys, pkg base, repo, boot, pkg install, rc, user, view, root lock, doas, ssh, pkg report, disk unmount) pinned to 'ssh -p VM_BAKE_SSH_PORT -i <key> VM_BAKE_BUILDER_USER@VM_BAKE_BUILDER_ADDRESS doas sh' -- one setintp line each, so the pins are seen
