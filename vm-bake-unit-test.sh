@@ -27,6 +27,7 @@ home_fixture() {
   mkdir -p "$HOME/$HOME_FIXTURE/config/gtk-3.0" "$HOME/$HOME_FIXTURE/cache" "$HOME/$HOME_FIXTURE/db" "$HOME/$HOME_FIXTURE/themes/NsCDE" "$HOME/$HOME_FIXTURE/ssh"
 }
 trap 'rm -rf "$HOME/$HOME_FIXTURE"' EXIT
+trap 'exit 1' INT TERM HUP
 
 MAXPROCS=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 1)
 while [ $# -gt 0 ]; do
@@ -431,6 +432,82 @@ test_template_lists() {
   fi
 }
 
+test_template_source_file() {
+  test_header "template source and file: apt sources with their key's digest, system files from dowries"
+  test_setup
+  image_chain
+  local d out
+  d=$(record_of freebsd-dev)
+  run_vmbake template source add freebsd-dev docker https://download.docker.com/linux/debian trixie stable https://download.docker.com/linux/debian/gpg 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570 > /dev/null
+  if [ "$(cat "$d/source")" = "docker https://download.docker.com/linux/debian trixie stable https://download.docker.com/linux/debian/gpg 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570" ]; then
+    pass "template source add records name, url, suite, component, key url and digest as one line"
+  else
+    fail "source record: $(cat "$d/source" 2>&1)"
+  fi
+  if run_vmbake template source add freebsd-dev docker ftp://x trixie stable https://y/gpg 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570 | grep -q "Error" && run_vmbake template source add freebsd-dev docker https://x trixie stable https://y/gpg 1500 | grep -q "Error" && run_vmbake template source add freebsd-dev 'bad name' https://x trixie stable https://y/gpg 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570 | grep -q "Error" && [ "$(grep -c . "$d/source")" = "1" ]; then
+    pass "template source add refuses a non-http url, a short digest and a name with a blank"
+  else
+    fail "source guards: $(run_vmbake template source add freebsd-dev docker https://x trixie stable https://y/gpg 1500)"
+  fi
+  if run_vmbake template source show freebsd-dev | grep -q "^#   freebsd-dev      docker https://download.docker.com/linux/debian trixie stable"; then
+    pass "template source show lists the line with its origin"
+  else
+    fail "source show: $(run_vmbake template source show freebsd-dev)"
+  fi
+  printf '{ "hosts": ["unix:///var/run/docker.sock"] }\n' > "$TEST_DIR/daemon.json"
+  mkdir -p "$TEST_DIR/adir"
+  run_vmbake dowry add daemon "$TEST_DIR/daemon.json" > /dev/null
+  run_vmbake dowry add adir "$TEST_DIR/adir" > /dev/null
+  run_vmbake template file add freebsd-dev daemon /etc/docker/daemon.json 0644 > /dev/null
+  if [ "$(cat "$d/file")" = "daemon /etc/docker/daemon.json 0644" ]; then
+    pass "template file add records dowry, path and mode"
+  else
+    fail "file record: $(cat "$d/file" 2>&1)"
+  fi
+  if run_vmbake template file add freebsd-dev adir /etc/x 0644 | grep -q "not one file" && run_vmbake template file add freebsd-dev nosuch /etc/x 0644 | grep -q "not one file" && run_vmbake template file add freebsd-dev daemon etc/x 0644 | grep -q "Error" && run_vmbake template file add freebsd-dev daemon /etc/x 0699 | grep -q "invalid mode" && run_vmbake template file add freebsd-dev daemon /etc/x 64 | grep -q "invalid mode" && [ "$(grep -c . "$d/file")" = "1" ]; then
+    pass "template file add refuses a directory dowry, an unknown dowry, a relative path and a mode that is not octal"
+  else
+    fail "file guards: $(run_vmbake template file add freebsd-dev adir /etc/x 0644)"
+  fi
+  run_vmbake template add freebsd-y freebsd-dev > /dev/null
+  run_vmbake template file mask freebsd-y daemon /etc/docker/daemon.json 0644 > /dev/null
+  if run_vmbake template file show freebsd-y | grep -q "(none)" && run_vmbake template file show freebsd-dev | grep -q "^#   freebsd-dev      daemon /etc/docker/daemon.json 0644" && run_vmbake template show freebsd-dev | grep -q "daemon /etc/docker/daemon.json 0644" && run_vmbake template show freebsd-dev | grep -q "docker https://download.docker.com"; then
+    pass "a child masks the file line; template show lists source and file tables"
+  else
+    fail "file mask/show: $(run_vmbake template file show freebsd-y)"
+  fi
+  run_vmbake template file unmask freebsd-y daemon /etc/docker/daemon.json 0644 > /dev/null
+  run_vmbake template file drop freebsd-dev daemon /etc/docker/daemon.json 0644 > /dev/null
+  run_vmbake template source drop freebsd-dev docker https://download.docker.com/linux/debian trixie stable https://download.docker.com/linux/debian/gpg 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570 > /dev/null
+  if [ -z "$(cat "$d/file")" ] && [ -z "$(cat "$d/source")" ] && run_vmbake template file show freebsd-y | grep -q "(none)"; then
+    pass "file drop and source drop remove the own lines"
+  else
+    fail "drops: $(cat "$d/file" "$d/source")"
+  fi
+  run_vmbake template file add freebsd-dev daemon /etc/docker/daemon.json 0644 > /dev/null
+  run_vmbake template source add freebsd-dev docker https://download.docker.com/linux/debian trixie stable https://download.docker.com/linux/debian/gpg 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570 > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"
+  run_vmbake image record write freebsd-dev x > /dev/null
+  out=$(run_vmbake image burn x)
+  if printf '%s\n' "$out" | grep -q "image file write 'x'" && printf '%s\n' "$out" | grep -q "note 'image x: source lines are apt sources, a FreeBSD image takes its packages from pkg" && printf '%s\n' "$out" | grep -n "env write\|file write\|user make" | tr '\n' ' ' | grep -q "env write.* file write.* user make"; then
+    pass "image burn: file write after env write when there are file lines, source lines noted"
+  else
+    fail "burn with files: $out"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_file_write"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  out=$(run_vmbake image file write x)
+  if printf '%s\n' "$out" | grep -q "^install -d -m 755 -o root -g wheel '$TEST_DIR/img/x/mnt/etc/docker' && install -m 0644 -o root -g wheel '$TEST_DIR/dowry/daemon/object' '$TEST_DIR/img/x/mnt/etc/docker/daemon.json' || exit 1$" && printf '%s\n' "$out" | grep -q "files from dowries.*'x' '1' >&2"; then
+    pass "image file write: the object installed into the mounted disk at its path, root:wheel, the line's mode"
+  else
+    fail "image file write: $out"
+  fi
+}
+
 test_template_drop_guards() {
   test_header "template drop: children and the root protect, a leaf goes with its record"
   test_setup
@@ -571,7 +648,7 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_sshd_write seed_view_write seed_pack firstboot_conf_write firstboot_gone firstboot_conf_drop response_write site_write site_pack console_drive_tmux console_drive_nmdm disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify key_fetch key_verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_source_write seed_sshd_write seed_file_write seed_check_write seed_view_write seed_pack firstboot_conf_write firstboot_report_tmux firstboot_report_nmdm firstboot_gone firstboot_conf_drop response_write site_write site_files_place site_pack console_drive_tmux console_drive_nmdm file_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
 GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write seed_write_cloud_init seed_write_autoinstall home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run install halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
 pin_image_cat() {
   local f
@@ -690,8 +767,8 @@ test_image_plan() {
     fail "close/seal/drop plan: $(run_vmbake image close x; run_vmbake image seal x; run_vmbake image drop x)"
   fi
   plan=$(run_vmbake image builder use)
-  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "18" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "18" ]; then
-    pass "builder use and leave: the place and eighteen pins, each a setintp or unsetintp line"
+  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "19" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "19" ]; then
+    pass "builder use and leave: the place and nineteen pins, each a setintp or unsetintp line"
   else
     fail "builder use/leave: $plan"
   fi
@@ -2104,10 +2181,25 @@ test_linux_plan() {
     fail "image create cloud plan: $plan"
   fi
   plan=$(run_vmbake image firstboot img:debian-dev:v1)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "8" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image seed write 'img:debian-dev:v1'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "guest run 'firstboot'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image firstboot conf drop"; then
-    pass "image firstboot: record, seed, conf, link, run, gone, link drop, conf drop"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "9" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image seed write 'img:debian-dev:v1'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "guest run 'firstboot'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image firstboot report$" && printf '%s\n' "$plan" | sed -n 7p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image firstboot conf drop"; then
+    pass "image firstboot: record, seed, conf, link, run, report, gone, link drop, conf drop"
   else
     fail "image firstboot plan: $plan"
+  fi
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake image firstboot report | grep -q "image firstboot report 'nmdm'" && run_vmbake setenv VM_BAKE_CONSOLE tmux > /dev/null && run_vmbake image firstboot report | grep -q "image firstboot report 'tmux'" && run_vmbake image firstboot report foo | grep -q "tmux | nmdm"; then
+    pass "image firstboot report: VM_BAKE_CONSOLE picks the reader, nmdm by default, another word is an error"
+  else
+    fail "image firstboot report dispatch: $(run_vmbake image firstboot report)"
+  fi
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_firstboot_report_tmux"; printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_firstboot_report_nmdm"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  out=$(run_vmbake image firstboot report tmux; run_vmbake image firstboot report nmdm)
+  if printf '%s\n' "$out" | grep -q "^hist() { tmux capture-pane -p -S - -t \"\$g\"" && [ "$(printf '%s\n' "$out" | grep -c "until hist | grep -q '# vm-bake firstboot:'; do .* -lt 3600 ")" = "2" ] && [ "$(printf '%s\n' "$out" | grep -c "give_up \"the first boot left packages out: ")" = "2" ] && [ "$(printf '%s\n' "$out" | grep -c "ended without a package report")" = "2" ] && printf '%s\n' "$out" | grep -q "^exec 3<> \"\$dev\"; stty raw -echo <&3$" && printf '%s\n' "$out" | grep -q "^hist() { tr -d \"\\\\r\" < \"\$log\"" && printf '%s\n' "$out" | grep -q 'pgrep -q -f "bhyve: $g\\$" || give_up'; then
+    pass "image firstboot report tmux/nmdm: the whole history read, an hour for the report line, missing packages and a boot without a report end the bake"
+  else
+    fail "image firstboot report acts: $out"
   fi
   rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   if run_vmbake image check cloud freebsd-dev 2>&1 | grep -q "Error" && [ -z "$(run_vmbake image check cloud debian-dev 2>&1 | grep -v '^#')" ]; then
@@ -2151,6 +2243,40 @@ test_linux_plan() {
     fail "two host users: $(run_vmbake image seed write img:debian-dev:v1 2>&1 | tail -2)"
   fi
   run_vmbake template user drop debian-dev other host > /dev/null
+  if run_vmbake image seed source write img:debian-dev:v1 | grep -q "no source lines in debian-dev" && run_vmbake image seed file write img:debian-dev:v1 | grep -q "no file lines in debian-dev" && ! run_vmbake image seed write img:debian-dev:v1 2>&1 | grep -q "image key fetch"; then
+    pass "without source and file lines: comments, no key fetched"
+  else
+    fail "seed without sources: $(run_vmbake image seed source write img:debian-dev:v1)"
+  fi
+  printf '{ "hosts": ["unix:///var/run/docker.sock", "tcp://0.0.0.0:2376"] }\n' > "$TEST_DIR/daemon.json"
+  run_vmbake dowry add daemon "$TEST_DIR/daemon.json" > /dev/null
+  run_vmbake template file add debian-dev daemon /etc/docker/daemon.json 0644 > /dev/null
+  run_vmbake template source add debian-dev docker https://download.docker.com/linux/debian trixie stable https://download.docker.com/linux/debian/gpg 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570 > /dev/null
+  out=$(run_vmbake image seed write img:debian-dev:v1 2>&1)
+  if printf '%s\n' "$out" | grep -q "^test -f '$TEST_DIR/cache/docker.asc' && printf '# image: key %s cached\\\\n' '$TEST_DIR/cache/docker.asc' >&2 || fetch -q -o '$TEST_DIR/cache/docker.asc' 'https://download.docker.com/linux/debian/gpg' || exit 1$" && printf '%s\n' "$out" | grep -q "^d=\$(sha256 -q '$TEST_DIR/cache/docker.asc') || exit 1$" && printf '%s\n' "$out" | grep -q "= '1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570' || { printf '# Error: key %s: sha256 %s, the template says %s (file removed)" && printf '%s\n' "$out" | grep -qF "  printf '    %s:\\n      source: \"deb [signed-by=\$KEY_FILE] %s %s %s\"\\n      key: |\\n' 'docker' 'https://download.docker.com/linux/debian' 'trixie' 'stable'" && printf '%s\n' "$out" | grep -q "^  sed 's/^/        /' '$TEST_DIR/cache/docker.asc'$" && printf '%s\n' "$out" | grep "^instance-id\|^packages:\|^{ printf 'apt:\|^write_files:" | tr '\n' ' ' | grep -q "instance-id.* packages:.* 'apt:.* write_files:"; then
+    pass "image seed write with a source line: the key fetched and verified before the seed, apt.sources.docker with signed-by and the key read from the cache, between packages and write_files"
+  else
+    fail "seed with source: $out"
+  fi
+  if printf '%s\n' "$out" | grep -q "^  - path: /etc/docker/daemon.json$" && printf '%s\n' "$out" | grep -q "^    permissions: '0644'$" && printf '%s\n' "$out" | grep -q "^    owner: root:root$" && printf '%s\n' "$out" | grep -q "^    encoding: b64$" && printf '%s\n' "$out" | grep -q "^      $(uuencode -m -r x < "$TEST_DIR/daemon.json")$" && printf '%s\n' "$out" | grep "^write_files:\|path: /etc/docker/daemon.json\|per-once/vm-bake-packages.sh\|^mounts:" | tr '\n' ' ' | grep -q "write_files:.*/daemon.json.*/vm-bake-packages.sh.* mounts:"; then
+    pass "image seed write with a file line: the dowry's object as base64 in write_files, root, the line's mode, before the package check and the mounts"
+  else
+    fail "seed with file: $out"
+  fi
+  if printf '%s\n' "$out" | grep -q "^  - path: /var/lib/cloud/scripts/per-once/vm-bake-packages.sh$" && printf '%s\n' "$out" | grep -qF "      for p in git sudo; do dpkg-query -W -f='\${Status}' \"\$p\" 2>/dev/null | grep -q 'install ok installed' || missing=\"\$missing \$p\"; done" && printf '%s\n' "$out" | grep -qF "printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" > /dev/console || printf '# vm-bake firstboot: packages complete\\n' > /dev/console" && printf '%s\n' "$out" | grep -q "dpkg-query -W -f='\${binary:Package} \${Version}\\\\n' > /etc/vm-bake/packages"; then
+    pass "image seed write: the per-once script asks dpkg for every package of the template and reports missing or complete on the console"
+  else
+    fail "seed check: $out"
+  fi
+  mkdir -p "$TEST_DIR/adir"
+  run_vmbake dowry add daemon "$TEST_DIR/adir" > /dev/null
+  if run_vmbake image seed write img:debian-dev:v1 2>&1 | grep -q "name dowries that are not one file in the database: daemon"; then
+    pass "a file line whose dowry became a directory is an error of the seed check"
+  else
+    fail "seed check dowry: $(run_vmbake image seed write img:debian-dev:v1 2>&1 | tail -2)"
+  fi
+  run_vmbake template file drop debian-dev daemon /etc/docker/daemon.json 0644 > /dev/null
+  run_vmbake template source drop debian-dev docker https://download.docker.com/linux/debian trixie stable https://download.docker.com/linux/debian/gpg 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570 > /dev/null
   out=$(run_vmbake image disk place img:debian-dev:v1 https://x/debian-13-genericcloud-amd64.raw 32G; run_vmbake image disk place img:debian-dev:v1 https://x/debian-13-generic-amd64.raw.xz 32G; run_vmbake image disk place img:debian-dev:v1 https://x/debian-13-generic-amd64.qcow2 32G 2>&1)
   if printf '%s\n' "$out" | grep -q "^cp '$TEST_DIR/cache/debian-13-genericcloud-amd64.raw' '$TEST_DIR/img/img:debian-dev:v1/disk0.img' || exit 1$" && printf '%s\n' "$out" | grep -q "^xz -dc '$TEST_DIR/cache/debian-13-generic-amd64.raw.xz' > '$TEST_DIR/img/img:debian-dev:v1/disk0.img' || exit 1$" && [ "$(printf '%s\n' "$out" | grep -c "^truncate -s '32G' '$TEST_DIR/img/img:debian-dev:v1/disk0.img' || exit 1$")" = "2" ] && printf '%s\n' "$out" | grep -q "neither raw nor xz"; then
     pass "image disk place: raw copied, xz unpacked, both grown to the disk size, qcow2 refused"
@@ -2269,8 +2395,8 @@ test_openbsd_plan() {
   fi
   run_vmbake image record write openbsd-dev $img > /dev/null
   plan=$(run_vmbake image install $img)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image response write '$img'" && printf '%s\n' "$plan" | sed -n 4p | grep -q "image site pack '$img'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image firstboot conf '$img'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest install 'firstboot' '$TEST_DIR/install80.iso'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image console drive '$img'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | sed -n 11p | grep -q "image firstboot conf drop"; then
-    pass "image install: record, response, site, pack, conf, link, install from the ISO, console, gone, link drop, conf drop"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "12" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image response write '$img'" && printf '%s\n' "$plan" | sed -n 4p | grep -q "image site files place '$img'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image site pack '$img'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image firstboot conf '$img'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "guest install 'firstboot' '$TEST_DIR/install80.iso'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image console drive '$img'" && printf '%s\n' "$plan" | sed -n 10p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | sed -n 12p | grep -q "image firstboot conf drop"; then
+    pass "image install: record, response, site, files, pack, conf, link, install from the ISO, console, gone, link drop, conf drop"
   else
     fail "image install plan: $plan"
   fi
@@ -2325,11 +2451,26 @@ quoted default ran" ]; then
     fail "image site write, the first boot's check: $out"
   fi
   out=$(run_vmbake image site pack $img 2>&1)
-  if printf '%s\n' "$out" | grep -q "bsdtar -czf '$TEST_DIR/img/$img/site/8.0/amd64/site80.tgz' --uid 0 --gid 0 --uname root --gname wheel -C '$TEST_DIR/img/$img/site.d' install.site" && printf '%s\n' "$out" | grep -q "sha256 site80.tgz > SHA256" && printf '%s\n' "$out" | grep -q "label=vmbakesite '$TEST_DIR/img/$img/site.iso' '$TEST_DIR/img/$img/site'"; then
-    pass "image site pack: the set as root:wheel under the release directory, its SHA256, the site directory as site.iso"
+  if printf '%s\n' "$out" | grep -q "bsdtar -czf '$TEST_DIR/img/$img/site/8.0/amd64/site80.tgz' --uid 0 --gid 0 --uname root --gname wheel -C '$TEST_DIR/img/$img/site.d' \. || exit 1" && printf '%s\n' "$out" | grep -q "sha256 site80.tgz > SHA256" && printf '%s\n' "$out" | grep -q "label=vmbakesite '$TEST_DIR/img/$img/site.iso' '$TEST_DIR/img/$img/site'"; then
+    pass "image site pack: the whole site.d as root:wheel under the release directory, its SHA256, the site directory as site.iso"
   else
     fail "image site pack: $out"
   fi
+  if run_vmbake image site files place $img | grep -q "no file lines in openbsd-dev"; then
+    pass "image site files place: no file lines is a comment"
+  else
+    fail "site files place without lines: $(run_vmbake image site files place $img)"
+  fi
+  printf 'hosts: files dns\n' > "$TEST_DIR/nss.conf"
+  run_vmbake dowry add nss "$TEST_DIR/nss.conf" > /dev/null
+  run_vmbake template file add openbsd-dev nss /etc/nsswitch.conf 0644 > /dev/null
+  out=$(run_vmbake image site files place $img)
+  if printf '%s\n' "$out" | grep -q "^install -d -m 755 '$TEST_DIR/img/$img/site.d/etc' && install -m 0644 '$TEST_DIR/dowry/nss/object' '$TEST_DIR/img/$img/site.d/etc/nsswitch.conf' || exit 1$" && printf '%s\n' "$out" | grep -q "files from dowries in the site set.*'$img' '1' >&2"; then
+    pass "image site files place: the dowry's object under site.d at its path with the line's mode"
+  else
+    fail "site files place: $out"
+  fi
+  run_vmbake template file drop openbsd-dev nss /etc/nsswitch.conf 0644 > /dev/null
   out=$(run_vmbake image firstboot conf write $img "$TEST_DIR/img/$img/site.iso")
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
@@ -2406,6 +2547,7 @@ main() {
   should_run_test test_template_add_chain
   should_run_test test_template_scalars
   should_run_test test_template_lists
+  should_run_test test_template_source_file
   should_run_test test_template_drop_guards
   should_run_test test_template_dump_restore
   should_run_test test_dispatch_and_help

@@ -314,7 +314,7 @@ ___image_base_content_image1() {
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 ___image_burn1() {
-	local t="" cur="" chain="" p="" n=0 a="" base="" abi="" osv="" ports="" pkgfiles=""
+	local t="" cur="" chain="" p="" n=0 a="" base="" abi="" osv="" ports="" pkgfiles="" srcs=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
 	cur=$t
 	while test "$cur" != empty && test "$n" -lt 32; do
@@ -335,6 +335,9 @@ ___image_burn1() {
 	test -z "$ports" || test "$VM_BAKE_BAKE_IN" = builder || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image burn: ports build in the builder only (image builder use): $(printf '%s' "$ports" | tr '\n' ' ')")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image rc write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image env write $(sq "$1")"
+	test -z "$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image file write $(sq "$1")"
+	srcs=$(awk -v base="$VM_BAKE_BASE" -v family=source -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -z "$srcs" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image $1: source lines are apt sources, a FreeBSD image takes its packages from pkg's repositories: $(printf '%s' "$srcs" | awk '{ print $1 }' | tr '\n' ' ')")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image user make $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image view write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image root lock $(sq "$1")"
@@ -468,7 +471,7 @@ ___image_builder_use0() {
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	ssh="ssh -p $VM_BAKE_SSH_PORT -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS doas sh"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN builder"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setintp $f $(sq "$ssh")"
 	done
 }
@@ -483,7 +486,7 @@ ___image_builder_use0() {
 ___image_builder_leave0() {
 	local f=""
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN host"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" unsetintp $f"
 	done
 }
@@ -1865,12 +1868,13 @@ _image_disk_place3() {
 
 #@help ___image_firstboot1
 # @command image firstboot <image>
-# @summary Step 2 of the Linux bake, the first boot: the image has a record; then the seed of the bake written (image seed write), the throwaway guest VM_BAKE_FIRSTBOOT configured with the image's disk and the seed, linked where vm-bhyve looks, started, waited for until its bhyve process is gone (cloud-init powers the guest off when it is done), its link and configuration removed again -- the guest exists for this one boot
+# @summary Step 2 of the Linux bake, the first boot: the image has a record; then the seed of the bake written (image seed write), the throwaway guest VM_BAKE_FIRSTBOOT configured with the image's disk and the seed, linked where vm-bhyve looks, started, its console read until the first boot reports its packages (image firstboot report: a missing package ends the bake with an error naming it), waited for until its bhyve process is gone (cloud-init powers the guest off when it is done), its link and configuration removed again -- the guest exists for this one boot
 # @group   image
 # @example vm-bake image firstboot img:debian-dev:v1
 # @see     image make linux
 # @see     image seed write
 # @see     image firstboot conf
+# @see     image firstboot report
 # @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name
 #@end
 ___image_firstboot1() {
@@ -1879,6 +1883,7 @@ ___image_firstboot1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link write $(sq "$VM_BAKE_FIRSTBOOT")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest run $(sq "$VM_BAKE_FIRSTBOOT")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot report"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot gone"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link drop $(sq "$VM_BAKE_FIRSTBOOT")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf drop"
@@ -2118,7 +2123,7 @@ ___image_create_iso2() {
 # @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name
 #@end
 ___image_install1() {
-	local t="" cur="" chain="" p="" n=0 a="" base="" iso=""
+	local t="" cur="" chain="" p="" n=0 a="" base="" iso="" srcs=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
 	cur=$t
 	while test "$cur" != empty && test "$n" -lt 32; do
@@ -2131,6 +2136,9 @@ ___image_install1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image response write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site files place $(sq "$1")"
+	srcs=$(awk -v base="$VM_BAKE_BASE" -v family=source -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -z "$srcs" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image $1: source lines are apt sources, an OpenBSD image takes its packages from installurl: $(printf '%s' "$srcs" | awk '{ print $1 }' | tr '\n' ' ')")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site pack $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link write $(sq "$VM_BAKE_FIRSTBOOT")"
@@ -2261,11 +2269,12 @@ _image_site_write1() {
 
 #@help _image_site_pack1
 # @command image site pack <image>
-# @summary Act terminal: install.site packed as the site set VM_BAKE_IMAGE_DIR/<image>/site/<release>/<arch>/site<NN>.tgz (bsdtar, owned by root:wheel) with its SHA256 beside it, then the site directory -- install.conf at its root, the set under the release directory the installer expects -- becomes site.iso (makefs cd9660, rockridge, label vmbakesite), the CD the throwaway guest carries besides the install ISO
+# @summary Act terminal: the whole site.d -- install.site and the files of the template's file lines at their paths (image site files place) -- packed as the site set VM_BAKE_IMAGE_DIR/<image>/site/<release>/<arch>/site<NN>.tgz (bsdtar, owned by root:wheel, the installer unpacks it over the installed system) with its SHA256 beside it, then the site directory -- install.conf at its root, the set under the release directory the installer expects -- becomes site.iso (makefs cd9660, rockridge, label vmbakesite), the CD the throwaway guest carries besides the install ISO
 # @group   image
 # @internal
 # @see     image install
 # @see     image site write
+# @see     image site files place
 # @env     VM_BAKE_IMAGE_DIR  the image's directory
 #@end
 _image_site_pack1() {
@@ -2279,7 +2288,7 @@ _image_site_pack1() {
 	done
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
 	arch=$(printf '%s' "$base" | awk '{ print $2 }'); nn=$(printf '%s' "$base" | awk '{ print $3 }'); nn=${nn##*/install}; nn=${nn%.iso}; rel="${nn%?}.${nn#?}"
-	printf '%s\n' "bsdtar -czf '$dir/site/$rel/$arch/site$nn.tgz' --uid 0 --gid 0 --uname root --gname wheel -C '$dir/site.d' install.site || exit 1"
+	printf '%s\n' "bsdtar -czf '$dir/site/$rel/$arch/site$nn.tgz' --uid 0 --gid 0 --uname root --gname wheel -C '$dir/site.d' . || exit 1"
 	printf '%s\n' "(cd '$dir/site/$rel/$arch' && sha256 site$nn.tgz > SHA256) || exit 1"
 	printf '%s\n' "rm -f '$dir/site.iso' && makefs -t cd9660 -o rockridge -o label=vmbakesite '$dir/site.iso' '$dir/site' && chmod 600 '$dir/site.iso' || exit 1"
 	printf '%s\n' "printf '# image %s: site.iso -- install.conf and %s/%s/site%s.tgz\\n' $(sq "$1") '$rel' '$arch' '$nn' >&2"
@@ -2596,15 +2605,16 @@ _image_seed_pack1() {
 
 #@help __image_check_seed1
 # @command image check seed <image>
-# @summary The template of the image (read at generation time) can be rendered as a NoCloud seed: when it says 'service files view', exactly one of its users has uid host -- that user's home is the view; a comment line, else an error line
+# @summary The template of the image (read at generation time) can be rendered as a NoCloud seed: when it says 'service files view', exactly one of its users has uid host -- that user's home is the view; every file line names a dowry whose object is one file (the seed carries it as write_files content); a comment line, else an error line
 # @group   image
 # @internal
 # @see     image seed write
 # @see     template user add
+# @see     template file add
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 __image_check_seed1() {
-	local t="" cur="" chain="" p="" n=0 users="" svc="" seen=0
+	local t="" cur="" chain="" p="" n=0 users="" svc="" seen=0 gone=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
 	cur=$t
 	while test "$cur" != empty && test "$n" -lt 32; do
@@ -2615,8 +2625,11 @@ __image_check_seed1() {
 	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	svc=$(awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	seen=$(printf '%s\n' "$users" | awk '$2 == "host" { print $1 }' | grep -c . || true)
+	for p in $(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | awk '{ print $1 }'); do test -f "$VM_BAKE_BASE/dowry/$p/object" || gone="$gone $p"; done
 	if printf '%s\n' "$svc" | grep -qx 'files view' && test "$seen" -ne 1; then
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image seed write: the view is the home of the template's host-uid user, and $t has $seen of them (template user add <template> <name> host)")"
+	elif test -n "$gone"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image seed write: the file lines of $t name dowries that are not one file in the database:$gone (dowry add <dowry> <file>, or template file drop)")"
 	else
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "image $1: the template $t renders as a seed")"
 	fi
@@ -2624,17 +2637,20 @@ __image_check_seed1() {
 
 #@help ___image_seed_write1
 # @command image seed write <image>
-# @summary The NoCloud seed of the bake, VM_BAKE_IMAGE_DIR/<image>/seed.iso: 'image check seed' (a view needs exactly one host-uid user), then six acts -- 'image seed meta write' (meta-data: instance-id bake-<image>, hostname VM_BAKE_FIRSTBOOT), 'image seed net write' (network-config: VM_BAKE_FIRSTBOOT_ADDRESS static on the MAC derived from it, gateway and nameserver VM_BAKE_GUEST_GATEWAY), 'image seed user write' (user-data begins: packages and users of the template), 'image seed sshd write' (write_files: sshd on VM_BAKE_SSH_PORT without root or passwords, the authorized key of every user, the env lines as /etc/profile.d/vm-bake.sh), 'image seed view write' (the 9p mounts when the template says 'service files view'), 'image seed pack' (power_state poweroff, makefs). The template's rc lines are FreeBSD's rc.conf and are noted, not written (read at generation time)
+# @summary The NoCloud seed of the bake, VM_BAKE_IMAGE_DIR/<image>/seed.iso: 'image check seed' (a view needs exactly one host-uid user, every file line a dowry that is one file), for each source line of the template its key fetched and verified (image key fetch, image key verify), then the acts -- 'image seed meta write' (meta-data: instance-id bake-<image>, hostname VM_BAKE_FIRSTBOOT), 'image seed net write' (network-config: VM_BAKE_FIRSTBOOT_ADDRESS static on the MAC derived from it, gateway and nameserver VM_BAKE_GUEST_GATEWAY), 'image seed user write' (user-data begins: packages and users of the template), 'image seed source write' (the apt sources with their keys), 'image seed sshd write' (write_files: sshd on VM_BAKE_SSH_PORT without root or passwords, the authorized key of every user, the env lines as /etc/profile.d/vm-bake.sh), 'image seed file write' (the file lines continue write_files), 'image seed check write' (the first boot's package check, its report on the console), 'image seed view write' (the 9p mounts when the template says 'service files view'), 'image seed pack' (power_state poweroff, makefs). The template's rc lines are FreeBSD's rc.conf and are noted, not written (read at generation time)
 # @group   image
 # @internal
 # @see     image firstboot
 # @see     image check seed
 # @see     image seed pack
 # @see     image view write
+# @see     image seed source write
+# @see     image seed file write
+# @see     image seed check write
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 ___image_seed_write1() {
-	local t="" cur="" chain="" p="" n=0 rcl=""
+	local t="" cur="" chain="" p="" n=0 rcl="" line=""
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
 	cur=$t
 	while test "$cur" != empty && test "$n" -lt 32; do
@@ -2645,10 +2661,268 @@ ___image_seed_write1() {
 	rcl=$(awk -v base="$VM_BAKE_BASE" -v family=rc -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check seed $(sq "$1")"
 	test -z "$rcl" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image $1: rc lines are FreeBSD's rc.conf, a Linux image ignores them: $(printf '%s' "$rcl" | tr '\n' ' ')")"
+	awk -v base="$VM_BAKE_BASE" -v family=source -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | while IFS= read -r line; do
+		set -- $line
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image key fetch $(sq "$1") $(sq "$5")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" image key verify $(sq "$1") $(sq "$6")"
+	done
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed meta write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed net write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed user write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed source write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed sshd write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed file write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed check write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed view write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed pack $(sq "$1")"
+}
+
+#@help _image_key_fetch2
+# @command image key fetch <name> <url>
+# @summary Act terminal: the signing key of a package source (template source add) fetched into VM_BAKE_IMAGE_CACHE as <name>.asc unless already there (fetch(1)); the base name of the url is no name -- every repository calls its key 'gpg'
+# @group   image
+# @internal
+# @see     image seed write
+# @see     image key verify
+# @env     VM_BAKE_IMAGE_CACHE  the directory the keys are fetched into, beside the VM images
+#@end
+_image_key_fetch2() {
+	local f="$VM_BAKE_IMAGE_CACHE/$1.asc"
+	printf '%s\n' "test -f '$f' && printf '# image: key %s cached\\n' '$f' >&2 || fetch -q -o '$f' $(sq "$2") || exit 1"
+}
+
+#@help _image_key_verify2
+# @command image key verify <name> <sha256>
+# @summary Act terminal: the sha256 of the cached key <name>.asc equals the template's source line, else the file is removed and the bake fails -- a key that changed is a key to look at, not to trust
+# @group   image
+# @internal
+# @see     image key fetch
+# @env     VM_BAKE_IMAGE_CACHE  the directory the keys lie in
+#@end
+_image_key_verify2() {
+	local f="$VM_BAKE_IMAGE_CACHE/$1.asc"
+	printf '%s\n' "d=\$(sha256 -q '$f') || exit 1"
+	printf '%s\n' "test \"\$d\" = $(sq "$2") || { printf '# Error: key %s: sha256 %s, the template says %s (file removed)\\n' '$f' \"\$d\" $(sq "$2") >&2; rm -f '$f'; exit 1; }"
+	printf '%s\n' "printf '# image: key %s verified (%s)\\n' '$f' \"\$d\" >&2"
+}
+
+#@help _image_seed_source_write1
+# @command image seed source write <image>
+# @summary Act terminal: the apt sources of user-data from the template's source lines (read at generation time) -- apt.sources.<name> with 'deb [signed-by=$KEY_FILE] <url> <suite> <component>' and the key read from VM_BAKE_IMAGE_CACHE/<name>.asc when the act runs (image key fetch and image key verify went before); cloud-init writes the key beside the list and installs the template's packages from the source. No source lines: a comment
+# @group   image
+# @internal
+# @see     image seed write
+# @see     template source add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_IMAGE_CACHE  the directory the keys lie in
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_seed_source_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 srcs="" line=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	srcs=$(awk -v base="$VM_BAKE_BASE" -v family=source -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	if test -z "$srcs"; then
+		printf '%s\n' "# image $1: no source lines in $t -- the distribution's own packages only"
+		return 0
+	fi
+	printf '%s\n' "{ printf 'apt:\\n  sources:\\n'"
+	printf '%s\n' "$srcs" | while IFS= read -r line; do
+		set -- $line
+		printf '%s\n' "  printf '    %s:\\n      source: \"deb [signed-by=\$KEY_FILE] %s %s %s\"\\n      key: |\\n' '$1' '$2' '$3' '$4'"
+		printf '%s\n' "  sed 's/^/        /' '$VM_BAKE_IMAGE_CACHE/$1.asc'"
+	done
+	printf '%s\n' "} >> '$dir/seed/user-data'"
+	printf '%s\n' "printf '# image %s: %s apt sources\\n' $(sq "$1") '$(printf '%s\n' "$srcs" | grep -c .)' >&2"
+}
+
+#@help _image_seed_file_write1
+# @command image seed file write <image>
+# @summary Act terminal: the template's file lines (read at generation time) continue the write_files of user-data (image seed sshd write opened the list) -- each dowry's object as base64 (uuencode -m), owner root, the mode of the line; the object is read at generation time, so the seed carries it. No file lines: a comment
+# @group   image
+# @internal
+# @see     image seed write
+# @see     template file add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_seed_file_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 files="" line=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	files=$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	if test -z "$files"; then
+		printf '%s\n' "# image $1: no file lines in $t -- nothing beyond the seed's own files"
+		return 0
+	fi
+	printf '%s\n' "cat >> '$dir/seed/user-data' <<'EOF_FILES'"
+	printf '%s\n' "$files" | while IFS= read -r line; do
+		set -- $line
+		printf '%s\n' "  - path: $2" "    permissions: '$3'" "    owner: root:root" "    encoding: b64" "    content: |"
+		uuencode -m -r x < "$VM_BAKE_BASE/dowry/$1/object" | sed 's/^/      /'
+	done
+	printf '%s\n' "EOF_FILES"
+	printf '%s\n' "printf '# image %s: %s files from dowries\\n' $(sq "$1") '$(printf '%s\n' "$files" | grep -c .)' >&2"
+}
+
+#@help _image_seed_check_write1
+# @command image seed check write <image>
+# @summary Act terminal: the first boot's package check continues the write_files of user-data -- /var/lib/cloud/scripts/per-once/vm-bake-packages.sh, which cloud-init runs in its final stage after the packages are installed (runcmd runs before them on Debian): the installed packages into /etc/vm-bake/packages, every package of the template (read at generation time) asked of dpkg-query, the report line on the console that 'image firstboot report' waits for ('# vm-bake firstboot: missing <packages>' or '# vm-bake firstboot: packages complete'); then cloud-init powers the guest off. apt fails loudly where pkg_add -I was silent, but a bake that reads only the exit of the first boot sees neither
+# @group   image
+# @internal
+# @see     image seed write
+# @see     image firstboot report
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_seed_check_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 pkgs=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	pkgs=$(awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | tr '\n' ' ' | sed 's/ $//')
+	printf '%s\n' "cat >> '$dir/seed/user-data' <<'EOF_CHECK'"
+	printf '%s\n' "  - path: /var/lib/cloud/scripts/per-once/vm-bake-packages.sh" "    permissions: '0755'" "    content: |"
+	printf '%s\n' "      #!/bin/sh" "      # written by vm-bake (image seed check write) -- the bake's first boot, after the packages: each checked against dpkg, the report line on the console"
+	printf '%s\n' "      install -d -m 755 /etc/vm-bake" "      dpkg-query -W -f='\${binary:Package} \${Version}\\n' > /etc/vm-bake/packages" "      missing="
+	printf '%s\n' "      for p in $pkgs; do dpkg-query -W -f='\${Status}' \"\$p\" 2>/dev/null | grep -q 'install ok installed' || missing=\"\$missing \$p\"; done"
+	printf '%s\n' "      test -n \"\$missing\" && printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" > /dev/console || printf '# vm-bake firstboot: packages complete\\n' > /dev/console"
+	printf '%s\n' "EOF_CHECK"
+}
+
+#@help __image_firstboot_report0
+# @command image firstboot report
+# @summary The first boot's package report read from the throwaway guest's serial console, by VM_BAKE_CONSOLE (the way vm-bhyve offers consoles): rewrite to 'image firstboot report tmux' or 'image firstboot report nmdm'
+# @group   image
+# @internal
+# @see     image firstboot
+# @see     image seed check write
+# @env     VM_BAKE_CONSOLE  tmux or nmdm, vm-bhyve's console= setting
+#@end
+__image_firstboot_report0() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot report $(sq "$VM_BAKE_CONSOLE")"
+}
+
+#@help __image_firstboot_report1
+# @internal dispatch fallback of 'image firstboot report <console>' for a console that is neither tmux nor nmdm: an error line
+#@end
+__image_firstboot_report1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image firstboot report: VM_BAKE_CONSOLE is $1, which is no console of vm-bhyve (tmux | nmdm)")"
+}
+
+#@help _image_firstboot_report_tmux0
+# @command image firstboot report tmux
+# @summary Act terminal (root): the report line of the first boot's package check waited for on vm-bhyve's tmux session of the throwaway guest (capture-pane with the whole history: the shutdown that follows the line scrolls it off the screen within seconds), up to an hour -- apt downloads the packages; '# vm-bake firstboot: missing <packages>' ends the bake with an error naming them and powers the guest off (vm poweroff -f), a session that ends without a report is the same error, '# vm-bake firstboot: packages complete' hands over to 'image firstboot gone'
+# @group   image
+# @internal
+# @see     image firstboot report
+# @see     image console drive tmux
+# @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, the tmux session
+#@end
+_image_firstboot_report_tmux0() {
+	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT")"
+	printf '%s\n' 'hist() { tmux capture-pane -p -S - -t "$g" 2>/dev/null || true; }'
+	printf '%s\n' 'n=0; until tmux has-session -t "$g" 2>/dev/null; do n=$((n + 1)); test "$n" -lt 60 || { printf "# Error: firstboot %s: no tmux session within a minute (VM_BAKE_CONSOLE says tmux; vm-bhyve console= in system.conf?)\n" "$g" >&2; exit 1; }; sleep 1; done'
+	cat <<'EOF_REPORT'
+give_up() { printf '# Error: firstboot %s: %s\n' "$g" "$1" >&2; hist | tail -15 >&2; vm poweroff -f "$g" >/dev/null 2>&1; exit 1; }
+n=0; until hist | grep -q '# vm-bake firstboot:'; do tmux has-session -t "$g" 2>/dev/null || give_up "the first boot ended without a package report"; n=$((n + 1)); test "$n" -lt 3600 || give_up "no package report within an hour"; sleep 1; done
+hist | grep -q '# vm-bake firstboot: missing' && give_up "the first boot left packages out: $(hist | grep '# vm-bake firstboot: missing' | tail -1 | tr -d '\r' | sed 's/.*missing //')"
+printf '# firstboot %s: the first boot reports its packages complete\n' "$g" >&2
+EOF_REPORT
+}
+
+#@help _image_firstboot_report_nmdm0
+# @command image firstboot report nmdm
+# @summary Act terminal (root): the same wait as 'image firstboot report tmux', over vm-bhyve's nmdm pair -- /dev/nmdm-<firstboot>.1B opened once on descriptor 3 in raw mode without echo and read into VM_BAKE_GUEST_DIR/<firstboot>/console.log by a cat in the background (the whole log stands for the history), the device waited for a minute
+# @group   image
+# @internal
+# @see     image firstboot report
+# @see     image console drive nmdm
+# @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, in the device name
+# @env     VM_BAKE_GUEST_DIR  the guests' directory, where the console log lies
+#@end
+_image_firstboot_report_nmdm0() {
+	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT") dev=$(sq "/dev/nmdm-$VM_BAKE_FIRSTBOOT.1B") log=$(sq "$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/console.log") lock=$(sq "$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/run.lock")"
+	printf '%s\n' 'n=0; until test -c "$dev"; do n=$((n + 1)); test "$n" -lt 60 || { printf "# Error: firstboot %s: no %s within a minute (VM_BAKE_CONSOLE says nmdm; vm-bhyve console= in system.conf?)\n" "$g" "$dev" >&2; exit 1; }; sleep 1; done'
+	printf '%s\n' 'exec 3<> "$dev"; stty raw -echo <&3'
+	printf '%s\n' ': > "$log"; cat <&3 >> "$log" & rd=$!' 'trap '"'"'kill "$rd" 2>/dev/null'"'"' EXIT'
+	printf '%s\n' 'hist() { tr -d "\r" < "$log" 2>/dev/null | cat -v; }'
+	cat <<'EOF_REPORT'
+give_up() { printf '# Error: firstboot %s: %s\n' "$g" "$1" >&2; hist | tail -15 >&2; vm poweroff -f "$g" >/dev/null 2>&1; exit 1; }
+n=0; until hist | grep -q '# vm-bake firstboot:'; do test -e "$lock" || pgrep -q -f "bhyve: $g\$" || give_up "the first boot ended without a package report"; n=$((n + 1)); test "$n" -lt 3600 || give_up "no package report within an hour"; sleep 1; done
+hist | grep -q '# vm-bake firstboot: missing' && give_up "the first boot left packages out: $(hist | grep '# vm-bake firstboot: missing' | tail -1 | sed 's/.*missing //')"
+printf '# firstboot %s: the first boot reports its packages complete\n' "$g" >&2
+EOF_REPORT
+}
+
+#@help _image_file_write1
+# @command image file write <image>
+# @summary Act terminal (root, host or builder): the template's file lines (read at generation time) into the mounted disk of a FreeBSD image -- each dowry's object installed at its path with the mode of the line, owner root:wheel, the directory made; 'image burn' calls it only when there are lines
+# @group   image
+# @internal
+# @see     image burn
+# @see     template file add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory, the disk is mounted under <image>/mnt
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_file_write1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" t="" cur="" chain="" p="" n=0 files="" line=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	files=$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	printf '%s\n' "$files" | while IFS= read -r line; do
+		set -- $line
+		printf '%s\n' "install -d -m 755 -o root -g wheel '$mnt$(dirname "$2")' && install -m $3 -o root -g wheel '$VM_BAKE_BASE/dowry/$1/object' '$mnt$2' || exit 1"
+	done
+	printf '%s\n' "printf '# image %s: %s files from dowries\\n' $(sq "$1") '$(printf '%s\n' "$files" | grep -c .)' >&2"
+}
+
+#@help _image_site_files_place1
+# @command image site files place <image>
+# @summary Act terminal: the template's file lines (read at generation time) into the site set of an OpenBSD image -- each dowry's object under VM_BAKE_IMAGE_DIR/<image>/site.d at its path with the mode of the line; 'image site pack' packs the whole directory owned by root, and the installer unpacks the set over the installed system. No file lines: a comment
+# @group   image
+# @internal
+# @see     image install
+# @see     image site pack
+# @see     template file add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_site_files_place1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 files="" line=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	files=$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	if test -z "$files"; then
+		printf '%s\n' "# image $1: no file lines in $t -- the site set carries install.site alone"
+		return 0
+	fi
+	printf '%s\n' "$files" | while IFS= read -r line; do
+		set -- $line
+		printf '%s\n' "install -d -m 755 '$dir/site.d$(dirname "$2")' && install -m $3 '$VM_BAKE_BASE/dowry/$1/object' '$dir/site.d$2' || exit 1"
+	done
+	printf '%s\n' "printf '# image %s: %s files from dowries in the site set\\n' $(sq "$1") '$(printf '%s\n' "$files" | grep -c .)' >&2"
 }

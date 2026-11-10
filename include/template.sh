@@ -50,7 +50,7 @@
 #@end
 
 TEMPLATE_LAYOUT=""
-TEMPLATE_FAMILIES="package pkgfile port rc env user home service forbid data session tag"
+TEMPLATE_FAMILIES="package pkgfile port rc env user home service forbid data session tag source file"
 TEMPLATE_LEAVES="base bake firmware resource topology"
 
 #@help _template_list0
@@ -2181,4 +2181,158 @@ ___template_dump_record1() {
 #@end
 __template_restore1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" batch $(sq "$1")"
+}
+
+#@help ___template_source_add7
+# @command template source add <template> <name> <url> <suite> <component> <keyurl> <sha256>
+# @summary Add a package source beyond the distribution's own to the template's own list: the template exists, name, suite and component are words, url and keyurl are http(s), the digest is the sha256 of the signing key behind keyurl; then 'template line append' of '<name> <url> <suite> <component> <keyurl> <sha256>'. A Linux bake fetches the key once into its cache and verifies it (image key fetch, image key verify), writes it into the seed as apt.sources.<name> with the line 'deb [signed-by=$KEY_FILE] <url> <suite> <component>', and the template's packages install from it; the FreeBSD and OpenBSD bakes note the lines and leave them (pkg and pkg_add have their own repositories)
+# @group   template
+# @example vm-bake template source add docker-host docker https://download.docker.com/linux/debian trixie stable https://download.docker.com/linux/debian/gpg 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570
+# @see     template source drop
+# @see     template source show
+# @see     template package add
+# @see     image seed source write
+#@end
+___template_source_add7() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template url valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$5")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template url valid $(sq "$6")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template sha256 valid $(sq "$7")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") source $(sq "$2 $3 $4 $5 $6 $7")"
+}
+
+#@help ___template_source_drop7
+# @command template source drop <template> <name> <url> <suite> <component> <keyurl> <sha256>
+# @summary Remove the source line from the template's own list: the template exists, the line is listed there (template source show prints it to copy); then 'template line remove'
+# @group   template
+# @see     template source add
+#@end
+___template_source_drop7() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") source $(sq "$2 $3 $4 $5 $6 $7")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") source $(sq "$2 $3 $4 $5 $6 $7")"
+}
+
+#@help ___template_source_mask7
+# @command template source mask <template> <name> <url> <suite> <component> <keyurl> <sha256>
+# @summary Hide an inherited source line in this template and below: the template exists, the words, urls and digest are valid; then 'template line mask'
+# @group   template
+# @see     template source unmask
+#@end
+___template_source_mask7() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template url valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template url valid $(sq "$6")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template sha256 valid $(sq "$7")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") source $(sq "$2 $3 $4 $5 $6 $7")"
+}
+
+#@help ___template_source_unmask7
+# @command template source unmask <template> <name> <url> <suite> <component> <keyurl> <sha256>
+# @summary Take a mask back: the template exists, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template source mask
+#@end
+___template_source_unmask7() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") source $(sq "$2 $3 $4 $5 $6 $7")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") source $(sq "$2 $3 $4 $5 $6 $7")"
+}
+
+#@help ___template_source_show1
+# @command template source show <template>
+# @summary The package sources resolved over the chain, each with its origin: the template exists; then 'template chain table'
+# @group   template
+# @see     template show
+#@end
+___template_source_show1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") source"
+}
+
+#@help ___template_file_add4
+# @command template file add <template> <dowry> <path> <mode>
+# @summary Put a dowry into the system of every image of this template, as a file at an absolute path: the template exists, the dowry is kept in the database and is one file, the path is absolute, the mode three or four octal digits; then 'template line append' of '<dowry> <path> <mode>'. The file belongs to root and is written at the bake: by cloud-init's write_files in a Linux image (image seed file write), into the mounted disk of a FreeBSD image (image file write), into the site set of an OpenBSD image (image site files place). A path that a guest changes at runtime belongs into the home instead (template home copy idem)
+# @group   template
+# @example vm-bake template file add docker-host docker-daemon-json /etc/docker/daemon.json 0644
+# @see     template file drop
+# @see     template file show
+# @see     template home copy idem
+# @see     dowry add
+#@end
+___template_file_add4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" dowry check file $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template path valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template mode valid $(sq "$4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") file $(sq "$2 $3 $4")"
+}
+
+#@help ___template_file_drop4
+# @command template file drop <template> <dowry> <path> <mode>
+# @summary Remove the file line from the template's own list: the template exists, the line is listed there; then 'template line remove'
+# @group   template
+# @see     template file add
+#@end
+___template_file_drop4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") file $(sq "$2 $3 $4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") file $(sq "$2 $3 $4")"
+}
+
+#@help ___template_file_mask4
+# @command template file mask <template> <dowry> <path> <mode>
+# @summary Hide an inherited file line in this template and below: the template exists, path and mode are valid; then 'template line mask'
+# @group   template
+# @see     template file unmask
+#@end
+___template_file_mask4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template path valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template mode valid $(sq "$4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") file $(sq "$2 $3 $4")"
+}
+
+#@help ___template_file_unmask4
+# @command template file unmask <template> <dowry> <path> <mode>
+# @summary Take a mask back: the template exists, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template file mask
+#@end
+___template_file_unmask4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") file $(sq "$2 $3 $4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") file $(sq "$2 $3 $4")"
+}
+
+#@help ___template_file_show1
+# @command template file show <template>
+# @summary The file lines resolved over the chain, each with its origin: the template exists; then 'template chain table'
+# @group   template
+# @see     template show
+#@end
+___template_file_show1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") file"
+}
+
+#@help __template_mode_valid1
+# @command template mode valid <mode>
+# @summary The mode is three or four octal digits, as chmod and install -m read them: a comment line, else an error line
+# @group   template
+# @internal
+# @see     template file add
+#@end
+__template_mode_valid1() {
+	local ok=no
+	case "$1" in [0-7][0-7][0-7]|[0-7][0-7][0-7][0-7]) ok=yes ;; esac
+	if test "$ok" = yes; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'mode $1 valid'"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template file: invalid mode $1 (three or four octal digits, e.g. 0644)")"
+	fi
 }

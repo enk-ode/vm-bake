@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the image bake (image file write), pinned to sudo sh: the mounted disk belongs to root. Inspect first: vm-bake setintp image_file_write cat.

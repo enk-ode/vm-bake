@@ -239,3 +239,19 @@ _dowry_record_place3() {
 	printf '%s\n' "$MODIFY_FILE_PERMS 0600 '$rec/source' '$rec/created'"
 	emit_note "dowry $1: record placed (source $2, created $3), the object comes with the bundle"
 }
+
+#@help __dowry_check_file1
+# @command dowry check file <dowry>
+# @summary The dowry is kept in the database and its object is one regular file (a template file line puts it at a path in the system; a directory has no mode and no single path): a comment line, else an error line
+# @group   dowry
+# @internal
+# @see     dowry check
+# @see     template file add
+#@end
+__dowry_check_file1() {
+	if test -f "$VM_BAKE_BASE/dowry/$1/object"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "dowry $1 is kept and is a file")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "dowry $1 is not one file in the database (dowry add $1 <file>, or dowry list)")"
+	fi
+}

@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the image bake (image firstboot report tmux), pinned to sudo sh: the throwaway guest's console belongs to root (vm-bhyve runs tmux and bhyve as root, the nmdm devices are root's). Inspect first: vm-bake setintp image_firstboot_report_tmux cat.
