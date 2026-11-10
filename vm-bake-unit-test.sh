@@ -2243,10 +2243,18 @@ test_openbsd_plan() {
   else
     fail "image install plan: $plan"
   fi
+  printf '%s\n' "sh -c 'cat; echo quoted default ran'" > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
   printf '%s\n' 'env VM_BAKE_PIN_PROBE=1 $VM_BAKE_BATCH_COMBINATOR_INTERPRETER' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_install"
+  if ! run_vmbake image install $img >/dev/null 2>&1; then
+    pass "image install pin: the bare name \$VM_BAKE_BATCH_COMBINATOR_INTERPRETER in a pin splits the class default into words, its quotes stay letters, sh refuses -- the first one-sudo bake on illyria died of that"
+  else
+    fail "image install pin: the bare class-default name ran"
+  fi
+  printf '%s\n' 'env VM_BAKE_PIN_PROBE=1 sh -c "$VM_BAKE_BATCH_COMBINATOR_INTERPRETER"' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_install"
   out=$(run_vmbake image install $img)
-  if [ "$out" = "$plan" ]; then
-    pass "image install pin: a pin naming \$VM_BAKE_BATCH_COMBINATOR_INTERPRETER expands to the class default before it runs -- 'sudo -E \$VM_BAKE_BATCH_COMBINATOR_INTERPRETER' puts the whole bake under one sudo"
+  if [ "$out" = "$plan
+quoted default ran" ]; then
+    pass "image install pin: 'sh -c \"\$VM_BAKE_BATCH_COMBINATOR_INTERPRETER\"' hands the class default's text to a shell that parses it -- 'sudo -E sh -c \"\$VM_BAKE_BATCH_COMBINATOR_INTERPRETER\"' puts the whole bake under one sudo"
   else
     fail "image install pin: $out"
   fi
