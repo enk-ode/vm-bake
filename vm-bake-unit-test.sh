@@ -2288,6 +2288,11 @@ quoted default ran" ]; then
   else
     fail "image site write: $out"
   fi
+  if printf '%s\n' "$out" | grep -qF 'for p in git; do grep -q "^${p%%--*}-[0-9]" /etc/vm-bake/packages || missing="$missing $p"; done' && printf '%s\n' "$out" | grep -qF "test -n \"\$missing\" && printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" > /dev/console || printf '# vm-bake firstboot: packages complete\\n' > /dev/console" && [ "$(printf '%s\n' "$out" | grep -n '^shutdown -p now$' | cut -d: -f1)" -gt "$(printf '%s\n' "$out" | grep -n '# vm-bake firstboot: packages complete' | cut -d: -f1)" ]; then
+    pass "image site write: the first boot checks every package against pkg_info (the stem before a flavor's --), reports missing or complete on the console, and powers off after the report"
+  else
+    fail "image site write, the first boot's check: $out"
+  fi
   out=$(run_vmbake image site pack $img 2>&1)
   if printf '%s\n' "$out" | grep -q "bsdtar -czf '$TEST_DIR/img/$img/site/8.0/amd64/site80.tgz' --uid 0 --gid 0 --uname root --gname wheel -C '$TEST_DIR/img/$img/site.d' install.site" && printf '%s\n' "$out" | grep -q "sha256 site80.tgz > SHA256" && printf '%s\n' "$out" | grep -q "label=vmbakesite '$TEST_DIR/img/$img/site.iso' '$TEST_DIR/img/$img/site'"; then
     pass "image site pack: the set as root:wheel under the release directory, its SHA256, the site directory as site.iso"
@@ -2314,6 +2319,11 @@ quoted default ran" ]; then
     pass "image console drive tmux and nmdm: the same dialogue -- com0, boot, the shell fills the CD names into the response file, autoinstall, CONGRATULATIONS -- over the session or the raw, echo-free device held open; both power the guest off when a wait runs out; boot is sent until the loader reports booting; after the install's reboot the guest is powered off and started from its disk; the installer's failure line ends a wait at once; mount_cd9660 without -r (OpenBSD has none)"
   else
     fail "console drive: $out / $plan"
+  fi
+  if [ "$(printf '%s\n' "$out$plan" | grep -c "^wait_for '# vm-bake firstboot:' 1800$")" = "2" ] && [ "$(printf '%s\n' "$out$plan" | grep -c "^pane | grep -q '# vm-bake firstboot: missing' && give_up ")" = "2" ] && [ "$(printf '%s\n' "$plan" | grep -n "^wait_for '# vm-bake firstboot:' 1800$" | cut -d: -f1)" -gt "$(printf '%s\n' "$plan" | grep -n '^vm start "$g" >&2' | cut -d: -f1)" ]; then
+    pass "console drive tmux and nmdm: after the restart from the disk both wait for the first boot's report line; missing ends the bake with the packages named, complete hands over to firstboot gone"
+  else
+    fail "console drive, the first boot's report: $out / $plan"
   fi
   run_vmbake guest record write $img istria 172.16.100.120/24 > /dev/null
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
