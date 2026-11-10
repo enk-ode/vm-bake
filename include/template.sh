@@ -912,13 +912,7 @@ ___template_tag_show1() {
 }
 
 #@help _template_find1
-# @command template find <key>
-# @summary Display terminal: every template whose resolved tags hold the key, whatever the text -- 'template find <key> .'
-# @group   template
-# @example vm-bake template find purpose
-# @see     template tag add
-# @see     guest find
-# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+# @internal arity-1 sibling of 'template find' (template find <key> -- the key alone): every template whose tags hold the key, whatever the text -- 'template find <key> .'
 #@end
 _template_find1() {
 	_template_find2 "$1" .

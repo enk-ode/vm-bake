@@ -569,13 +569,7 @@ _guest_tag_table1() {
 }
 
 #@help _guest_find1
-# @command guest find <key>
-# @summary Display terminal: every guest whose tags, own or inherited from its image's template, hold the key, whatever the text -- 'guest find <key> .'
-# @group   guest
-# @example vm-bake guest find purpose
-# @see     guest tag add
-# @see     template find
-# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+# @internal arity-1 sibling of 'guest find' (guest find <key> -- the key alone): every guest whose tags hold the key, whatever the text -- 'guest find <key> .'
 #@end
 _guest_find1() {
 	_guest_find2 "$1" .
