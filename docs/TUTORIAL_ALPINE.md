@@ -77,6 +77,10 @@ under `cat`:
   `missing <packages>`, and powers off.
 - `etc/runlevels/default/local`: the link that starts the local service
   on the live system.
+- `etc/.default_boot_services`: the marker that keeps the default services
+  of the live init (devfs, mdev, hwdrivers, modloop). An apkovl is meant
+  to bring its own runlevels; without the marker the live system has no
+  kernel modules, and `setup-disk` cannot mount the filesystems it made.
 
 The template's `file` lines go into `etc/vm-bake/files` (`image overlay
 files place`); the first boot installs each at its path and removes the

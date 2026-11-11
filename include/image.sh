@@ -2707,7 +2707,7 @@ ___image_overlay_write1() {
 
 #@help _image_overlay_answer_write1
 # @command image overlay answer write <image>
-# @summary Act terminal: overlay.d begun -- its directories, the link etc/runlevels/default/local that starts the local service on the live system, and etc/vm-bake/answerfile, the answers of setup-alpine -f: no keymap, hostname VM_BAKE_FIRSTBOOT, mdev, eth0 static on VM_BAKE_FIRSTBOOT_ADDRESS with the gateway VM_BAKE_GUEST_GATEWAY, DNS domain VM_BAKE_GUEST_DOMAIN and nameserver VM_BAKE_GUEST_GATEWAY, the host's timezone (/var/db/zoneinfo, else UTC), no proxy, the repositories the first mirror of the list and community (-1 -c), no user (the first boot makes the template's users with their host uids), openssh, chrony, the whole disk vda in the sys mode (-m sys), no lbu and no apk cache
+# @summary Act terminal: overlay.d begun -- its directories, the link etc/runlevels/default/local that starts the local service on the live system, the marker etc/.default_boot_services (an apkovl is meant to bring its own runlevels: without the marker the live init adds none of its default services -- devfs, mdev, hwdrivers, modloop -- and setup-disk finds no kernel modules for the filesystems it makes), and etc/vm-bake/answerfile, the answers of setup-alpine -f: no keymap, hostname VM_BAKE_FIRSTBOOT, mdev, eth0 static on VM_BAKE_FIRSTBOOT_ADDRESS with the gateway VM_BAKE_GUEST_GATEWAY, DNS domain VM_BAKE_GUEST_DOMAIN and nameserver VM_BAKE_GUEST_GATEWAY, the host's timezone (/var/db/zoneinfo, else UTC), no proxy, the repositories the first mirror of the list and community (-1 -c), no user (the first boot makes the template's users with their host uids), openssh, chrony, the whole disk vda in the sys mode (-m sys), no lbu and no apk cache
 # @group   image
 # @internal
 # @see     image overlay write
@@ -2723,6 +2723,7 @@ _image_overlay_answer_write1() {
 	IFS= read -r tz 2>/dev/null < /var/db/zoneinfo || tz=UTC
 	printf '%s\n' "install -d -m 755 '$dir/overlay.d/etc/local.d' '$dir/overlay.d/etc/vm-bake' '$dir/overlay.d/etc/runlevels/default' || exit 1"
 	printf '%s\n' "ln -sf /etc/init.d/local '$dir/overlay.d/etc/runlevels/default/local'"
+	printf '%s\n' "touch '$dir/overlay.d/etc/.default_boot_services'"
 	printf '%s\n' "cat > '$dir/overlay.d/etc/vm-bake/answerfile' <<'EOF_ANSWER'"
 	printf '%s\n' "# written by vm-bake (image overlay answer write) -- the answers of setup-alpine -f" "KEYMAPOPTS=none" "HOSTNAMEOPTS=$VM_BAKE_FIRSTBOOT" "DEVDOPTS=mdev" "INTERFACESOPTS=\"auto lo" "iface lo inet loopback" "" "auto eth0" "iface eth0 inet static" "    address ${VM_BAKE_FIRSTBOOT_ADDRESS%/*}" "    netmask $mask" "    gateway $VM_BAKE_GUEST_GATEWAY" "\"" "DNSOPTS=\"-d $VM_BAKE_GUEST_DOMAIN $VM_BAKE_GUEST_GATEWAY\"" "TIMEZONEOPTS=$tz" "PROXYOPTS=none" "APKREPOSOPTS=\"-1 -c\"" "USEROPTS=none" "SSHDOPTS=openssh" "NTPOPTS=chrony" "DISKOPTS=\"-m sys /dev/vda\"" "LBUOPTS=none" "APKCACHEOPTS=none"
 	printf '%s\n' "EOF_ANSWER"
