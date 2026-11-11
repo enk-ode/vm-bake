@@ -610,7 +610,7 @@ exists; then `template chain table'
 \f[B]template service add <template> <kind> <variant>\f[R]
 Add a host service the guest may use to the template\(cqs own list: the
 template exists, kind and variant are valid (display x|rdp|none, audio
-pulse|sndio|none, clipboard broker|none, files disk|none, net <switch>,
+pulse|sndio|none, clipboard broker|none, files view|none, net <switch>,
 token none); then `template line append'
 .TP
 \f[B]template service drop <template> <kind> <variant>\f[R]
@@ -1174,6 +1174,8 @@ The ssh host key itself stays in the database and is free again, so the
 guest built anew under that name takes it back and answers with the same
 identity; the view stays too \(en a new image replaces the guest, not
 what it wrote (`guest view drop' removes that, `hostkey drop' the key)
+\(en its data disks stay where they are, their own act ends them (guest
+data drop)
 .TP
 \f[B]guest drop unfetched <guest>\f[R]
 `guest drop' without the fetched check: the guest\(cqs commits that the
@@ -1352,6 +1354,19 @@ differs: an error.
 The record stands for a clone that is NOT here: `guest drop <guest>'
 lets it go, `guest make <image> <guest> <address>' makes it anew; a host
 key placed by import keeps its identity
+.TP
+\f[B]guest data drop <guest> <name>\f[R]
+Destroy a data disk after its guest: the name is a guest name, the guest
+is absent (guest drop first \(en the disk outlives the guest by design,
+this is the one act that ends it), the disk name is valid; then `guest
+data destroy' (the zvol with its snapshots, and the guest\(cqs data
+dataset when it was the last)
+.TP
+\f[B]guest data show <guest>\f[R]
+Act terminal (the invoking user): the data disks of the guest as the
+pool holds them \(en the zvols and their snapshots under
+VM_BAKE_DIR/data/<guest> with size, space used and backup class, whether
+or not the guest still exists; none is a note
 .SS Export and import
 `export <dump> <bundle>' writes the two artifacts: the dump (what `dump'
 prints: the environment the replay needs, every template, the image and
@@ -1529,13 +1544,15 @@ must know which.
 .TP
 \f[B]VM_BAKE_DIR\f[R]
 vm\-bake\(cqs own dataset and directory: the datasets image/ (the sealed
-images) and guest/ (the clones), and the directory distfiles/ for what
-comes from outside, by kind: image/ (VM images), pkg/ (package files),
-later deb/, rpm/, port/.
+images), guest/ (the clones) and data/ (the data disks of the guests:
+zvols that outlive their guests, template data add), and the directory
+distfiles/ for what comes from outside, by kind: image/ (VM images),
+pkg/ (package files), later deb/, rpm/, port/.
 Made once by root and delegated to the invoking user: zfs create
 <pool>/\&.../vm\-bake, chown <user> on its mount point, zfs allow <user>
-create,mount,snapshot,clone,destroy,readonly on it, sysctl
-vfs.usermount=1 \(en then every ZFS act of vm\-bake runs without root.
+create,mount,snapshot,clone,destroy,readonly,volsize,userprop on it,
+sysctl vfs.usermount=1 \(en then every ZFS act of vm\-bake runs without
+root.
 vm\-bhyve keeps its own directory (VM_BAKE_VM_DIR).
 .TP
 \f[B]VM_BAKE_DNS_FILE\f[R]

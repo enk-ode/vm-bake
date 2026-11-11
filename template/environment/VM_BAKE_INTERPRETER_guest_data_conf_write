@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest data conf write), pinned to sh: the configuration file lives in the clone, which is the invoking user's, and zfs list only reads; it acts directly, cat shows it.

@@ -53,14 +53,17 @@ ___guest_make3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest address valid $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest repo tree ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check homes $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check data $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image tree ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest switch ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest log rotate ensure"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest record write $(sq "$1") $(sq "$2") $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey ensure $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest view ensure $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest data ensure $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest clone $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest conf write $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest data conf write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest disk write $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest dns write"
@@ -111,12 +114,13 @@ ___guest_stop1() {
 
 #@help ___guest_drop1
 # @command guest drop <guest>
-# @summary Remove the guest: it has a record, is not running (vm-bhyve's run.lock) and its repositories are fetched (the mark of 'guest stop'; 'guest drop unfetched' gives them up); the overlays of its view let go, whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed with its hostkey binding, unbound told, what the host remembered of its ssh host key forgotten. The ssh host key itself stays in the database and is free again, so the guest built anew under that name takes it back and answers with the same identity; the view stays too -- a new image replaces the guest, not what it wrote ('guest view drop' removes that, 'hostkey drop' the key)
+# @summary Remove the guest: it has a record, is not running (vm-bhyve's run.lock) and its repositories are fetched (the mark of 'guest stop'; 'guest drop unfetched' gives them up); the overlays of its view let go, whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed with its hostkey binding, unbound told, what the host remembered of its ssh host key forgotten. The ssh host key itself stays in the database and is free again, so the guest built anew under that name takes it back and answers with the same identity; the view stays too -- a new image replaces the guest, not what it wrote ('guest view drop' removes that, 'hostkey drop' the key) -- its data disks stay where they are, their own act ends them (guest data drop)
 # @group   guest
 # @example vm-bake guest drop bake
 # @see     guest make
 # @see     guest stop
 # @see     guest view drop
+# @see     guest data drop
 #@end
 ___guest_drop1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check record $(sq "$1")"
@@ -1840,18 +1844,20 @@ __guest_disk_write1() {
 
 #@help ___guest_disk_write_chroot1
 # @command guest disk write chroot <guest>
-# @summary The chroot case of 'guest disk write': the clone is mounted and gets its network (rc.conf), the home paths of the template and its ssh host key -- 'guest network write', 'guest home write', 'guest hostkey write'
+# @summary The chroot case of 'guest disk write': the clone is mounted and gets its network (rc.conf), the home paths of the template and its ssh host key -- 'guest network write', 'guest home write', 'guest hostkey write', and its data disks made ready -- 'guest data write'
 # @group   guest
 # @internal
 # @see     guest disk write
 # @see     guest network write
 # @see     guest home write
 # @see     guest hostkey write
+# @see     guest data write
 #@end
 ___guest_disk_write_chroot1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest network write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest home write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest hostkey write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest data write $(sq "$1")"
 }
 
 #@help __guest_disk_write_cloud_init1
@@ -1880,4 +1886,210 @@ __guest_disk_write_apkovl1() {
 #@end
 __guest_disk_write2() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest disk write: the image of $2 was baked by $1, which has no disk write (chroot | cloud-init | autoinstall | apkovl)")"
+}
+
+#@help __guest_check_data1
+# @command guest check data <image>
+# @summary The data lines of the image's template (read at generation time) can be carried by a guest of it: the image was baked the chroot way (the other three ways have no reader for a data disk yet), no name is listed twice -- a comment line naming the disks, else an error line
+# @group   guest
+# @internal
+# @see     guest make
+# @see     guest data ensure
+# @see     template data add
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+__guest_check_data1() {
+	local t="" cur="" chain="" p="" n=0 a="" bake="" lines="" names="" dup=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/bake" && IFS= read -r bake < "$VM_BAKE_BASE/template/$a/bake"; done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=data -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	names=$(printf '%s\n' "$lines" | awk 'NF { print $1 }' | tr '\n' ' ' | sed 's/ $//')
+	dup=$(printf '%s\n' "$lines" | awk 'NF && seen[$1]++ == 1 { printf " %s", $1 }')
+	if test -z "$lines"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "image $1: no data disk in the template $t")"
+	elif test "${bake:-chroot}" != chroot; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest make: the template $t lists data disks ($names), and the $bake way has no reader for them yet -- a FreeBSD template, or template data mask")"
+	elif test -n "$dup"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest make: data names listed twice in $t:$dup (template data drop)")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "image $1: data disks $names, carried by the chroot way")"
+	fi
+}
+
+#@help _guest_data_ensure1
+# @command guest data ensure <guest>
+# @summary Act terminal (the invoking user, delegated by zfs allow): every data line of the image's template (read at generation time) has its zvol VM_BAKE_DIR/data/<guest>/<name> -- sparse, the line's size, enk-ode:backup set to the line's class, which some dataset of the pool must already carry (an unknown class would be a disk without backup). One that exists is kept: a snapshot first (@<utc time>), the volume grown when the line says more, never shrunk (an error). No data line is a note
+# @group   guest
+# @internal
+# @see     guest make
+# @see     guest check data
+# @see     guest data write
+# @see     guest data drop
+# @see     template data add
+# @env     VM_BAKE_DIR  vm-bake's dataset: data/<guest>/<name> are the zvols
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_data_ensure1() {
+	local img="" t="" cur="" chain="" p="" n=0 lines="" line="" name="" size="" class="" bytes=""
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=data -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -n "$lines" || { emit_note "guest $1: no data disk in the template $t"; return 0; }
+	printf '%s\n' "parent=\$(zfs list -H -o name '$VM_BAKE_DIR/data') || { printf '# Error: %s/data is no dataset (image tree ensure makes it)\\n' '$VM_BAKE_DIR' >&2; exit 1; }"
+	printf '%s\n' "zfs list -H -o name \"\$parent/$1\" > /dev/null 2>&1 || zfs create \"\$parent/$1\" || exit 1"
+	printf '%s\n' "$lines" | while IFS= read -r line; do
+		name=${line%% *}; class=${line##* }; size=${line#* }; size=${size%% *}
+		bytes=$(printf '%s\n' "$size" | awk '{ m = 1; u = substr($0, length($0)); if (u == "K") m = 1024; if (u == "M") m = 1048576; if (u == "G") m = 1073741824; if (u == "T") m = 1099511627776; printf "%.0f", ($0 + 0) * m }')
+		printf '%s\n' "zfs get -H -o value -r enk-ode:backup \"\${parent%%/*}\" | grep -qx $(sq "$class") || { printf '# Error: no dataset of the pool carries enk-ode:backup=%s -- the backup knows no such class, the data disk %s of guest %s would have none\\n' $(sq "$class") '$name' '$1' >&2; exit 1; }"
+		printf '%s\n' "if zfs list -H -o name \"\$parent/$1/$name\" > /dev/null 2>&1; then"
+		printf '%s\n' "	cur=\$(zfs get -Hp -o value volsize \"\$parent/$1/$name\") || exit 1"
+		printf '%s\n' "	test \"\$cur\" -le $bytes || { printf '# Error: the data disk %s of guest %s holds %s bytes, the template says %s -- a data disk never shrinks\\n' '$name' '$1' \"\$cur\" '$size' >&2; exit 1; }"
+		printf '%s\n' "	zfs snapshot \"\$parent/$1/$name@\$(date -u +%Y%m%dT%H%M%SZ)\" || exit 1"
+		printf '%s\n' "	test \"\$cur\" -eq $bytes || zfs set volsize=$size \"\$parent/$1/$name\" || exit 1"
+		printf '%s\n' "	printf '# guest %s: data disk %s kept, snapshot taken, %s\\n' '$1' '$name' '$size' >&2"
+		printf '%s\n' "else"
+		printf '%s\n' "	zfs create -s -V $size -o enk-ode:backup=$(sq "$class") \"\$parent/$1/$name\" || exit 1"
+		printf '%s\n' "	printf '# guest %s: data disk %s made, %s, class %s\\n' '$1' '$name' '$size' $(sq "$class") >&2"
+		printf '%s\n' "fi"
+	done
+}
+
+#@help _guest_data_conf_write1
+# @command guest data conf write <guest>
+# @summary Act terminal (the invoking user: the configuration is theirs): the data disks of the image's template (read at generation time) appended to the vm-bhyve configuration, each a virtio-blk disk on its zvol /dev/zvol/<dataset of VM_BAKE_DIR/data>/<guest>/<name> -- disk1 onward, disk2 onward on a way whose disk1 is the seed CD. No data line is a note
+# @group   guest
+# @internal
+# @see     guest make
+# @see     guest conf write
+# @see     guest data ensure
+# @env     VM_BAKE_GUEST_DIR  the guests' directory, <guest>/<guest>.conf in it
+# @env     VM_BAKE_DIR  vm-bake's dataset, data/ in it
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_data_conf_write1() {
+	local conf="$VM_BAKE_GUEST_DIR/$1/$1.conf" img="" t="" cur="" chain="" p="" n=0 a="" bake="" lines="" line="" name="" i=1
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/bake" && IFS= read -r bake < "$VM_BAKE_BASE/template/$a/bake"; done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=data -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -n "$lines" || { emit_note "guest $1: no data disk in the template $t, the configuration keeps disk0 alone"; return 0; }
+	case "$bake" in cloud-init|autoinstall|apkovl) i=2 ;; esac
+	printf '%s\n' "parent=\$(zfs list -H -o name '$VM_BAKE_DIR/data') || exit 1"
+	printf '%s\n' "$lines" | while IFS= read -r line; do
+		name=${line%% *}
+		printf '%s\n' "printf 'disk%s_type=\"virtio-blk\"\\ndisk%s_name=\"/dev/zvol/%s/$1/$name\"\\ndisk%s_dev=\"custom\"\\n' '$i' '$i' \"\$parent\" '$i' >> '$conf' || exit 1"
+		i=$((i + 1))
+	done
+	printf '%s\n' "printf '# guest %s: %s data disks in %s\\n' '$1' '$(printf '%s\n' "$lines" | grep -c .)' '$conf' >&2"
+}
+
+#@help _guest_data_write1
+# @command guest data write <guest>
+# @summary Act terminal (root): the clone's disk0.img attached as md and its root mounted by the image's label, then every data disk of the image's template (read at generation time) made ready -- a zvol without a filesystem gets UFS (soft updates, trim, the name as its label) and the content of the image's /<name> as its first content (for home: the users with their keys); one with a filesystem is grown to its volume when the volume grew (growfs, unmounted), else kept as it is; the clone's fstab mounts /dev/ufs/<name> on /<name>. No data line is a note
+# @group   guest
+# @internal
+# @see     guest disk write chroot
+# @see     guest data ensure
+# @see     guest network write
+# @see     template data add
+# @env     VM_BAKE_GUEST_DIR  the guests' directory
+# @env     VM_BAKE_DIR  vm-bake's dataset, data/<guest>/<name> the zvols
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_guest_data_write1() {
+	local img="" t="" cur="" chain="" p="" n=0 lines="" line="" name="" disk="$VM_BAKE_GUEST_DIR/$1/disk0.img" mnt="$VM_BAKE_GUEST_DIR/$1/mnt" dmnt="$VM_BAKE_GUEST_DIR/$1/mnt.data"
+	IFS= read -r img 2>/dev/null < "$VM_BAKE_BASE/guest/$1/image" || img=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$img/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=data -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -n "$lines" || { emit_note "guest $1: no data disk in the template $t, nothing to format or to mount"; return 0; }
+	printf '%s\n' "parent=\$(zfs list -H -o name '$VM_BAKE_DIR/data') || exit 1"
+	printf '%s\n' "md=\$(mdconfig -a -t vnode -f '$disk') || exit 1"
+	printf '%s\n' "mkdir -p '$mnt' '$dmnt' && mount -t ufs '/dev/gpt/$img-root' '$mnt' || { mdconfig -d -u \"\${md#md}\"; exit 1; }"
+	printf '%s\n' "$lines" | while IFS= read -r line; do
+		name=${line%% *}
+		printf '%s\n' "dev=\"/dev/zvol/\$parent/$1/$name\""
+		printf '%s\n' "if test -z \"\$(fstyp \"\$dev\" 2>/dev/null)\"; then"
+		printf '%s\n' "	newfs -U -t -L '$name' \"\$dev\" > /dev/null && mkdir -p '$mnt/$name' && mount -t ufs \"\$dev\" '$dmnt' && cp -Rp '$mnt/$name/.' '$dmnt/' && umount '$dmnt' || { umount '$dmnt' 2>/dev/null; umount '$mnt'; mdconfig -d -u \"\${md#md}\"; exit 1; }"
+		printf '%s\n' "	printf '# guest %s: data disk %s: new UFS, first content from the image\\n' '$1' '$name' >&2"
+		printf '%s\n' "elif test \"\$(dumpfs \"\$dev\" | awk '/^ncg /{ n = \$4 } /^fsize /{ f = \$2 } END { print n * f }')\" -lt \$((\$(diskinfo \"\$dev\" | awk '{ print \$3 }') / 100 * 99)); then"
+		printf '%s\n' "	growfs -y \"\$dev\" > /dev/null || { umount '$mnt'; mdconfig -d -u \"\${md#md}\"; exit 1; }"
+		printf '%s\n' "	printf '# guest %s: data disk %s grown to its volume\\n' '$1' '$name' >&2"
+		printf '%s\n' "else"
+		printf '%s\n' "	printf '# guest %s: data disk %s kept as it is\\n' '$1' '$name' >&2"
+		printf '%s\n' "fi"
+		printf '%s\n' "grep -q '^/dev/ufs/$name[[:space:]]' '$mnt/etc/fstab' || printf '/dev/ufs/%s\\t/%s\\tufs\\trw,noatime\\t2\\t2\\n' '$name' '$name' >> '$mnt/etc/fstab' || exit 1"
+	done
+	printf '%s\n' "umount '$mnt' && rmdir '$mnt' '$dmnt' && mdconfig -d -u \"\${md#md}\" || exit 1"
+	printf '%s\n' "printf '# guest %s: %s data disks ready, fstab written\\n' '$1' '$(printf '%s\n' "$lines" | grep -c .)' >&2"
+}
+
+#@help ___guest_data_drop2
+# @command guest data drop <guest> <name>
+# @summary Destroy a data disk after its guest: the name is a guest name, the guest is absent (guest drop first -- the disk outlives the guest by design, this is the one act that ends it), the disk name is valid; then 'guest data destroy' (the zvol with its snapshots, and the guest's data dataset when it was the last)
+# @group   guest
+# @example vm-bake guest data drop bake home
+# @see     guest drop
+# @see     guest data show
+# @see     template data add
+#@end
+___guest_data_drop2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest name valid $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest check absent $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template data name valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest data destroy $(sq "$1") $(sq "$2")"
+}
+
+#@help _guest_data_destroy2
+# @command guest data destroy <guest> <name>
+# @summary Act terminal (the invoking user, delegated by zfs allow): the zvol VM_BAKE_DIR/data/<guest>/<name> destroyed with its snapshots, the guest's data dataset too when nothing is left in it; no such zvol is a note
+# @group   guest
+# @internal
+# @see     guest data drop
+# @env     VM_BAKE_DIR  vm-bake's dataset, data/ in it
+#@end
+_guest_data_destroy2() {
+	printf '%s\n' "parent=\$(zfs list -H -o name '$VM_BAKE_DIR/data' 2>/dev/null) || { printf '# guest %s: no data datasets at all\\n' '$1' >&2; exit 0; }"
+	printf '%s\n' "zfs list -H -o name \"\$parent/$1/$2\" > /dev/null 2>&1 || { printf '# guest %s: no data disk %s\\n' '$1' '$2' >&2; exit 0; }"
+	printf '%s\n' "zfs destroy -r \"\$parent/$1/$2\" || exit 1"
+	printf '%s\n' "test -n \"\$(zfs list -H -o name -r -d 1 \"\$parent/$1\" | sed 1d)\" || zfs destroy \"\$parent/$1\" || exit 1"
+	printf '%s\n' "printf '# guest %s: data disk %s destroyed with its snapshots\\n' '$1' '$2' >&2"
+}
+
+#@help _guest_data_show1
+# @command guest data show <guest>
+# @summary Act terminal (the invoking user): the data disks of the guest as the pool holds them -- the zvols and their snapshots under VM_BAKE_DIR/data/<guest> with size, space used and backup class, whether or not the guest still exists; none is a note
+# @group   guest
+# @example vm-bake guest data show andalusia
+# @see     guest data drop
+# @see     template data show
+# @env     VM_BAKE_DIR  vm-bake's dataset, data/ in it
+#@end
+_guest_data_show1() {
+	printf '%s\n' "parent=\$(zfs list -H -o name '$VM_BAKE_DIR/data' 2>/dev/null) || { printf '# guest %s: no data datasets at all\\n' '$1' >&2; exit 0; }"
+	printf '%s\n' "zfs list -H -o name \"\$parent/$1\" > /dev/null 2>&1 || { printf '# guest %s: no data disk\\n' '$1' >&2; exit 0; }"
+	printf '%s\n' "zfs list -r -t volume,snapshot -o name,volsize,used,enk-ode:backup \"\$parent/$1\" | sed 's/^/# /'"
 }

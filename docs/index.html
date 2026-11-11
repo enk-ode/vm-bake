@@ -641,7 +641,7 @@
     service add &lt;template&gt; &lt;kind&gt; &lt;variant&gt;</b></a></dt>
   <dd>Add a host service the guest may use to the template&#x2019;s own list:
       the template exists, kind and variant are valid (display x|rdp|none, audio
-      pulse|sndio|none, clipboard broker|none, files disk|none, net
+      pulse|sndio|none, clipboard broker|none, files view|none, net
       &lt;switch&gt;, token none); then `template line append'</dd>
   <dt id="template~64"><a class="permalink" href="#template~64"><b>template
     service drop &lt;template&gt; &lt;kind&gt; &lt;variant&gt;</b></a></dt>
@@ -1228,7 +1228,8 @@
       stays in the database and is free again, so the guest built anew under
       that name takes it back and answers with the same identity; the view stays
       too &#x2013; a new image replaces the guest, not what it wrote (`guest
-      view drop' removes that, `hostkey drop' the key)</dd>
+      view drop' removes that, `hostkey drop' the key) &#x2013; its data disks
+      stay where they are, their own act ends them (guest data drop)</dd>
   <dt id="guest~5"><a class="permalink" href="#guest~5"><b>guest drop unfetched
     &lt;guest&gt;</b></a></dt>
   <dd>`guest drop' without the fetched check: the guest&#x2019;s commits that
@@ -1403,6 +1404,19 @@
       &lt;guest&gt;' lets it go, `guest make &lt;image&gt; &lt;guest&gt;
       &lt;address&gt;' makes it anew; a host key placed by import keeps its
       identity</dd>
+  <dt id="guest~28"><a class="permalink" href="#guest~28"><b>guest data drop
+    &lt;guest&gt; &lt;name&gt;</b></a></dt>
+  <dd>Destroy a data disk after its guest: the name is a guest name, the guest
+      is absent (guest drop first &#x2013; the disk outlives the guest by
+      design, this is the one act that ends it), the disk name is valid; then
+      `guest data destroy' (the zvol with its snapshots, and the guest&#x2019;s
+      data dataset when it was the last)</dd>
+  <dt id="guest~29"><a class="permalink" href="#guest~29"><b>guest data show
+    &lt;guest&gt;</b></a></dt>
+  <dd>Act terminal (the invoking user): the data disks of the guest as the pool
+      holds them &#x2013; the zvols and their snapshots under
+      VM_BAKE_DIR/data/&lt;guest&gt; with size, space used and backup class,
+      whether or not the guest still exists; none is a note</dd>
 </dl>
 </section>
 <section class="Ss">
@@ -1581,14 +1595,15 @@
       types into that console (image console drive) and must know which.</dd>
   <dt id="VM_BAKE_DIR"><a class="permalink" href="#VM_BAKE_DIR"><b>VM_BAKE_DIR</b></a></dt>
   <dd>vm-bake&#x2019;s own dataset and directory: the datasets image/ (the
-      sealed images) and guest/ (the clones), and the directory distfiles/ for
-      what comes from outside, by kind: image/ (VM images), pkg/ (package
-      files), later deb/, rpm/, port/. Made once by root and delegated to the
-      invoking user: zfs create &lt;pool&gt;/.../vm-bake, chown &lt;user&gt; on
-      its mount point, zfs allow &lt;user&gt;
-      create,mount,snapshot,clone,destroy,readonly on it, sysctl vfs.usermount=1
-      &#x2013; then every ZFS act of vm-bake runs without root. vm-bhyve keeps
-      its own directory (VM_BAKE_VM_DIR).</dd>
+      sealed images), guest/ (the clones) and data/ (the data disks of the
+      guests: zvols that outlive their guests, template data add), and the
+      directory distfiles/ for what comes from outside, by kind: image/ (VM
+      images), pkg/ (package files), later deb/, rpm/, port/. Made once by root
+      and delegated to the invoking user: zfs create &lt;pool&gt;/.../vm-bake,
+      chown &lt;user&gt; on its mount point, zfs allow &lt;user&gt;
+      create,mount,snapshot,clone,destroy,readonly,volsize,userprop on it,
+      sysctl vfs.usermount=1 &#x2013; then every ZFS act of vm-bake runs without
+      root. vm-bhyve keeps its own directory (VM_BAKE_VM_DIR).</dd>
   <dt id="VM_BAKE_DNS_FILE"><a class="permalink" href="#VM_BAKE_DNS_FILE"><b>VM_BAKE_DNS_FILE</b></a></dt>
   <dd>The unbound include file vm-bake owns: rendered from the guest records by
       guest dns write (guest make, guest drop), one local-data and one

@@ -703,7 +703,7 @@ test_inspect_by_default() {
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
 IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify key_fetch key_verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_source_write seed_sshd_write seed_file_write seed_check_write seed_view_write seed_pack firstboot_conf_write firstboot_report_tmux firstboot_report_nmdm firstboot_gone firstboot_conf_drop response_write site_files_place site_pack console_drive_tmux console_drive_nmdm overlay_files_place overlay_pack site_head_write site_user_write site_env_write site_net_write site_firsttime_write overlay_answer_write overlay_install_write overlay_firstboot_write overlay_sshd_write overlay_user_write overlay_env_write overlay_file_write overlay_view_write overlay_net_write overlay_report_write console_watch_tmux console_watch_nmdm file_write daemon_write site_daemon_write overlay_daemon_write seed_daemon_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
-GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write seed_write_cloud_init seed_write_autoinstall home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run install halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
+GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write seed_write_cloud_init seed_write_autoinstall home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run install halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure data_ensure data_conf_write data_write data_destroy data_show"
 pin_image_cat() {
   local f
   for f in $IMAGE_ACTS; do printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_$f"; done
@@ -1046,8 +1046,8 @@ test_guest_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake guest make b bake 172.16.100.250/24)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "19" ] && printf '%s\n' "$plan" | sed -n 6p | grep -q "guest repo tree ensure" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest check homes 'bake'" && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest log rotate ensure" && printf '%s\n' "$plan" | grep -q "guest hostkey ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest view ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest disk write 'bake'" && printf '%s\n' "$plan" | grep -q "guest link write 'bake'" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 19p | grep -q "guest knownhosts drop 'bake'"; then
-    pass "guest make: image checked, name, free, address, mirrors' directory, homes, tree, switch, log rotation, record, host key, view, clone, conf, link, disk (network, home and host key by the bake), dns, known hosts"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "22" ] && printf '%s\n' "$plan" | sed -n 6p | grep -q "guest repo tree ensure" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest check homes 'bake'" && printf '%s\n' "$plan" | grep -q "guest switch ensure" && printf '%s\n' "$plan" | grep -q "guest log rotate ensure" && printf '%s\n' "$plan" | grep -q "guest hostkey ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest view ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest disk write 'bake'" && printf '%s\n' "$plan" | grep -q "guest link write 'bake'" && printf '%s\n' "$plan" | grep -q "guest clone 'bake'" && printf '%s\n' "$plan" | sed -n 22p | grep -q "guest knownhosts drop 'bake'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "guest check data 'b'" && printf '%s\n' "$plan" | grep -q "guest data ensure 'bake'" && printf '%s\n' "$plan" | grep -q "guest data conf write 'bake'"; then
+    pass "guest make: image checked, name, free, address, mirrors' directory, homes, data lines, tree, switch, log rotation, record, host key, view, clone, conf, link, disk (network, home and host key by the bake), dns, known hosts"
   else
     fail "guest make plan: $plan"
   fi
@@ -1482,6 +1482,86 @@ view_chain() {
   run_vmbake guest record write x caledonia 172.16.100.102/24 > /dev/null
   run_vmbake guest record write b bake 172.16.100.254/24 > /dev/null
   run_vmbake setenv VM_BAKE_VIEW_DIR "$TEST_DIR/view" > /dev/null
+}
+
+
+test_guest_data() {
+  test_header "data disks: the template's data lines become zvols under VM_BAKE_DIR/data that outlive the guest; the name is label and mount point; the chroot way carries them; dropped after the guest"
+  test_setup
+  image_chain
+  run_vmbake image record write freebsd-builder b > /dev/null
+  run_vmbake image record write freebsd-dev x > /dev/null
+  run_vmbake template add debian > /dev/null
+  run_vmbake template bake cloud-init debian > /dev/null
+  run_vmbake template add debian-dev debian > /dev/null
+  run_vmbake template base image debian-dev amd64 13 https://h/debian.raw 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef > /dev/null
+  run_vmbake template data add debian-dev home 8G proton > /dev/null
+  run_vmbake image record write debian-dev d > /dev/null
+  run_vmbake template data add freebsd-builder home 8G proton > /dev/null
+  run_vmbake template data add freebsd-builder docker 4G proton > /dev/null
+  if run_vmbake template data add freebsd-builder 1home 8G proton | grep -q "invalid data name" && run_vmbake template data add freebsd-builder home/x 8G proton | grep -q "invalid data name" && run_vmbake template data add freebsd-builder usr 8G proton | grep -q "invalid data name" && run_vmbake template data add freebsd-builder a123456789b123456789c123456789def 8G proton | grep -q "invalid data name" && run_vmbake template data add freebsd-builder a123456789b123456789c123456789de 1G proton > /dev/null && [ "$(grep -c . "$(record_of freebsd-builder)/data")" = "3" ]; then
+    pass "a name starting with a digit, with a slash, a directory of the root filesystem or 33 characters is refused; 32 pass"
+  else
+    fail "data name guards: $(run_vmbake template data add freebsd-builder usr 8G proton)"
+  fi
+  run_vmbake template data drop freebsd-builder a123456789b123456789c123456789de 1G proton > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  local plan
+  plan=$(run_vmbake guest make b bake 172.16.100.250/24)
+  if printf '%s\n' "$plan" | sed -n 8p | grep -q "guest check data 'b'" && printf '%s\n' "$plan" | grep -n "guest view ensure\|guest data ensure\|guest clone" | sed -n 2p | grep -q "data ensure" && printf '%s\n' "$plan" | grep -n "guest conf write\|guest data conf write\|guest link write" | sed -n 2p | grep -q "data conf write" && [ "$(run_vmbake guest disk write chroot bake | grep -c .)" = "4" ] && run_vmbake guest disk write chroot bake | sed -n 4p | grep -q "guest data write 'bake'"; then
+    pass "guest make checks the data lines eighth, ensures the disks between view and clone, extends the conf right after conf write; the chroot disk write ends with data write"
+  else
+    fail "guest make plan with data: $plan"
+  fi
+  if run_vmbake guest check data b | grep -q "data disks home docker, carried by the chroot way" && run_vmbake guest check data d | grep -q "the cloud-init way has no reader for them yet" && run_vmbake guest check data x | grep -q "no data disk in the template freebsd-dev"; then
+    pass "check data names the disks of a chroot image, refuses those of a cloud-init image until that way carries them, passes a template without any"
+  else
+    fail "check data: $(run_vmbake guest check data b; run_vmbake guest check data d)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake guest record write b bake 172.16.100.250/24 > /dev/null
+  run_vmbake guest record write x nodata 172.16.100.251/24 > /dev/null
+  if pin_image_cat; then
+    pass "guest acts pinned to cat"
+  else
+    fail "guest acts not pinned -- not calling them"; return
+  fi
+  local out
+  out=$(run_vmbake guest data ensure bake)
+  if printf '%s\n' "$out" | grep -q "zfs list -H -o name '.*/data'" && printf '%s\n' "$out" | grep -q 'zfs create "$parent/bake"' && printf '%s\n' "$out" | grep -q "zfs create -s -V 8G -o enk-ode:backup='proton' \"\$parent/bake/home\"" && printf '%s\n' "$out" | grep -q "zfs create -s -V 4G -o enk-ode:backup='proton' \"\$parent/bake/docker\"" && printf '%s\n' "$out" | grep -q "grep -qx 'proton'" && printf '%s\n' "$out" | grep -q 'test "$cur" -le 8589934592' && printf '%s\n' "$out" | grep -q 'test "$cur" -le 4294967296' && printf '%s\n' "$out" | grep -q "a data disk never shrinks" && printf '%s\n' "$out" | grep -q 'zfs snapshot "$parent/bake/home@$(date -u' && printf '%s\n' "$out" | grep -q 'zfs set volsize=8G "$parent/bake/home"' && ! printf '%s\n' "$out" | grep -q "^for \|^while \|^until " && run_vmbake guest data ensure nodata | grep -q "no data disk in the template freebsd-dev"; then
+    pass "data ensure: the parent dataset, the guest's dataset, a sparse zvol per line with its class, the class checked against the pool, a kept disk snapshotted and grown, never shrunk, no loop in the emission; no lines, a note"
+  else
+    fail "data ensure: $out"
+  fi
+  out=$(run_vmbake guest data conf write bake)
+  if printf '%s\n' "$out" | grep -q "disk%s_type=\"virtio-blk\"" && printf '%s\n' "$out" | grep -q "/dev/zvol/%s/bake/home" && printf '%s\n' "$out" | grep -q "' '1' '1' \"\$parent\" '1' >> " && printf '%s\n' "$out" | grep -q "/dev/zvol/%s/bake/docker" && printf '%s\n' "$out" | grep -q "' '2' '2' \"\$parent\" '2' >> " && printf '%s\n' "$out" | grep -q "disk%s_dev=\"custom\"" && printf '%s\n' "$out" | grep -q "bake/bake.conf" && run_vmbake guest data conf write nodata | grep -q "keeps disk0 alone"; then
+    pass "data conf write: virtio-blk disks from disk1 on their zvols, appended to the guest's configuration; no lines, a note"
+  else
+    fail "data conf write: $out"
+  fi
+  out=$(run_vmbake guest data write bake)
+  if printf '%s\n' "$out" | grep -q "mdconfig -a -t vnode -f" && printf '%s\n' "$out" | grep -q 'dev="/dev/zvol/$parent/bake/home"' && printf '%s\n' "$out" | grep -q 'fstyp "$dev"' && printf '%s\n' "$out" | grep -q "newfs -U -t -L 'home'" && printf '%s\n' "$out" | grep -q "cp -Rp '.*/bake/mnt/home/.' '.*/bake/mnt.data/'" && printf '%s\n' "$out" | grep -q "newfs -U -t -L 'docker'" && printf '%s\n' "$out" | grep -q "mkdir -p '.*/bake/mnt/docker'" && printf '%s\n' "$out" | grep -q 'growfs -y "$dev"' && printf '%s\n' "$out" | grep -q 'dumpfs "$dev"' && printf '%s\n' "$out" | grep -q "printf '/dev/ufs/%s\\\\t/%s\\\\tufs\\\\trw,noatime\\\\t2\\\\t2\\\\n' 'home' 'home' >> '.*/bake/mnt/etc/fstab'" && printf '%s\n' "$out" | grep -q "grep -q '^/dev/ufs/docker\[\[:space:\]\]'" && printf '%s\n' "$out" | grep -o "newfs -U -t -L '[a-z]*'\|^umount '[^']*/bake/mnt' && rmdir" | tr '\n' ' ' | grep -q "^newfs -U -t -L 'home' newfs -U -t -L 'docker' umount " && ! printf '%s\n' "$out" | grep -q "^for \|^while \|^until " && run_vmbake guest data write nodata | grep -q "nothing to format or to mount"; then
+    pass "data write: the clone mounted by label, each zvol formatted and filled from the image when it has no filesystem, grown when its volume grew, the fstab line by label, unmount last; no loop; no lines, a note"
+  else
+    fail "data write: $out"
+  fi
+  out=$(run_vmbake guest data destroy bake home)
+  if printf '%s\n' "$out" | grep -q 'zfs destroy -r "$parent/bake/home"' && printf '%s\n' "$out" | grep -q 'zfs destroy "$parent/bake"' && printf '%s\n' "$out" | grep -q "no data disk %s" && run_vmbake guest data show bake | grep -q 'zfs list -r -t volume,snapshot -o name,volsize,used,enk-ode:backup "$parent/bake"'; then
+    pass "data destroy: the zvol with its snapshots, the guest's data dataset when it was the last, a note when there is none; data show lists volumes and snapshots with their class"
+  else
+    fail "data destroy/show: $out"
+  fi
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  plan=$(run_vmbake guest data drop bake home)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "4" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "guest check absent 'bake'" && printf '%s\n' "$plan" | sed -n 3p | grep -q "template data name valid 'home'" && printf '%s\n' "$plan" | sed -n 4p | grep -q "guest data destroy 'bake' 'home'"; then
+    pass "guest data drop: name valid, the guest absent, the disk name valid, then destroy -- the disk is ended after its guest, never under it"
+  else
+    fail "guest data drop plan: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
 }
 
 test_view_plan() {
@@ -2394,7 +2474,7 @@ test_linux_plan() {
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   disk=$(run_vmbake guest disk write tirol)
-  if [ "$(printf '%s\n' "$disk" | grep -c .)" = "1" ] && printf '%s\n' "$disk" | grep -q "guest disk write 'cloud-init' 'tirol'" && run_vmbake guest disk write cloud-init tirol | grep -q "guest seed write cloud-init 'tirol'" && run_vmbake guest disk write caledonia | grep -q "guest disk write 'chroot' 'caledonia'" && run_vmbake guest disk write foo caledonia | grep -q "chroot | cloud-init | autoinstall" && [ "$(printf '%s\n' "$out" | grep -c .)" = "3" ] && printf '%s\n' "$out" | grep -n "network write\|home write\|hostkey write" | tr '\n' ' ' | grep -q "1:.*network write.* 2:.*home write.* 3:.*hostkey write"; then
+  if [ "$(printf '%s\n' "$disk" | grep -c .)" = "1" ] && printf '%s\n' "$disk" | grep -q "guest disk write 'cloud-init' 'tirol'" && run_vmbake guest disk write cloud-init tirol | grep -q "guest seed write cloud-init 'tirol'" && run_vmbake guest disk write caledonia | grep -q "guest disk write 'chroot' 'caledonia'" && run_vmbake guest disk write foo caledonia | grep -q "chroot | cloud-init | autoinstall" && [ "$(printf '%s\n' "$out" | grep -c .)" = "4" ] && printf '%s\n' "$out" | grep -n "network write\|home write\|hostkey write\|data write" | tr '\n' ' ' | grep -q "1:.*network write.* 2:.*home write.* 3:.*hostkey write.* 4:.*data write"; then
     pass "guest disk write: the bake word from the template (none is chroot); cloud-init rewrites to its seed, chroot to network, home and host key, another word is an error"
   else
     fail "guest disk write: $disk / $out"
@@ -2822,6 +2902,7 @@ main() {
   should_run_test test_image_record_lock_list
   should_run_test test_image_prune
   should_run_test test_guest_plan
+  should_run_test test_guest_data
   should_run_test test_session_plan
   should_run_test test_port_plan
   should_run_test test_pkgfile_plan

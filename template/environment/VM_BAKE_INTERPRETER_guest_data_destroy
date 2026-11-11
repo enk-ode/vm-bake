@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest data destroy), pinned to sh: zfs destroy under VM_BAKE_DIR/data, delegated to the invoking user (zfs allow), it acts directly; cat shows it.

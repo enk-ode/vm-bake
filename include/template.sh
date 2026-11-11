@@ -1392,7 +1392,7 @@ ___template_user_show1() {
 
 #@help ___template_service_add3
 # @command template service add <template> <kind> <variant>
-# @summary Add a host service the guest may use to the template's own list: the template exists, kind and variant are valid (display x|rdp|none, audio pulse|sndio|none, clipboard broker|none, files disk|none, net <switch>, token none); then 'template line append'
+# @summary Add a host service the guest may use to the template's own list: the template exists, kind and variant are valid (display x|rdp|none, audio pulse|sndio|none, clipboard broker|none, files view|none, net <switch>, token none); then 'template line append'
 # @group   template
 # @example vm-bake template service add freebsd-dev display x
 # @example vm-bake template service add freebsd-dev net dev
@@ -1576,7 +1576,7 @@ ___template_forbid_show1() {
 #@end
 ___template_data_add4() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template data name valid $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template size valid $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$4")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") data $(sq "$2 $3 $4")"
@@ -1602,7 +1602,7 @@ ___template_data_drop4() {
 #@end
 ___template_data_mask4() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template data name valid $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template size valid $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$4")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") data $(sq "$2 $3 $4")"
@@ -1886,7 +1886,7 @@ ___template_forbid_unmask3() {
 #@end
 ___template_data_unmask4() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template data name valid $(sq "$2")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template size valid $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template word valid $(sq "$4")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") data $(sq "$2 $3 $4")"
@@ -2052,6 +2052,23 @@ __template_count_valid1() {
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'count $1 valid'"
 	else
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template resource: the cpu count is a number from 1 up: $1")"
+	fi
+}
+
+#@help __template_data_name_valid1
+# @command template data name valid <name>
+# @summary The data disk's name is its UFS label and its mount point /<name> in the guest: a letter, then letters, digits, underscores and hyphens, at most 32 characters (the label's limit), and not one of the directories a root filesystem cannot boot without (bin boot dev etc lib libexec proc rescue sbin sys usr): a comment line, else an error line
+# @group   template
+# @internal
+# @see     template data add
+#@end
+__template_data_name_valid1() {
+	local ok=yes
+	case "$1" in ""|[!A-Za-z]*|*[!A-Za-z0-9_-]*|?????????????????????????????????*|bin|boot|dev|etc|lib|libexec|proc|rescue|sbin|sys|usr) ok=no ;; esac
+	if test "$ok" = yes; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'data name $1 valid'"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template data: invalid data name $1 (a letter, then [A-Za-z0-9_-], at most 32 -- the UFS label and the mount point /<name>; not a directory the root filesystem boots from)")"
 	fi
 }
 

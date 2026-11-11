@@ -40,7 +40,7 @@ resource/topology, the lists package/pkgfile/port/rc/env/user/home/service/
 forbid/data/session/tag/source/file with add/drop/mask/unmask/show), the
 four image ways, ssh host keys as a resource (`hostkey create`, bound to
 one guest each), guests (`guest make`, tags, home seeds, the view with its
-overlays, the dowry a template hands to the homes of its guests, the
+overlays, the dowry a template hands to the homes of its guests, the data disks a template gives its guests (zvols that outlive every image), the
 guest's own repository clones on its disk with the mirrors in the view and
 the report of its records written into the view at every start), sessions
 (ssh, xterm, and X in a Xephyr compartment) and the pair that travels

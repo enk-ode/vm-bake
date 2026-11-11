@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest data show), pinned to sh: zfs list only reads, the lines are the report; cat shows the command instead.

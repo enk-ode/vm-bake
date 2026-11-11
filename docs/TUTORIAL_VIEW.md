@@ -115,3 +115,45 @@ trusts -- a guest with unfetched commits is not dropped (`guest drop
 unfetched` gives them up). A guest on a fresh image gets its clones back
 at `guest start` (`guest repo ensure`). To refresh a mirror after the host
 committed, `guest repo add` again; the guest then pulls from it.
+
+## The data disk
+
+A guest that must not share a home with the host -- a daemon with its
+own state, a mail client's profile, a Docker host's volumes -- keeps that
+state on a *data disk*: a zvol of its own under `VM_BAKE_DIR/data/<guest>/
+<name>`, outside the image's clone, which survives every new image and
+`guest drop` itself. The template says so with one line, and the name is
+the disk's UFS label and its mount point `/<name>` in the guest:
+
+    vm-bake template data add proton-bridge home 24G proton
+    vm-bake template data show proton-bridge
+
+The class is the value of `enk-ode:backup` the zvol gets; some dataset of
+the pool must carry it already, or `guest make` refuses (a class the backup
+does not know would be a disk without one). Root delegates two more
+abilities once for this: `zfs allow <user> volsize,userprop` on vm-bake's
+dataset (`help env VM_BAKE_DIR`).
+
+`guest make` makes the zvol when it is missing (sparse, the line's size)
+and keeps one that exists -- a snapshot first, the volume grown when the
+line says more, never shrunk. The guest's configuration gets the disk as
+`disk1` (virtio-blk). The chroot way then formats a new zvol (UFS, soft
+updates, trim, the name as label), gives it the content of the image's
+`/<name>` as its first content -- for `home`, the users with their keys --
+and writes the fstab line `/dev/ufs/<name> /<name>`; a zvol that already
+has a filesystem is grown to its volume when that grew, else left alone.
+The other three ways have no reader for a data disk yet, and `guest make`
+says so instead of silently leaving the line out.
+
+    vm-bake guest data show andalusia
+    vm-bake guest drop andalusia
+    vm-bake guest make img:proton-bridge:v2 andalusia 172.16.100.105/24
+
+The disk is the one thing `guest drop` leaves standing. It ends only by
+its own word, after the guest:
+
+    vm-bake guest data drop andalusia home
+
+A view and a data disk are not alternatives: a template may say `service
+files view` and give the guest a data disk `docker` beside it. What they
+share is the rule that a guest owns no state the host did not decide.

@@ -751,12 +751,12 @@ _image_record_remove1() {
 
 #@help _image_tree_ensure0
 # @command image tree ensure
-# @summary Act terminal (the invoking user, delegated by zfs allow): vm-bake's datasets exist -- image and guest under the dataset mounted at VM_BAKE_DIR, which root made once and delegated, and the distfiles directories (VM images, package files) beside them -- idempotent, the first act of image create and guest make
+# @summary Act terminal (the invoking user, delegated by zfs allow): vm-bake's datasets exist -- image, guest and data under the dataset mounted at VM_BAKE_DIR, which root made once and delegated, and the distfiles directories (VM images, package files) beside them -- idempotent, the first act of image create and guest make
 # @group   image
 # @internal
 # @see     image create
 # @see     guest make
-# @env     VM_BAKE_DIR  vm-bake's dataset: image/, guest/ (datasets) and distfiles/ (directories) live in it
+# @env     VM_BAKE_DIR  vm-bake's dataset: image/, guest/, data/ (datasets) and distfiles/ (directories) live in it
 # @env     VM_BAKE_IMAGE_CACHE  the cache directory
 # @env     VM_BAKE_PKG_DIR  the package-file directory
 #@end
@@ -764,8 +764,9 @@ _image_tree_ensure0() {
 	printf '%s\n' "ds=\$(zfs list -H -o name '$VM_BAKE_DIR') || { printf '# Error: %s is no dataset (root makes it once and delegates it: help env VM_BAKE_DIR)\\n' '$VM_BAKE_DIR' >&2; exit 1; }"
 	printf '%s\n' "zfs list -H -o name \"\$ds/image\" > /dev/null 2>&1 || zfs create \"\$ds/image\" || exit 1"
 	printf '%s\n' "zfs list -H -o name \"\$ds/guest\" > /dev/null 2>&1 || zfs create \"\$ds/guest\" || exit 1"
+	printf '%s\n' "zfs list -H -o name \"\$ds/data\" > /dev/null 2>&1 || zfs create \"\$ds/data\" || exit 1"
 	printf '%s\n' "install -d -m 755 '$VM_BAKE_IMAGE_CACHE' '$VM_BAKE_PKG_DIR' || exit 1"
-	printf '%s\n' "printf '# tree: %s/image, %s/guest, cache %s\\n' \"\$ds\" \"\$ds\" '$VM_BAKE_IMAGE_CACHE' >&2"
+	printf '%s\n' "printf '# tree: %s/image, %s/guest, %s/data, cache %s\\n' \"\$ds\" \"\$ds\" \"\$ds\" '$VM_BAKE_IMAGE_CACHE' >&2"
 }
 
 #@help _image_dataset_create1

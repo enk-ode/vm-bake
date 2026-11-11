@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal of the guests (guest data write), pinned to sudo sh: md, mount, newfs and growfs on the zvol need root. Inspect first: vm-bake setintp guest_data_write cat.

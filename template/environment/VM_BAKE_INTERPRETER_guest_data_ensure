@@ -1,0 +1,2 @@
+sh
+# Act terminal of the guests (guest data ensure), pinned to sh: zfs create, snapshot and set under VM_BAKE_DIR/data, delegated to the invoking user (zfs allow create,mount,snapshot,volsize,userprop), it acts directly; cat shows it.

@@ -385,7 +385,7 @@ exists and holds nothing.
 :   The users resolved over the chain, each with its origin: the template exists; then 'template chain table'
 
 **template service add \<template\> \<kind\> \<variant\>**
-:   Add a host service the guest may use to the template's own list: the template exists, kind and variant are valid (display x\|rdp\|none, audio pulse\|sndio\|none, clipboard broker\|none, files disk\|none, net \<switch\>, token none); then 'template line append'
+:   Add a host service the guest may use to the template's own list: the template exists, kind and variant are valid (display x\|rdp\|none, audio pulse\|sndio\|none, clipboard broker\|none, files view\|none, net \<switch\>, token none); then 'template line append'
 
 **template service drop \<template\> \<kind\> \<variant\>**
 :   Remove the service from the template's own list: the template exists, the entry is listed there; then 'template line remove'
@@ -687,7 +687,7 @@ survives the guest: 'guest drop' keeps it, 'guest view drop' removes it.
 :   Stop the guest: it has a record; then 'guest repo hold' (its commits fetched into the host's repositories and the fetched mark written, while it still answers), 'vm stop' (ACPI shutdown), the wait until its bhyve process is gone, the vm instance released if one is left behind, and the overlays of its view let go
 
 **guest drop \<guest\>**
-:   Remove the guest: it has a record, is not running (vm-bhyve's run.lock) and its repositories are fetched (the mark of 'guest stop'; 'guest drop unfetched' gives them up); the overlays of its view let go, whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed with its hostkey binding, unbound told, what the host remembered of its ssh host key forgotten. The ssh host key itself stays in the database and is free again, so the guest built anew under that name takes it back and answers with the same identity; the view stays too -- a new image replaces the guest, not what it wrote ('guest view drop' removes that, 'hostkey drop' the key)
+:   Remove the guest: it has a record, is not running (vm-bhyve's run.lock) and its repositories are fetched (the mark of 'guest stop'; 'guest drop unfetched' gives them up); the overlays of its view let go, whatever still holds the clone on the host released (a stale md, a mount), its dataset destroyed (a running guest makes zfs refuse: guest stop first), the record removed with its hostkey binding, unbound told, what the host remembered of its ssh host key forgotten. The ssh host key itself stays in the database and is free again, so the guest built anew under that name takes it back and answers with the same identity; the view stays too -- a new image replaces the guest, not what it wrote ('guest view drop' removes that, 'hostkey drop' the key) -- its data disks stay where they are, their own act ends them (guest data drop)
 
 **guest drop unfetched \<guest\>**
 :   'guest drop' without the fetched check: the guest's commits that the host never fetched are given up with its disk -- for a guest stopped by other means whose clones hold nothing worth a start and a stop
@@ -757,6 +757,12 @@ survives the guest: 'guest drop' keeps it, 'guest view drop' removes it.
 
 **guest record restore \<guest\> \<image\> \<address\> \<created\>**
 :   A record from a dump, the witness of a guest made elsewhere or before: the name and the address valid; then 'guest record compare' -- no record of that name here: placed; the same record: a comment; one that differs: an error. The record stands for a clone that is NOT here: 'guest drop \<guest\>' lets it go, 'guest make \<image\> \<guest\> \<address\>' makes it anew; a host key placed by import keeps its identity
+
+**guest data drop \<guest\> \<name\>**
+:   Destroy a data disk after its guest: the name is a guest name, the guest is absent (guest drop first -- the disk outlives the guest by design, this is the one act that ends it), the disk name is valid; then 'guest data destroy' (the zvol with its snapshots, and the guest's data dataset when it was the last)
+
+**guest data show \<guest\>**
+:   Act terminal (the invoking user): the data disks of the guest as the pool holds them -- the zvols and their snapshots under VM_BAKE_DIR/data/\<guest\> with size, space used and backup class, whether or not the guest still exists; none is a note
 
 ## Export and import
 
@@ -845,7 +851,7 @@ All configuration lives in `VM_BAKE_*` variables, layered as `.env/local` (overr
 :   How vm-bhyve offers the guests' serial console, the word vm-bhyve's console= in VM_BAKE_VM_DIR/.config/system.conf says: nmdm (its default: /dev/nmdm-\<guest\>.1B, what 'vm console' attaches to) or tmux (a tmux session per guest, run by root). An autoinstall bake types into that console (image console drive) and must know which.
 
 **VM_BAKE_DIR**
-:   vm-bake's own dataset and directory: the datasets image/ (the sealed images) and guest/ (the clones), and the directory distfiles/ for what comes from outside, by kind: image/ (VM images), pkg/ (package files), later deb/, rpm/, port/. Made once by root and delegated to the invoking user: zfs create \<pool\>/.../vm-bake, chown \<user\> on its mount point, zfs allow \<user\> create,mount,snapshot,clone,destroy,readonly on it, sysctl vfs.usermount=1 -- then every ZFS act of vm-bake runs without root. vm-bhyve keeps its own directory (VM_BAKE_VM_DIR).
+:   vm-bake's own dataset and directory: the datasets image/ (the sealed images), guest/ (the clones) and data/ (the data disks of the guests: zvols that outlive their guests, template data add), and the directory distfiles/ for what comes from outside, by kind: image/ (VM images), pkg/ (package files), later deb/, rpm/, port/. Made once by root and delegated to the invoking user: zfs create \<pool\>/.../vm-bake, chown \<user\> on its mount point, zfs allow \<user\> create,mount,snapshot,clone,destroy,readonly,volsize,userprop on it, sysctl vfs.usermount=1 -- then every ZFS act of vm-bake runs without root. vm-bhyve keeps its own directory (VM_BAKE_VM_DIR).
 
 **VM_BAKE_DNS_FILE**
 :   The unbound include file vm-bake owns: rendered from the guest records by guest dns write (guest make, guest drop), one local-data and one local-data-ptr per guest, then local_unbound reloaded. local_unbound includes conf.d/*.conf.
