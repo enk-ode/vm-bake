@@ -2741,7 +2741,7 @@ _image_overlay_answer_write1() {
 _image_overlay_install_write1() {
 	local dir="$VM_BAKE_IMAGE_DIR/$1"
 	printf '%s\n' "cat > '$dir/overlay.d/etc/local.d/vm-bake-install.start' <<'EOF_INSTALL'"
-	printf '%s\n' '#!/bin/sh' '# written by vm-bake (image overlay install write) -- run by the local service of the live system: the unattended installation, then power off; what stays in /etc travels onto the disk, so this hook removes itself first' 'rm -f /etc/local.d/vm-bake-install.start' 'export ERASE_DISKS=/dev/vda' 'if setup-alpine -e -f /etc/vm-bake/answerfile; then' "	sync; printf '# vm-bake install: complete, powering off\\n' | tee /dev/ttyS0 > /dev/console; poweroff" 'else' "	printf '# vm-bake install: failed\\n' | tee /dev/ttyS0 > /dev/console" 'fi'
+	printf '%s\n' '#!/bin/sh' '# written by vm-bake (image overlay install write) -- run by the local service of the live system: the unattended installation, then power off; what stays in /etc travels onto the disk, so this hook removes itself first' 'exec > /dev/ttyS0 2>&1' 'rm -f /etc/local.d/vm-bake-install.start' 'export ERASE_DISKS=/dev/vda' 'if setup-alpine -e -f /etc/vm-bake/answerfile; then' "	sync; printf '# vm-bake install: complete, powering off\\n' | tee /dev/console; poweroff" 'else' "	printf '# vm-bake install: failed\\n' | tee /dev/console" 'fi'
 	printf '%s\n' "EOF_INSTALL"
 	printf '%s\n' "printf '# image %s: vm-bake-install.start -- setup-alpine -e -f, ERASE_DISKS=/dev/vda, power off\\n' $(sq "$1") >&2"
 }
@@ -2768,7 +2768,7 @@ _image_overlay_firstboot_write1() {
 	done
 	pkgs=$(awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	printf '%s\n' "cat > '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
-	printf '%s\n' '#!/bin/sh' "# written by vm-bake (image overlay write) -- the bake's first boot from the disk (on the live system, whose root is a tmpfs, it does nothing): the packages, each checked against apk info, sshd, the users, the seed hook, the report line on the console, then power off; the host seals the disk" "test \"\$(awk '\$2 == \"/\" { print \$3 }' /proc/mounts)\" != tmpfs || exit 0" 'rm -f /etc/local.d/vm-bake-firstboot.start' 'install -d -m 755 /etc/ssh/authorized_keys /etc/vm-bake /etc/profile.d /usr/local/libexec /media/vmbake'
+	printf '%s\n' '#!/bin/sh' "# written by vm-bake (image overlay write) -- the bake's first boot from the disk (on the live system, whose root is a tmpfs, it does nothing): the packages, each checked against apk info, sshd, the users, the seed hook, the report line on the console, then power off; the host seals the disk" "test \"\$(awk '\$2 == \"/\" { print \$3 }' /proc/mounts)\" != tmpfs || exit 0"  'exec > /dev/ttyS0 2>&1' 'rm -f /etc/local.d/vm-bake-firstboot.start' 'install -d -m 755 /etc/ssh/authorized_keys /etc/vm-bake /etc/profile.d /usr/local/libexec /media/vmbake'
 	test -z "$pkgs" || printf '%s\n' "apk add --no-progress $(printf '%s\n' "$pkgs" | tr '\n' ' ')2>&1 | tee /dev/console"
 	printf '%s\n' "apk info > /etc/vm-bake/packages"
 	printf '%s\n' "missing="
@@ -2968,7 +2968,7 @@ _image_overlay_net_write1() {
 _image_overlay_report_write1() {
 	local dir="$VM_BAKE_IMAGE_DIR/$1"
 	printf '%s\n' "cat >> '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
-	printf '%s\n' "test -n \"\$missing\" && printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" | tee /dev/ttyS0 > /dev/console || printf '# vm-bake firstboot: packages complete\\n' | tee /dev/ttyS0 > /dev/console"
+	printf '%s\n' "test -n \"\$missing\" && printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" | tee /dev/console || printf '# vm-bake firstboot: packages complete\\n' | tee /dev/console"
 	printf '%s\n' "sync; poweroff" "EOF_FIRST"
 	printf '%s\n' "chmod 755 '$dir/overlay.d/etc/local.d/vm-bake-install.start' '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start'"
 	printf '%s\n' "printf '# image %s: vm-bake-firstboot.start done -- the report line, power off; both hooks executable\\n' $(sq "$1") >&2"
