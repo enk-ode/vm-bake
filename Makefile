@@ -4,7 +4,11 @@
 #                   suites from the anchor functions in include/*.sh
 #   make check      syntax-check every shell source (sh -n)
 #   make test       the architecture rules, then the unit tests
-#   make install    the wrapper ${BINDIR}/vm-bake execs this checkout
+#   make manpage    docs/vm-bake.8.md from the help blocks (vm-bake help manual),
+#                   docs/vm-bake.8 (pandoc) and docs/vm-bake.html, index.html
+#                   (mandoc) -- the GitHub Pages site is served from /docs
+#   make install    the wrapper ${BINDIR}/vm-bake execs this checkout, the
+#                   manual page into ${MANDIR}
 
 SCRIPT=		vm-bake.sh
 TESTS=		vm-bake-architecture-test.sh vm-bake-unit-test.sh
@@ -12,7 +16,7 @@ INCLUDE_DIR=	include
 INCLUDES!=	echo ${INCLUDE_DIR}/*.sh
 MODULE_SRCS!=	echo ${INCLUDE_DIR}/*.sh | tr ' ' '\n' | grep -v engine.sh | tr '\n' ' '
 
-.PHONY: metadata check test archtest unittest install uninstall
+.PHONY: metadata check test archtest unittest manpage install uninstall
 
 # Terminals: exactly ONE leading underscore. Modules: every anchor (_, __,
 # ___) mapped to its basename. The lists replace the maintained lines in
@@ -80,14 +84,35 @@ COMPLETIONDIR?=	${PREFIX}/share/bash-completion/completions
 COMPLETION=	${DESTDIR}${COMPLETIONDIR}/vm-bake
 
 install:
-	@mkdir -p ${DESTDIR}${BINDIR} ${DESTDIR}${COMPLETIONDIR}
+	@mkdir -p ${DESTDIR}${BINDIR} ${DESTDIR}${COMPLETIONDIR} ${DESTDIR}${MANDIR}
 	@printf '#!/bin/sh\n# vm-bake wrapper (make install from %s)\nexec /bin/sh %s/vm-bake.sh "$$@"\n' \
 	    '${.CURDIR}' '${.CURDIR}' > ${WRAPPER}.tmp
 	@install -m 0755 ${WRAPPER}.tmp ${WRAPPER} && rm -f ${WRAPPER}.tmp
 	@rm -f ${COMPLETION} && ln -s ${.CURDIR}/completion/vm-bake.bash ${COMPLETION}
 	@echo "install: ${WRAPPER} -> ${.CURDIR}/vm-bake.sh"
 	@echo "install: ${COMPLETION} (bash completion)"
+	@test ! -f docs/vm-bake.8 || { install -m 0644 docs/vm-bake.8 ${MANPAGE} && echo "install: ${MANPAGE}"; }
 
 uninstall:
-	@rm -f ${WRAPPER} ${COMPLETION}
+	@rm -f ${WRAPPER} ${COMPLETION} ${MANPAGE}
 	@echo "uninstall: ${WRAPPER} and ${COMPLETION} removed"
+
+# The manual page is generated: the help blocks of the anchors (make
+# metadata keeps their tables) render through `vm-bake help manual` into
+# docs/vm-bake.8.md, pandoc turns that into the groff page and mandoc
+# renders the HTML with man.css, the same look as the page in a terminal;
+# index.html is the copy GitHub Pages serves from /docs. All four are
+# committed, so packagers and readers need neither pandoc nor a database.
+# `help manual` reads the active database (VM_BAKE_BASE overrides it).
+MANDIR?=	${PREFIX}/share/man/man8
+MANPAGE=	${DESTDIR}${MANDIR}/vm-bake.8
+
+manpage:
+	@command -v pandoc > /dev/null 2>&1 || { echo "manpage: pandoc not found (pkg install hs-pandoc)"; exit 1; }
+	@command -v mandoc > /dev/null 2>&1 || { echo "manpage: mandoc not found"; exit 1; }
+	@./vm-bake.sh help manual > docs/vm-bake.8.md
+	@pandoc -f markdown-tex_math_dollars-raw_tex -s -t man docs/vm-bake.8.md -o docs/vm-bake.8
+	@mandoc -T lint docs/vm-bake.8
+	@mandoc -T html -O style=man.css docs/vm-bake.8 > docs/vm-bake.html
+	@cp docs/vm-bake.html docs/index.html
+	@echo "manpage: docs/vm-bake.8.md docs/vm-bake.8 docs/vm-bake.html docs/index.html"

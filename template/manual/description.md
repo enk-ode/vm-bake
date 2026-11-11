@@ -12,6 +12,15 @@ says `service files view` mounts a *view* of it over virtio-9p, sees of the
 rest what the template's home lines allow, and works in its own clones of
 the host's repositories. Starting and stopping guests stays with vm-bhyve.
 
+Four ways bake an image, chosen by the template's `bake` word: `chroot`
+(FreeBSD: pkgbase into the mounted disk, on the host or in a builder
+guest, no first boot), `cloud-init` (Linux: a cloud image and a seed CD,
+one first boot), `autoinstall` (OpenBSD: the install ISO with a response
+file and a site set on a second CD, the console driven) and `apkovl`
+(Alpine: the live ISO and an overlay on a second CD, unattended). Every
+way ends with the first boot reporting its packages on the console; a
+missing package ends the bake with an error naming it.
+
 Every command GENERATES shell text; an interpreter the user pins decides
 whether that text is displayed (the default, `cat`) or executed. The
 bookkeeping of the templates is pinned to act; the bake, once there, shows

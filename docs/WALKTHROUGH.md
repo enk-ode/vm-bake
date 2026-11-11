@@ -3,7 +3,8 @@
 The first vertical cut through vm-bake: a chain of templates from the root
 to `freebsd-dev`, the template that will bake the guest with VS Code and
 Claude Code. Everything below is bookkeeping in the database; nothing
-touches vm-bhyve or zfs yet. `image make` is the next chapter.
+touches vm-bhyve or zfs yet; the image, the builder, the guest and the
+rebuild follow below.
 
 ## The database
 
@@ -213,6 +214,58 @@ is how the builder's user escalates. `image builder use` sets
 `ssh ... doas sh`, one setintp line each; `image builder leave` takes them
 back. The emissions are the same on both sides: the interpreter decides
 where they run.
+
+## The guest
+
+A guest is a clone of the image's snapshot `@image` under
+`VM_BAKE_GUEST_DIR/<guest>`, with a rendered vm-bhyve configuration (UEFI,
+cpu and memory from the template, the topology, virtio disk and network
+on `VM_BAKE_GUEST_SWITCH`, the 9p share when the template has a view) and
+a link where vm-bhyve looks for it. The host writes what the guest needs
+before its first start, because no one is root inside: a FreeBSD guest
+gets hostname, address and resolver into its rc.conf and its ssh host key
+into /etc/ssh with the clone mounted; a Linux, OpenBSD or Alpine guest
+gets the same as a seed CD its image reads at every boot.
+
+    vm-bake guest make img:freebsd-dev:v1 dalmatia 172.16.100.101/24
+    vm-bake guest start dalmatia
+    vm-bake guest list
+    vm-bake guest show dalmatia
+    ssh -p 2222 brj@dalmatia.local
+    vm-bake guest stop dalmatia
+
+`guest make` is content with an ssh host key named after the guest and
+makes it when it is missing (`hostkey list`), so the guest answers with
+the same identity after every rebuild; the host's known_hosts learns it
+once. `guest start` places the dowry, hangs the overlays of the view in,
+writes the report of the records into the view and makes sure the guest's
+repository clones are there; `guest stop` fetches the guest's commits
+first, then shuts it down over ACPI and lets the overlays go. Starting and
+stopping are vm-bhyve's (`vm start`, `vm stop`); vm-bake wraps them so
+that the view and the repositories are handled on the way.
+
+## Rebuilding
+
+A new decision in the template is a new version of the image. The guest
+moves to it; the old image goes when no guest is made from it; what the
+guest has to keep is in its view, not on its disk:
+
+    vm-bake template package add freebsd-dev tmux
+    vm-bake image make freebsd freebsd-dev v2
+    vm-bake guest stop dalmatia
+    vm-bake guest drop dalmatia
+    vm-bake guest make img:freebsd-dev:v2 dalmatia 172.16.100.101/24
+    vm-bake guest start dalmatia
+    vm-bake image prune
+    vm-bake image list
+
+`guest drop` refuses a running guest and a guest whose commits the host
+has not fetched (`guest drop unfetched` gives them up); it keeps the view
+and the ssh host key. `image prune` drops every sealed image no guest
+names, notes an open one (a bake under way, or one that died with the
+lock -- `image lock drop`, then `image drop` by name) and comments on
+every image in use. A guest that differs from its template is a vm-bake
+bug: it is fixed in the code, baked and made again, never patched by hand.
 
 ## The session
 
@@ -441,3 +494,11 @@ in your repository, never inside the guest's clone.
     git -C ~/git/Infrastruktur merge --ff-only dalmatia/main
     vm-bake guest repo pull dalmatia git/Infrastruktur     # fetch and fast-forward in one
     vm-bake guest repo add dalmatia git/Infrastruktur      # refreshes the mirror
+
+## Further reading
+
+- `TUTORIAL_QUICKSTART.md` -- install, the database, pins and traces.
+- `TUTORIAL_FREEBSD.md`, `TUTORIAL_LINUX.md`, `TUTORIAL_OPENBSD.md`,
+  `TUTORIAL_ALPINE.md` -- one tutorial per way of baking.
+- `TUTORIAL_VIEW.md` -- one home: the view, the dowry, the repositories.
+- `vm-bake help <command>` and the manual `vm-bake(8)` for every command.

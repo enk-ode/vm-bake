@@ -26,20 +26,36 @@ the database carries its records with dump and restore. The combinator
 engine is vm-bake's own, forked from [elvboot](https://github.com/enk-ode/elvboot)
 and renamed, as elvboot's was forked from vpn-switch.
 
+Four ways bake an image, one per family of operating systems: `image make
+freebsd` (the chroot way: pkgbase into the mounted disk, on the host or in
+a builder guest), `image make linux` (the cloud-init way: a cloud image
+and a seed CD, one first boot), `image make openbsd` (the autoinstall way:
+the install ISO, a response file and a site set on a second CD, the
+console driven) and `image make alpine` (the apkovl way: the live ISO and
+an overlay on a second CD, unattended). Every bake ends with the first
+boot reporting its packages; a missing one ends the bake.
+
 Status: templates (add, drop, show, the scalars base/bake/firmware/
-resource, the lists package/pkgfile/port/rc/env/user/home/service/forbid/
-data/session/tag with add/drop/mask/unmask/show), images (`image make freebsd`,
-on the host or in a builder guest), ssh host keys as a resource (`hostkey
-create`, bound to one guest each), guests (`guest make`, tags,
-home seeds, the view with its overlays, the dowry a template hands to the
-homes of its guests, the guest's own repository clones on its disk with the
-mirrors in the view and the report of its records written into the view at
-every start),
-sessions (ssh, and X in a Xephyr compartment) and the pair
-that travels (`dump`/`restore` with the records as witnesses, `export`/
-`import` with the bundle of ssh host keys, package files and home seeds, sealed
-to the dump). `docs/WALKTHROUGH.md` walks the first chain, the FreeBSD
-development guest.
+resource/topology, the lists package/pkgfile/port/rc/env/user/home/service/
+forbid/data/session/tag/source/file with add/drop/mask/unmask/show), the
+four image ways, ssh host keys as a resource (`hostkey create`, bound to
+one guest each), guests (`guest make`, tags, home seeds, the view with its
+overlays, the dowry a template hands to the homes of its guests, the
+guest's own repository clones on its disk with the mirrors in the view and
+the report of its records written into the view at every start), sessions
+(ssh, xterm, and X in a Xephyr compartment) and the pair that travels
+(`dump`/`restore` with the records as witnesses, `export`/`import` with
+the bundle of ssh host keys, package files, dowries and home seeds, sealed
+to the dump).
+
+Documentation: `docs/TUTORIAL_QUICKSTART.md` (install, the database, pins
+and traces), one tutorial per way (`docs/TUTORIAL_FREEBSD.md`,
+`docs/TUTORIAL_LINUX.md`, `docs/TUTORIAL_OPENBSD.md`,
+`docs/TUTORIAL_ALPINE.md`), `docs/TUTORIAL_VIEW.md` (one home: the view,
+the dowry, the guest's repositories) and `docs/WALKTHROUGH.md`, the whole
+chain for a FreeBSD development guest. The manual `vm-bake(8)` is
+generated from the help corpus (`make manpage`) and published at
+<https://enk-ode.github.io/vm-bake/>.
 
     vm-bake bootstrap production minimal
     vm-bake template add freebsd
