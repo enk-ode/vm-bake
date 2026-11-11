@@ -42,6 +42,13 @@ Packages come from the repositories `setup-apkrepos` picks (the first
 mirror of the list, main and community); `source` lines are apt's and
 get a note.
 
+A `daemon` line (`template daemon add <template> <name> <user>
+'<program>'`, see `TUTORIAL_FREEBSD.md`) becomes an OpenRC script
+`etc/init.d/<name>` in the overlay (`command_user`, background with a
+pidfile, output to `/var/log/<name>.log`, `need net`), which setup-disk
+carries onto the disk with etc; the first boot adds it to the default
+runlevel after the packages, so the daemon first runs in a guest.
+
 ## What the template becomes
 
 `image overlay write` renders the overlay aspect by aspect into

@@ -4,7 +4,7 @@
 # Copyright (c) 2026 Dr. Johannes Brügmann
 # template.sh - the templates of vm-bake: the build recipe of an image as a
 # record of decisions (base, bake, firmware, resource, and the lists
-# package, rc, user, service, forbid, data, session), inheriting from a
+# package, rc, user, service, forbid, data, session, daemon), inheriting from a
 # parent down to the root 'empty'. add stores, drop removes, mask hides an
 # inherited line; show resolves the chain. Checked at bake time, not here.
 
@@ -14,8 +14,8 @@
 #   A template is the build recipe of an image: the base (a release, a
 #   stage, a cloud image, an iso), how it is baked, firmware, resources,
 #   and the lists of packages, rc.conf lines, users, host services the
-#   guest may use, what it must not reach, its data disks and session
-#   protocols. Templates inherit: scalars from the nearest ancestor, lists
+#   guest may use, what it must not reach, its data disks, session
+#   protocols and the daemons its init starts. Templates inherit: scalars from the nearest ancestor, lists
 #   as the union of the chain minus the masks. The root 'empty' always
 #   exists and holds nothing.
 #@end
@@ -43,6 +43,7 @@
 # @defcompletion size          none
 # @defcompletion class         none
 # @defcompletion protocol      none
+# @defcompletion user          none
 # @defcompletion family        none
 # @defcompletion chain         none
 # @defcompletion leaf          none
@@ -50,7 +51,7 @@
 #@end
 
 TEMPLATE_LAYOUT=""
-TEMPLATE_FAMILIES="package pkgfile port rc env user home service forbid data session tag source file"
+TEMPLATE_FAMILIES="package pkgfile port rc env user home service forbid data session tag source file daemon"
 TEMPLATE_LEAVES="base bake firmware resource topology"
 
 #@help _template_list0
@@ -2169,6 +2170,7 @@ ___template_dump_record1() {
 			case "$f" in
 			rc|env) a="$(sq "${l%%=*}") $(sq "${l#*=}")" ;;
 			tag) a="$(sq "${l%% *}") $(sq "${l#* }")" ;;
+			daemon) rest=${l#* }; a="$(sq "${l%% *}") $(sq "${rest%% *}") $(sq "${rest#* }")" ;;
 			*) a=$(printf '%s\n' "$l" | sed "s/[^ ]*/'&'/g") ;;
 			esac
 			printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template $f add '$1' $a"
@@ -2178,6 +2180,7 @@ ___template_dump_record1() {
 			case "$f" in
 			rc|env) a="$(sq "${l%%=*}") $(sq "${l#*=}")" ;;
 			tag) a="$(sq "${l%% *}") $(sq "${l#* }")" ;;
+			daemon) rest=${l#* }; a="$(sq "${l%% *}") $(sq "${rest%% *}") $(sq "${rest#* }")" ;;
 			*) a=$(printf '%s\n' "$l" | sed "s/[^ ]*/'&'/g") ;;
 			esac
 			printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template $f mask '$1' $a"
@@ -2332,6 +2335,109 @@ ___template_file_unmask4() {
 ___template_file_show1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") file"
+}
+
+#@help ___template_daemon_add4
+# @command template daemon add <template> <name> <user> <program>
+# @summary Add a daemon of the guest to the template's own list -- a program the init of every image of this template starts at boot and keeps running, under the user, as the service <name>: the template exists, the name is an identifier (a letter or underscore, then letters, digits, underscores: it names the rc.d script, the OpenRC script, the systemd unit and the rc.conf variable <name>_enable), the user is a login name (root, or a user of the template's user list -- image check daemons holds it against that list at the bake), the program is one word of command line (letters, digits, single blanks and ._/:=,@+%-, nothing the shell would read); then 'template line append' of '<name> <user> <program>'. The bake renders the line per way: an rc.d script under daemon(8) with restart on FreeBSD (image daemon write), an rc.d script with rc_bg on OpenBSD (image site daemon write), an OpenRC script in the overlay on Alpine (image overlay daemon write), a systemd unit with Restart=always on Debian (image seed daemon write). The daemon runs from the first boot of a guest, never in the bake. A bare program name is looked up in the system's path, /usr/local included; HOME is the user's home; where the init keeps no journal, stdout and stderr go to /var/log/<name>.log
+# @group   template
+# @example vm-bake template daemon add proton-bridge bridge brj 'protonmail-bridge --noninteractive --log-level info'
+# @example vm-bake template daemon add proton-bridge relay_imap root 'socat TCP4-LISTEN:1143,fork,reuseaddr,keepalive,nodelay,max-children=25 TCP4:127.0.0.1:1144'
+# @see     template daemon drop
+# @see     template daemon mask
+# @see     template daemon show
+# @see     template user add
+# @see     template rc add
+#@end
+___template_daemon_add4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template daemon valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template user valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template program valid $(sq "$4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line append $(sq "$1") daemon $(sq "$2 $3 $4")"
+}
+
+#@help ___template_daemon_drop4
+# @command template daemon drop <template> <name> <user> <program>
+# @summary Remove the daemon line from the template's own list: the template exists, the line is listed there (template daemon show prints it to copy); then 'template line remove'
+# @group   template
+# @see     template daemon add
+#@end
+___template_daemon_drop4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line listed $(sq "$1") daemon $(sq "$2 $3 $4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line remove $(sq "$1") daemon $(sq "$2 $3 $4")"
+}
+
+#@help ___template_daemon_mask4
+# @command template daemon mask <template> <name> <user> <program>
+# @summary Hide an inherited daemon line in this template and below: the template exists, name, user and program are valid; then 'template line mask'
+# @group   template
+# @see     template daemon unmask
+#@end
+___template_daemon_mask4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template daemon valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template user valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template program valid $(sq "$4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line mask $(sq "$1") daemon $(sq "$2 $3 $4")"
+}
+
+#@help ___template_daemon_unmask4
+# @command template daemon unmask <template> <name> <user> <program>
+# @summary Take a mask back: the template exists, the line is masked here; then 'template line unmask'
+# @group   template
+# @see     template daemon mask
+#@end
+___template_daemon_unmask4() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line masked $(sq "$1") daemon $(sq "$2 $3 $4")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template line unmask $(sq "$1") daemon $(sq "$2 $3 $4")"
+}
+
+#@help ___template_daemon_show1
+# @command template daemon show <template>
+# @summary The daemon lines resolved over the chain, each with its origin: the template exists; then 'template chain table'
+# @group   template
+# @see     template show
+#@end
+___template_daemon_show1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template chain table $(sq "$1") daemon"
+}
+
+#@help __template_daemon_valid1
+# @command template daemon valid <name>
+# @summary The daemon's name is an identifier -- a letter or underscore, then letters, digits and underscores -- as rc.d (OpenBSD refuses any other script name), rc.conf's <name>_enable, OpenRC and systemd take it: a comment line, else an error line
+# @group   template
+# @internal
+# @see     template daemon add
+#@end
+__template_daemon_valid1() {
+	local ok=yes
+	case "$1" in ""|[0-9]*|*[!A-Za-z0-9_]*) ok=no ;; esac
+	if test "$ok" = yes; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'daemon name $1 valid'"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template daemon: invalid daemon name $1 ([A-Za-z_][A-Za-z0-9_]*, the name of its rc.d script and unit)")"
+	fi
+}
+
+#@help __template_program_valid1
+# @command template program valid <program>
+# @summary The program line of a daemon is plain: words of [A-Za-z0-9._/:=,@+%-] separated by single blanks, the first a program name and no option, nothing the shell would read (no quotes, no $, backquote, backslash, ;, &, |, <, >, *, ?, parentheses, no tab) -- the bake writes it verbatim into an rc.d script's command_args and daemon_flags, an OpenRC script's command_args and a unit's ExecStart: a comment line, else an error line
+# @group   template
+# @internal
+# @see     template daemon add
+#@end
+__template_program_valid1() {
+	local ok=yes
+	case "$1" in ""|-*|" "*|*" "|*"  "*|*[!A-Za-z0-9._/:=,@+%" "-]*) ok=no ;; esac
+	if test "$ok" = yes; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'program $1 valid'"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template daemon: invalid program line (words of [A-Za-z0-9._/:=,@+%-] with single blanks, the first no option, nothing the shell would read): $1")"
+	fi
 }
 
 #@help __template_mode_valid1

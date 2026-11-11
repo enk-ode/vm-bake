@@ -289,7 +289,8 @@ re\-minted, an identical record is a note
 A template is the build recipe of an image: the base (a release, a
 stage, a cloud image, an iso), how it is baked, firmware, resources, and
 the lists of packages, rc.conf lines, users, host services the guest may
-use, what it must not reach, its data disks and session protocols.
+use, what it must not reach, its data disks, session protocols and the
+daemons its init starts.
 Templates inherit: scalars from the nearest ancestor, lists as the union
 of the chain minus the masks.
 The root `empty' always exists and holds nothing.
@@ -795,6 +796,45 @@ Take a mask back: the template exists, the line is masked here; then
 .TP
 \f[B]template file show <template>\f[R]
 The file lines resolved over the chain, each with its origin: the
+template exists; then `template chain table'
+.TP
+\f[B]template daemon add <template> <name> <user> <program>\f[R]
+Add a daemon of the guest to the template\(cqs own list \(en a program
+the init of every image of this template starts at boot and keeps
+running, under the user, as the service <name>: the template exists, the
+name is an identifier (a letter or underscore, then letters, digits,
+underscores: it names the rc.d script, the OpenRC script, the systemd
+unit and the rc.conf variable <name>\f[I]enable), the user is a login
+name (root, or a user of the template\(cqs user list \(en image check
+daemons holds it against that list at the bake), the program is one word
+of command line (letters, digits, single blanks and .\f[R]/:=,\(at+%\-,
+nothing the shell would read); then `template line append' of `<name>
+<user> <program>'.
+The bake renders the line per way: an rc.d script under daemon(8) with
+restart on FreeBSD (image daemon write), an rc.d script with rc_bg on
+OpenBSD (image site daemon write), an OpenRC script in the overlay on
+Alpine (image overlay daemon write), a systemd unit with Restart=always
+on Debian (image seed daemon write).
+The daemon runs from the first boot of a guest, never in the bake.
+A bare program name is looked up in the system\(cqs path, /usr/local
+included; HOME is the user\(cqs home; where the init keeps no journal,
+stdout and stderr go to /var/log/<name>.log
+.TP
+\f[B]template daemon drop <template> <name> <user> <program>\f[R]
+Remove the daemon line from the template\(cqs own list: the template
+exists, the line is listed there (template daemon show prints it to
+copy); then `template line remove'
+.TP
+\f[B]template daemon mask <template> <name> <user> <program>\f[R]
+Hide an inherited daemon line in this template and below: the template
+exists, name, user and program are valid; then `template line mask'
+.TP
+\f[B]template daemon unmask <template> <name> <user> <program>\f[R]
+Take a mask back: the template exists, the line is masked here; then
+`template line unmask'
+.TP
+\f[B]template daemon show <template>\f[R]
+The daemon lines resolved over the chain, each with its origin: the
 template exists; then `template chain table'
 .SS Images
 An image is a baked disk: the decisions of a template applied to a

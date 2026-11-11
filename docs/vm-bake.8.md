@@ -193,8 +193,8 @@ Back up, restore and batch-drive the database itself.
 A template is the build recipe of an image: the base (a release, a
 stage, a cloud image, an iso), how it is baked, firmware, resources,
 and the lists of packages, rc.conf lines, users, host services the
-guest may use, what it must not reach, its data disks and session
-protocols. Templates inherit: scalars from the nearest ancestor, lists
+guest may use, what it must not reach, its data disks, session
+protocols and the daemons its init starts. Templates inherit: scalars from the nearest ancestor, lists
 as the union of the chain minus the masks. The root 'empty' always
 exists and holds nothing.
 
@@ -506,6 +506,21 @@ exists and holds nothing.
 
 **template file show \<template\>**
 :   The file lines resolved over the chain, each with its origin: the template exists; then 'template chain table'
+
+**template daemon add \<template\> \<name\> \<user\> \<program\>**
+:   Add a daemon of the guest to the template's own list -- a program the init of every image of this template starts at boot and keeps running, under the user, as the service \<name\>: the template exists, the name is an identifier (a letter or underscore, then letters, digits, underscores: it names the rc.d script, the OpenRC script, the systemd unit and the rc.conf variable \<name\>_enable), the user is a login name (root, or a user of the template's user list -- image check daemons holds it against that list at the bake), the program is one word of command line (letters, digits, single blanks and ._/:=,@+%-, nothing the shell would read); then 'template line append' of '\<name\> \<user\> \<program\>'. The bake renders the line per way: an rc.d script under daemon(8) with restart on FreeBSD (image daemon write), an rc.d script with rc_bg on OpenBSD (image site daemon write), an OpenRC script in the overlay on Alpine (image overlay daemon write), a systemd unit with Restart=always on Debian (image seed daemon write). The daemon runs from the first boot of a guest, never in the bake. A bare program name is looked up in the system's path, /usr/local included; HOME is the user's home; where the init keeps no journal, stdout and stderr go to /var/log/\<name\>.log
+
+**template daemon drop \<template\> \<name\> \<user\> \<program\>**
+:   Remove the daemon line from the template's own list: the template exists, the line is listed there (template daemon show prints it to copy); then 'template line remove'
+
+**template daemon mask \<template\> \<name\> \<user\> \<program\>**
+:   Hide an inherited daemon line in this template and below: the template exists, name, user and program are valid; then 'template line mask'
+
+**template daemon unmask \<template\> \<name\> \<user\> \<program\>**
+:   Take a mask back: the template exists, the line is masked here; then 'template line unmask'
+
+**template daemon show \<template\>**
+:   The daemon lines resolved over the chain, each with its origin: the template exists; then 'template chain table'
 
 ## Images
 

@@ -432,6 +432,54 @@ test_template_lists() {
   fi
 }
 
+test_template_daemon() {
+  test_header "template daemon: name, user and program recorded as one line; identifier, login and plain program line enforced; show, mask, unmask, drop"
+  test_setup
+  run_vmbake template add freebsd > /dev/null
+  run_vmbake template add freebsd-dev freebsd > /dev/null
+  run_vmbake template daemon add freebsd bridge brj 'protonmail-bridge --noninteractive --log-level info' > /dev/null
+  run_vmbake template daemon add freebsd-dev relay_imap root 'socat TCP4-LISTEN:1143,fork,reuseaddr,keepalive,nodelay,max-children=25 TCP4:127.0.0.1:1144' > /dev/null
+  local d; d=$(record_of freebsd-dev)
+  if [ "$(cat "$d/daemon")" = "relay_imap root socat TCP4-LISTEN:1143,fork,reuseaddr,keepalive,nodelay,max-children=25 TCP4:127.0.0.1:1144" ] && [ "$(cat "$(record_of freebsd)/daemon")" = "bridge brj protonmail-bridge --noninteractive --log-level info" ]; then
+    pass "template daemon add records name, user and the program line as one line"
+  else
+    fail "daemon record: $(cat "$d/daemon" 2>&1)"
+  fi
+  if run_vmbake template daemon add freebsd-dev 1relay root socat | grep -q "invalid daemon name" && run_vmbake template daemon add freebsd-dev re-lay root socat | grep -q "invalid daemon name" && run_vmbake template daemon add freebsd-dev relay Root socat | grep -q "invalid login" && run_vmbake template daemon add freebsd-dev relay root 'socat; rm -rf /' | grep -q "invalid program line" && run_vmbake template daemon add freebsd-dev relay root '--noninteractive' | grep -q "invalid program line" && run_vmbake template daemon add freebsd-dev relay root 'a  b' | grep -q "invalid program line" && run_vmbake template daemon add freebsd-dev relay root "it's" | grep -q "invalid program line" && [ "$(grep -c . "$d/daemon")" = "1" ]; then
+    pass "a name starting with a digit or carrying a hyphen, a login with a capital, a program line with a semicolon, a leading option, a double blank or a quote are refused, nothing recorded"
+  else
+    fail "daemon guards: $(run_vmbake template daemon add freebsd-dev relay root 'socat; rm -rf /')"
+  fi
+  if run_vmbake template daemon show freebsd-dev | grep -q "^#   freebsd  *bridge brj protonmail-bridge --noninteractive --log-level info" && run_vmbake template daemon show freebsd-dev | grep -q "^#   freebsd-dev  *relay_imap root socat"; then
+    pass "template daemon show lists inherited and own lines with their origin"
+  else
+    fail "daemon show: $(run_vmbake template daemon show freebsd-dev)"
+  fi
+  run_vmbake template daemon mask freebsd-dev bridge brj 'protonmail-bridge --noninteractive --log-level info' > /dev/null
+  if ! run_vmbake template daemon show freebsd-dev | grep -q bridge && run_vmbake template daemon show freebsd | grep -q bridge && [ "$(cat "$d/daemon.mask")" = "bridge brj protonmail-bridge --noninteractive --log-level info" ]; then
+    pass "mask hides the inherited daemon below, not at its origin"
+  else
+    fail "daemon mask: $(run_vmbake template daemon show freebsd-dev)"
+  fi
+  run_vmbake template daemon unmask freebsd-dev bridge brj 'protonmail-bridge --noninteractive --log-level info' > /dev/null
+  if run_vmbake template daemon show freebsd-dev | grep -q bridge && [ ! -s "$d/daemon.mask" ]; then
+    pass "unmask takes the mask back"
+  else
+    fail "daemon unmask: $(cat "$d/daemon.mask" 2>&1)"
+  fi
+  run_vmbake template daemon drop freebsd-dev relay_imap root 'socat TCP4-LISTEN:1143,fork,reuseaddr,keepalive,nodelay,max-children=25 TCP4:127.0.0.1:1144' > /dev/null
+  if [ ! -s "$d/daemon" ] && run_vmbake template daemon drop freebsd-dev bridge brj 'protonmail-bridge --noninteractive --log-level info' | grep -q "no own daemon entry"; then
+    pass "drop removes exactly the own line; an inherited line cannot be dropped in the child"
+  else
+    fail "daemon drop: $(cat "$d/daemon" 2>&1)"
+  fi
+  if run_vmbake template show freebsd-dev | grep -q "^# daemon of freebsd-dev"; then
+    pass "template show renders the daemon family"
+  else
+    fail "show daemon family: $(run_vmbake template show freebsd-dev | grep '^# ')"
+  fi
+}
+
 test_template_source_file() {
   test_header "template source and file: apt sources with their key's digest, system files from dowries"
   test_setup
@@ -560,6 +608,7 @@ test_template_dump_restore() {
   run_vmbake template forbid add freebsd-dev net 192.168.1.0/24 > /dev/null
   run_vmbake template data add freebsd-dev home 64G proton > /dev/null
   run_vmbake template session add freebsd-dev x > /dev/null
+  run_vmbake template daemon add freebsd-dev bridge brj 'protonmail-bridge --noninteractive --log-level info' > /dev/null
   run_vmbake template dump all > "$TEST_DIR/all.vmb" 2>/dev/null
   if [ "$(grep -n "template add 'freebsd' 'empty'" "$TEST_DIR/all.vmb" | cut -d: -f1)" -lt "$(grep -n "template add 'freebsd-15.1'" "$TEST_DIR/all.vmb" | cut -d: -f1)" ]; then
     pass "dump all writes parents before children"
@@ -570,6 +619,11 @@ test_template_dump_restore() {
     pass "dump replays scalars, lines and masks in the command vocabulary"
   else
     fail "dump lines: $(cat "$TEST_DIR/all.vmb")"
+  fi
+  if grep -qF "template daemon add 'freebsd-dev' 'bridge' 'brj' 'protonmail-bridge --noninteractive --log-level info'" "$TEST_DIR/all.vmb"; then
+    pass "dump quotes a daemon line as name, user and the program line with its blanks"
+  else
+    fail "dump daemon line: $(grep daemon "$TEST_DIR/all.vmb")"
   fi
   local second="$TEST_BASE_DIR/test-$TESTS_RUN-second"
   mkdir -p "$second"
@@ -648,7 +702,7 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify key_fetch key_verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_source_write seed_sshd_write seed_file_write seed_check_write seed_view_write seed_pack firstboot_conf_write firstboot_report_tmux firstboot_report_nmdm firstboot_gone firstboot_conf_drop response_write site_files_place site_pack console_drive_tmux console_drive_nmdm overlay_files_place overlay_pack site_head_write site_user_write site_env_write site_net_write site_firsttime_write overlay_answer_write overlay_install_write overlay_firstboot_write overlay_sshd_write overlay_user_write overlay_env_write overlay_file_write overlay_view_write overlay_net_write overlay_report_write console_watch_tmux console_watch_nmdm file_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify key_fetch key_verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_source_write seed_sshd_write seed_file_write seed_check_write seed_view_write seed_pack firstboot_conf_write firstboot_report_tmux firstboot_report_nmdm firstboot_gone firstboot_conf_drop response_write site_files_place site_pack console_drive_tmux console_drive_nmdm overlay_files_place overlay_pack site_head_write site_user_write site_env_write site_net_write site_firsttime_write overlay_answer_write overlay_install_write overlay_firstboot_write overlay_sshd_write overlay_user_write overlay_env_write overlay_file_write overlay_view_write overlay_net_write overlay_report_write console_watch_tmux console_watch_nmdm file_write daemon_write site_daemon_write overlay_daemon_write seed_daemon_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
 GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write seed_write_cloud_init seed_write_autoinstall home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run install halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
 pin_image_cat() {
   local f
@@ -756,8 +810,8 @@ test_image_plan() {
   fi
   printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   plan=$(run_vmbake image burn x)
-  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image root lock 'x'" && printf '%s\n' "$plan" | grep -q "image view write 'x'" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "10" ]; then
-    pass "burn: users checked, then packages, rc, users, the view, root locked, doas, sshd"
+  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image root lock 'x'" && printf '%s\n' "$plan" | grep -q "image view write 'x'" && printf '%s\n' "$plan" | grep -q "image check daemons 'x'" && ! printf '%s\n' "$plan" | grep -q "image daemon write" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ]; then
+    pass "burn: users and daemons checked, then packages, rc, users, the view, root locked, doas, sshd; no daemon write without daemon lines"
   else
     fail "burn plan: $plan"
   fi
@@ -767,8 +821,8 @@ test_image_plan() {
     fail "close/seal/drop plan: $(run_vmbake image close x; run_vmbake image seal x; run_vmbake image drop x)"
   fi
   plan=$(run_vmbake image builder use)
-  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "19" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "19" ]; then
-    pass "builder use and leave: the place and nineteen pins, each a setintp or unsetintp line"
+  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "20" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && printf '%s\n' "$plan" | grep -q "setintp image_daemon_write " && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "20" ]; then
+    pass "builder use and leave: the place and twenty pins, each a setintp or unsetintp line"
   else
     fail "builder use/leave: $plan"
   fi
@@ -878,6 +932,24 @@ test_image_emissions() {
   else
     fail "user/ssh/doas: $out"
   fi
+  run_vmbake template daemon add freebsd-dev bridge "$(id -un)" 'protonmail-bridge --noninteractive --log-level info' > /dev/null
+  run_vmbake template daemon add freebsd-dev relay_imap root 'socat TCP4-LISTEN:1143,fork TCP4:127.0.0.1:1144' > /dev/null
+  out=$(run_vmbake image check daemons x; run_vmbake image daemon write x; run_vmbake image burn x)
+  if printf '%s\n' "$out" | grep -qF "command_args=\"-f -u $(id -un) -R 5 -P \${pidfile} -o /var/log/bridge.log protonmail-bridge --noninteractive --log-level info\"" && printf '%s\n' "$out" | grep -qF ': ${relay_imap_enable:=NO}' && printf '%s\n' "$out" | grep -q "^# REQUIRE: LOGIN$" && printf '%s\n' "$out" | grep -qF "printf '%s\n' 'bridge_enable=\"YES\"' >> '$TEST_DIR/img/x/mnt/etc/rc.conf'" && [ "$(printf '%s\n' "$out" | grep -cF "cat > '$TEST_DIR/img/x/mnt/usr/local/etc/rc.d/bridge' <<'EOF_RCD'")" = "2" ]; then
+    pass "daemon write: an rc.d script per line under daemon(8) as the user with restart, pidfile and log, enabled in rc.conf; the check passes and the burn writes them once lines exist"
+  else
+    fail "daemon write: $out"
+  fi
+  run_vmbake template daemon add freebsd-dev relay_imap nobody socat > /dev/null
+  out=$(run_vmbake image check daemons x)
+  if printf '%s\n' "$out" | grep -q "names listed twice: relay_imap" && printf '%s\n' "$out" | grep -q "users the template does not list: relay_imap(nobody)"; then
+    pass "check daemons: a user the template does not list and a name listed twice are one error line"
+  else
+    fail "check daemons: $out"
+  fi
+  run_vmbake template daemon drop freebsd-dev relay_imap nobody socat > /dev/null
+  run_vmbake template daemon drop freebsd-dev relay_imap root 'socat TCP4-LISTEN:1143,fork TCP4:127.0.0.1:1144' > /dev/null
+  run_vmbake template daemon drop freebsd-dev bridge "$(id -un)" 'protonmail-bridge --noninteractive --log-level info' > /dev/null
   out=$(run_vmbake image pkg report x; run_vmbake image disk unmount x; run_vmbake image disk detach x; run_vmbake image digest write x; run_vmbake image snapshot take x; run_vmbake image readonly set x; run_vmbake image disk release x; run_vmbake image dataset destroy x)
   if printf '%s\n' "$out" | grep -q "audit -F > '$TEST_DIR/img/x/mnt/var/log/vm-bake/audit.txt'" && printf '%s\n' "$out" | grep -q "umount '$TEST_DIR/img/x/mnt/dev'" && printf '%s\n' "$out" | grep -q 'mdconfig -d -u "${md#md}"' && printf '%s\n' "$out" | grep -q "sha256 -q '$TEST_DIR/img/x/disk0.img'" && printf '%s\n' "$out" | grep -q 'zfs snapshot "$ds@image"' && printf '%s\n' "$out" | grep -q 'zfs set readonly=on "$ds"' && printf '%s\n' "$out" | grep -q 'zfs destroy -r "$ds"'; then
     pass "report into the image, unmount, detach, digest, snapshot, readonly, release, destroy in their words"
@@ -1758,7 +1830,7 @@ test_guest_report() {
   view_chain
   local out plan
   out=$(run_vmbake guest show caledonia)
-  if printf '%s\n' "$out" | grep -q "^# guest caledonia" && printf '%s\n' "$out" | grep -q "^#   image     x" && printf '%s\n' "$out" | grep -q "^#   chain     empty > freebsd > freebsd-15.1 > freebsd-dev" && printf '%s\n' "$out" | grep -q "^#   view      $TEST_DIR/view/caledonia on the host" && printf '%s\n' "$out" | grep -q "slot 30, share home" && [ "$(printf '%s\n' "$out" | grep -c '^# [a-z]* (origin')" = "14" ]; then
+  if printf '%s\n' "$out" | grep -q "^# guest caledonia" && printf '%s\n' "$out" | grep -q "^#   image     x" && printf '%s\n' "$out" | grep -q "^#   chain     empty > freebsd > freebsd-15.1 > freebsd-dev" && printf '%s\n' "$out" | grep -q "^#   view      $TEST_DIR/view/caledonia on the host" && printf '%s\n' "$out" | grep -q "slot 30, share home" && [ "$(printf '%s\n' "$out" | grep -c '^# [a-z]* (origin')" = "15" ]; then
     pass "guest show names record, template chain, view and every list family"
   else
     fail "guest show: $out"
@@ -2276,6 +2348,16 @@ test_linux_plan() {
     fail "seed check dowry: $(run_vmbake image seed write img:debian-dev:v1 2>&1 | tail -2)"
   fi
   run_vmbake template file drop debian-dev daemon /etc/docker/daemon.json 0644 > /dev/null
+  run_vmbake template daemon add debian-dev bridge "$(id -un)" 'protonmail-bridge --noninteractive' > /dev/null
+  run_vmbake template daemon add debian-dev relay_imap root 'socat TCP4-LISTEN:1143,fork TCP4:127.0.0.1:1144' > /dev/null
+  out=$(run_vmbake image seed write img:debian-dev:v1 2>&1)
+  if printf '%s\n' "$out" | grep -q "^  - path: /etc/systemd/system/bridge.service$" && printf '%s\n' "$out" | grep -q "^      User=$(id -un)$" && printf '%s\n' "$out" | grep -q "^      ExecStart=protonmail-bridge --noninteractive$" && printf '%s\n' "$out" | grep -q "^      Restart=always$" && printf '%s\n' "$out" | grep -q "^      ExecStart=socat TCP4-LISTEN:1143,fork TCP4:127.0.0.1:1144$" && printf '%s\n' "$out" | grep -q "^  - path: /var/lib/cloud/scripts/per-once/vm-bake-daemons.sh$" && printf '%s\n' "$out" | grep -q "^      systemctl enable relay_imap.service$" && [ "$(printf '%s\n' "$out" | grep -o "vm-bake-packages.sh\|system/bridge.service\|^mounts:" | tr '\n' ' ')" = "vm-bake-packages.sh system/bridge.service mounts: " ]; then
+    pass "image seed write with daemon lines: a unit per line in write_files (User, ExecStart, Restart=always) after the package check, the per-once script that enables them, before the mounts"
+  else
+    fail "seed daemon write: $out"
+  fi
+  run_vmbake template daemon drop debian-dev bridge "$(id -un)" 'protonmail-bridge --noninteractive' > /dev/null
+  run_vmbake template daemon drop debian-dev relay_imap root 'socat TCP4-LISTEN:1143,fork TCP4:127.0.0.1:1144' > /dev/null
   run_vmbake template source drop debian-dev docker https://download.docker.com/linux/debian trixie stable https://download.docker.com/linux/debian/gpg 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570 > /dev/null
   out=$(run_vmbake image disk place img:debian-dev:v1 https://x/debian-13-genericcloud-amd64.raw 32G; run_vmbake image disk place img:debian-dev:v1 https://x/debian-13-generic-amd64.raw.xz 32G; run_vmbake image disk place img:debian-dev:v1 https://x/debian-13-generic-amd64.qcow2 32G 2>&1)
   if printf '%s\n' "$out" | grep -q "^cp '$TEST_DIR/cache/debian-13-genericcloud-amd64.raw' '$TEST_DIR/img/img:debian-dev:v1/disk0.img' || exit 1$" && printf '%s\n' "$out" | grep -q "^xz -dc '$TEST_DIR/cache/debian-13-generic-amd64.raw.xz' > '$TEST_DIR/img/img:debian-dev:v1/disk0.img' || exit 1$" && [ "$(printf '%s\n' "$out" | grep -c "^truncate -s '32G' '$TEST_DIR/img/img:debian-dev:v1/disk0.img' || exit 1$")" = "2" ] && printf '%s\n' "$out" | grep -q "neither raw nor xz"; then
@@ -2395,8 +2477,8 @@ test_openbsd_plan() {
   fi
   run_vmbake image record write openbsd-dev $img > /dev/null
   plan=$(run_vmbake image install $img)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "12" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image response write '$img'" && printf '%s\n' "$plan" | sed -n 4p | grep -q "image site files place '$img'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image site pack '$img'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image firstboot conf '$img'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "guest install 'firstboot' '$TEST_DIR/install80.iso'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image console drive '$img'" && printf '%s\n' "$plan" | sed -n 10p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | sed -n 12p | grep -q "image firstboot conf drop"; then
-    pass "image install: record, response, site, files, pack, conf, link, install from the ISO, console, gone, link drop, conf drop"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "13" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image check daemons '$img'" && printf '%s\n' "$plan" | sed -n 3p | grep -q "image response write '$img'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image site files place '$img'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image site pack '$img'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "image firstboot conf '$img'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "guest install 'firstboot' '$TEST_DIR/install80.iso'" && printf '%s\n' "$plan" | sed -n 10p | grep -q "image console drive '$img'" && printf '%s\n' "$plan" | sed -n 11p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | sed -n 13p | grep -q "image firstboot conf drop"; then
+    pass "image install: record, daemons checked, response, site, files, pack, conf, link, install from the ISO, console, gone, link drop, conf drop"
   else
     fail "image install plan: $plan"
   fi
@@ -2450,6 +2532,16 @@ quoted default ran" ]; then
   else
     fail "image site write, the first boot's check: $out"
   fi
+  run_vmbake template daemon add openbsd-dev relay_imap root 'socat TCP4-LISTEN:1143,fork TCP4:127.0.0.1:1144' > /dev/null
+  run_vmbake template daemon add openbsd-dev bridge "$(id -un)" protonmail-bridge > /dev/null
+  out=$(run_vmbake image site write $img 2>&1)
+  if printf '%s\n' "$out" | grep -qF "cat > '/etc/rc.d/relay_imap' <<'EOF_RCD'" && printf '%s\n' "$out" | grep -q "^#!/bin/ksh$" && printf '%s\n' "$out" | grep -qF 'daemon="$(PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin command -v socat)"' && printf '%s\n' "$out" | grep -qF 'daemon_flags="TCP4-LISTEN:1143,fork TCP4:127.0.0.1:1144"' && printf '%s\n' "$out" | grep -qF 'daemon_flags=""' && printf '%s\n' "$out" | grep -qF "daemon_user=\"$(id -un)\"" && printf '%s\n' "$out" | grep -q "^rc_bg=YES$" && printf '%s\n' "$out" | grep -qF "chmod 555 '/etc/rc.d/bridge'" && printf '%s\n' "$out" | grep -qF "printf 'rcctl enable %s\n' 'bridge' >> /etc/rc.firsttime" && printf '%s\n' "$out" | grep -n "rcctl enable\|rc.firsttime <<" | sed -n 1p | grep -q "rcctl enable"; then
+    pass "image site daemon write: an rc.d script per line (the user, the program looked up at start, its arguments or none, rc_bg), rcctl enable into rc.firsttime before the packages"
+  else
+    fail "image site daemon write: $out"
+  fi
+  run_vmbake template daemon drop openbsd-dev relay_imap root 'socat TCP4-LISTEN:1143,fork TCP4:127.0.0.1:1144' > /dev/null
+  run_vmbake template daemon drop openbsd-dev bridge "$(id -un)" protonmail-bridge > /dev/null
   out=$(run_vmbake image site pack $img 2>&1)
   if printf '%s\n' "$out" | grep -qF "(cd '$TEST_DIR/img/$img/site.d' && find . -type f | sed 's|^\./||' | bsdtar -czf '$TEST_DIR/img/$img/site/8.0/amd64/site80.tgz' --uid 0 --gid 0 --uname root --gname wheel -n -T -) || exit 1" && printf '%s\n' "$out" | grep -q "sha256 site80.tgz > SHA256" && printf '%s\n' "$out" | grep -q "label=vmbakesite '$TEST_DIR/img/$img/site.iso' '$TEST_DIR/img/$img/site'"; then
     pass "image site pack: the files of site.d as root:wheel under the release directory, no directory entry, its SHA256, the site directory as site.iso"
@@ -2587,8 +2679,8 @@ test_alpine_plan() {
   fi
   run_vmbake image record write alpine-dev $img > /dev/null
   plan=$(run_vmbake image install apkovl $img)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image overlay write '$img'" && printf '%s\n' "$plan" | sed -n 3p | grep -q "image overlay files place '$img'" && printf '%s\n' "$plan" | sed -n 4p | grep -q "image overlay pack '$img'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image firstboot conf '$img'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest install 'firstboot' '$TEST_DIR/alpine-virt-3.22.1-x86_64.iso'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image console watch '$img'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | tail -1 | grep -q "image firstboot conf drop"; then
-    pass "image install apkovl: record, overlay, files, pack, conf, link, install from the live ISO, watch, gone, link drop, conf drop"
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "12" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image check daemons '$img'" && printf '%s\n' "$plan" | sed -n 3p | grep -q "image overlay write '$img'" && printf '%s\n' "$plan" | sed -n 4p | grep -q "image overlay files place '$img'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image overlay pack '$img'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image firstboot conf '$img'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "guest install 'firstboot' '$TEST_DIR/alpine-virt-3.22.1-x86_64.iso'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image console watch '$img'" && printf '%s\n' "$plan" | sed -n 10p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | tail -1 | grep -q "image firstboot conf drop"; then
+    pass "image install apkovl: record, daemons checked, overlay, files, pack, conf, link, install from the live ISO, watch, gone, link drop, conf drop"
   else
     fail "image install apkovl plan: $plan"
   fi
@@ -2651,6 +2743,21 @@ test_alpine_plan() {
     fail "overlay files place: $out / $plan"
   fi
   run_vmbake template file drop alpine-dev nss /etc/nsswitch.conf 0644 > /dev/null
+  run_vmbake template daemon add alpine-dev bridge "$(id -un)" 'protonmail-bridge --noninteractive' > /dev/null
+  run_vmbake template daemon add alpine-dev relay_imap root socat > /dev/null
+  out=$(run_vmbake image overlay daemon write $img 2>&1)
+  if printf '%s\n' "$out" | grep -qF "cat > '$TEST_DIR/img/$img/overlay.d/etc/init.d/bridge' <<'EOF_INIT'" && printf '%s\n' "$out" | grep -q "^#!/sbin/openrc-run$" && printf '%s\n' "$out" | grep -qF 'command="$(PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin command -v protonmail-bridge)"' && printf '%s\n' "$out" | grep -qF 'command_args="--noninteractive"' && printf '%s\n' "$out" | grep -qF "command_user=\"$(id -un)\"" && printf '%s\n' "$out" | grep -qF "export HOME=\"/home/$(id -un)\"" && printf '%s\n' "$out" | grep -qF 'export HOME="/root"' && printf '%s\n' "$out" | grep -qF 'command_args=""' && printf '%s\n' "$out" | grep -q "^command_background=yes$" && printf '%s\n' "$out" | grep -q "^output_log=\"/var/log/bridge.log\"$" && printf '%s\n' "$out" | grep -q "^rc-update add relay_imap default$" && printf '%s\n' "$out" | grep -qF "chmod 755 '$TEST_DIR/img/$img/overlay.d/etc/init.d/relay_imap' || exit 1"; then
+    pass "image overlay daemon write: an OpenRC script per line in the overlay (the user and its HOME, the program looked up at start, its arguments or none, background with pidfile and log), rc-update at the first boot"
+  else
+    fail "image overlay daemon write: $out"
+  fi
+  if run_vmbake image overlay write $img 2>&1 | grep -n "^apk add \|^rc-update add " | sed -n 1p | grep -q "apk add"; then
+    pass "the first boot adds the daemons to the runlevel after the packages"
+  else
+    fail "overlay order: $(run_vmbake image overlay write $img 2>&1 | grep -n "^apk add \|^rc-update add ")"
+  fi
+  run_vmbake template daemon drop alpine-dev bridge "$(id -un)" 'protonmail-bridge --noninteractive' > /dev/null
+  run_vmbake template daemon drop alpine-dev relay_imap root socat > /dev/null
   out=$(run_vmbake image firstboot conf write $img "$TEST_DIR/img/$img/overlay.iso")
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
@@ -2703,6 +2810,7 @@ main() {
   should_run_test test_template_add_chain
   should_run_test test_template_scalars
   should_run_test test_template_lists
+  should_run_test test_template_daemon
   should_run_test test_template_source_file
   should_run_test test_template_drop_guards
   should_run_test test_template_dump_restore

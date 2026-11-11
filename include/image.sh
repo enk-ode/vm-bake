@@ -327,6 +327,7 @@ ___image_burn1() {
 	osv=$(printf '%s\n' "$base" | awk '{ split($3, v, /[.-]/); printf "%d", v[1] * 100000 + v[2] * 1000 }')
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check users $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check daemons $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkg install $(sq "$1") $(sq "$abi") $(sq "$osv")"
 	pkgfiles=$(awk -v base="$VM_BAKE_BASE" -v family=pkgfile -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	test -z "$pkgfiles" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pkgfiles $(sq "$1")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkgfile stage $(sq "$1")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkgfile add $(sq "$1")"
@@ -335,6 +336,7 @@ ___image_burn1() {
 	test -z "$ports" || test "$VM_BAKE_BAKE_IN" = builder || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image burn: ports build in the builder only (image builder use): $(printf '%s' "$ports" | tr '\n' ' ')")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image rc write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image env write $(sq "$1")"
+	test -z "$(awk -v base="$VM_BAKE_BASE" -v family=daemon -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image daemon write $(sq "$1")"
 	test -z "$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image file write $(sq "$1")"
 	srcs=$(awk -v base="$VM_BAKE_BASE" -v family=source -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	test -z "$srcs" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image $1: source lines are apt sources, a FreeBSD image takes its packages from pkg's repositories: $(printf '%s' "$srcs" | awk '{ print $1 }' | tr '\n' ' ')")"
@@ -471,7 +473,7 @@ ___image_builder_use0() {
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	ssh="ssh -p $VM_BAKE_SSH_PORT -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS doas sh"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN builder"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setintp $f $(sq "$ssh")"
 	done
 }
@@ -486,7 +488,7 @@ ___image_builder_use0() {
 ___image_builder_leave0() {
 	local f=""
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN host"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" unsetintp $f"
 	done
 }
@@ -2142,6 +2144,7 @@ ___image_install1() {
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
 	iso=$(printf '%s' "$base" | awk '{ print $3 }')
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check daemons $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image response write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site files place $(sq "$1")"
@@ -2214,6 +2217,7 @@ ___image_site_write1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site user write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site env write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site net write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site daemon write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site firsttime write $(sq "$1")"
 }
 
@@ -2659,6 +2663,7 @@ ___image_install_apkovl1() {
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
 	iso=$(printf '%s' "$base" | awk '{ print $3 }')
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check daemons $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay files place $(sq "$1")"
 	srcs=$(awk -v base="$VM_BAKE_BASE" -v family=source -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
@@ -2686,6 +2691,7 @@ ___image_install_apkovl1() {
 # @see     image overlay user write
 # @see     image overlay env write
 # @see     image overlay file write
+# @see     image overlay daemon write
 # @see     image overlay view write
 # @see     image overlay net write
 # @see     image overlay report write
@@ -2700,6 +2706,7 @@ ___image_overlay_write1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay user write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay env write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay file write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay daemon write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay view write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay net write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay report write $(sq "$1")"
@@ -3336,6 +3343,8 @@ __image_check_seed1() {
 # @see     image seed source write
 # @see     image seed file write
 # @see     image seed check write
+# @see     image seed daemon write
+# @see     image check daemons
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 ___image_seed_write1() {
@@ -3349,6 +3358,7 @@ ___image_seed_write1() {
 	done
 	rcl=$(awk -v base="$VM_BAKE_BASE" -v family=rc -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check seed $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check daemons $(sq "$1")"
 	test -z "$rcl" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image $1: rc lines are FreeBSD's rc.conf, a Linux image ignores them: $(printf '%s' "$rcl" | tr '\n' ' ')")"
 	awk -v base="$VM_BAKE_BASE" -v family=source -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | while IFS= read -r line; do
 		set -- $line
@@ -3361,6 +3371,7 @@ ___image_seed_write1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed sshd write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed file write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed check write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed daemon write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed view write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seed pack $(sq "$1")"
 }
@@ -3616,4 +3627,176 @@ _image_site_files_place1() {
 		printf '%s\n' "install -d -m 755 '$dir/site.d$(dirname "$2")' && install -m $3 '$VM_BAKE_BASE/dowry/$1/object' '$dir/site.d$2' || exit 1"
 	done
 	printf '%s\n' "printf '# image %s: %s files from dowries in the site set\\n' $(sq "$1") '$(printf '%s\n' "$files" | grep -c .)' >&2"
+}
+
+#@help __image_check_daemons1
+# @command image check daemons <image>
+# @summary The template's daemon lines (read at generation time) resolve: every user is root or a user of the template's user list, every name is listed once -- a comment line naming the daemons, else an error line
+# @group   image
+# @internal
+# @see     image burn
+# @see     image seed write
+# @see     image install
+# @see     image install apkovl
+# @see     template daemon add
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+__image_check_daemons1() {
+	local name="$1" t="" cur="" chain="" p="" n=0 lines="" users="" names="" bad="" dup=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=daemon -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | awk '{ print $1 }' | tr '\n' ' ')
+	names=$(printf '%s\n' "$lines" | awk 'NF { print $1 }' | tr '\n' ' ' | sed 's/ $//')
+	bad=$(printf '%s\n' "$lines" | awk -v u="root $users" 'NF && index(" " u " ", " " $2 " ") == 0 { printf " %s(%s)", $1, $2 }')
+	dup=$(printf '%s\n' "$lines" | awk 'NF && seen[$1]++ == 1 { printf " %s", $1 }')
+	if test -z "$bad" && test -z "$dup"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "image $name: daemons resolve (${names:-none})")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image $name: the daemon lines of $t do not resolve --${bad:+ users the template does not list:$bad}${dup:+ names listed twice:$dup} (template user add, template daemon drop)")"
+	fi
+}
+
+#@help _image_daemon_write1
+# @command image daemon write <image>
+# @summary Act terminal (root, host or builder): the template's daemon lines (read at generation time) as rc.d scripts of the image -- /usr/local/etc/rc.d/<name> runs the program under daemon(8) as the user (-u sets HOME, USER and SHELL), supervised with a restart after 5 seconds (-R 5), the supervisor's pid in /var/run/<name>.pid (-P: stop ends the supervisor, which forwards the SIGTERM to the program), stdout and stderr appended to /var/log/<name>.log (-f -o), PATH widened by /usr/local so a bare program name is found; REQUIRE: LOGIN, KEYWORD: shutdown; <name>_enable="YES" appended to rc.conf after 'image rc write'. No daemon lines: a comment
+# @group   image
+# @internal
+# @see     image burn
+# @see     image rc write
+# @see     template daemon add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_daemon_write1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" t="" cur="" chain="" p="" n=0 lines="" line="" name="" rest="" user="" prog=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=daemon -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -n "$lines" || { printf '%s\n' "# image $1: no daemon lines in $t -- no rc.d script of its own"; return 0; }
+	printf '%s\n' "install -d -m 755 -o root -g wheel '$mnt/usr/local/etc/rc.d' || exit 1"
+	printf '%s\n' "$lines" | while IFS= read -r line; do
+		name=${line%% *}; rest=${line#* }; user=${rest%% *}; prog=${rest#* }
+		printf '%s\n' "cat > '$mnt/usr/local/etc/rc.d/$name' <<'EOF_RCD'" '#!/bin/sh' "# written by vm-bake (image daemon write) -- the daemon $name of the template $t under daemon(8): as $user, restarted after 5 seconds, its output appended to /var/log/$name.log"
+		printf '%s\n' "# PROVIDE: $name" "# REQUIRE: LOGIN" "# KEYWORD: shutdown" ". /etc/rc.subr" "name=\"$name\"" "rcvar=\"${name}_enable\"" "load_rc_config \"\$name\"" ": \${${name}_enable:=NO}"
+		printf '%s\n' "export PATH=\"/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin\"" "pidfile=\"/var/run/$name.pid\"" "command=\"/usr/sbin/daemon\"" "command_args=\"-f -u $user -R 5 -P \${pidfile} -o /var/log/$name.log $prog\"" "run_rc_command \"\$1\"" "EOF_RCD"
+		printf '%s\n' "chmod 555 '$mnt/usr/local/etc/rc.d/$name' && printf '%s\\n' '${name}_enable=\"YES\"' >> '$mnt/etc/rc.conf' || exit 1"
+	done
+	printf '%s\n' "printf '# image %s: %s daemons as rc.d scripts, enabled in rc.conf\\n' $(sq "$1") '$(printf '%s\n' "$lines" | grep -c .)' >&2"
+}
+
+#@help _image_site_daemon_write1
+# @command image site daemon write <image>
+# @summary Act terminal: the template's daemon lines (read at generation time) appended to install.site -- for each an rc.d script /etc/rc.d/<name> (daemon_user the user, daemon the program's path looked up at start with /usr/local in the path, daemon_flags its arguments, rc_bg=YES for a program that stays in the foreground, su -l gives it the user's login environment), and 'rcctl enable <name>' appended to rc.firsttime, where the first boot of the bake runs it before the packages 'image site firsttime write' adds -- the daemon first runs in a guest. No daemon lines: a comment
+# @group   image
+# @internal
+# @see     image site write
+# @see     image site firsttime write
+# @see     template daemon add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_site_daemon_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 lines="" line="" name="" rest="" user="" prog="" args=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=daemon -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -n "$lines" || { printf '%s\n' "# image $1: no daemon lines in $t -- install.site writes no rc.d script"; return 0; }
+	printf '%s\n' "cat >> '$dir/site.d/install.site' <<'EOF_SITE'"
+	printf '%s\n' "$lines" | while IFS= read -r line; do
+		name=${line%% *}; rest=${line#* }; user=${rest%% *}; prog=${rest#* }; args=""
+		case "$prog" in *" "*) args=${prog#* } ;; esac
+		printf '%s\n' "cat > '/etc/rc.d/$name' <<'EOF_RCD'" '#!/bin/ksh' "# written by vm-bake (image site daemon write) -- the daemon $name of the template $t: rc_bg keeps a program that stays in the foreground, su -l gives it the login environment of $user"
+		printf '%s\n' "daemon_user=\"$user\"" "daemon=\"\$(PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin command -v ${prog%% *})\"" "daemon_flags=\"$args\"" ". /etc/rc.d/rc.subr" "rc_bg=YES" "rc_reload=NO" "rc_cmd \$1" "EOF_RCD"
+		printf '%s\n' "chmod 555 '/etc/rc.d/$name'" "printf 'rcctl enable %s\\n' '$name' >> /etc/rc.firsttime"
+	done
+	printf '%s\n' "EOF_SITE"
+	printf '%s\n' "printf '# image %s: install.site -- %s daemons as rc.d scripts, enabled at the first boot\\n' $(sq "$1") '$(printf '%s\n' "$lines" | grep -c .)' >&2"
+}
+
+#@help _image_overlay_daemon_write1
+# @command image overlay daemon write <image>
+# @summary Act terminal: the template's daemon lines (read at generation time) as OpenRC scripts in the overlay -- etc/init.d/<name> (command the program's path looked up at start with /usr/local in the path, command_args its arguments, command_user the user with HOME exported as the user's home, command_background with a pidfile under /run, output_log and error_log /var/log/<name>.log, need net), which setup-disk carries onto the disk with etc; 'rc-update add <name> default' appended to the first boot's script after the packages -- the daemon first runs in a guest. No daemon lines: a comment
+# @group   image
+# @internal
+# @see     image overlay write
+# @see     image overlay firstboot write
+# @see     template daemon add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_overlay_daemon_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 lines="" line="" name="" rest="" user="" prog="" args="" home=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=daemon -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -n "$lines" || { printf '%s\n' "# image $1: no daemon lines in $t -- the overlay carries no init script"; return 0; }
+	printf '%s\n' "install -d -m 755 '$dir/overlay.d/etc/init.d' || exit 1"
+	printf '%s\n' "$lines" | while IFS= read -r line; do
+		name=${line%% *}; rest=${line#* }; user=${rest%% *}; prog=${rest#* }; args=""; home="/home/$user"
+		case "$prog" in *" "*) args=${prog#* } ;; esac
+		test "$user" != root || home=/root
+		printf '%s\n' "cat > '$dir/overlay.d/etc/init.d/$name' <<'EOF_INIT'" '#!/sbin/openrc-run' "# written by vm-bake (image overlay daemon write) -- the daemon $name of the template $t: in the background under start-stop-daemon as $user, its output in /var/log/$name.log"
+		printf '%s\n' "description=\"$name, a daemon of the template $t\"" "export HOME=\"$home\"" "command=\"\$(PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin command -v ${prog%% *})\"" "command_args=\"$args\"" "command_user=\"$user\"" "command_background=yes"
+		printf '%s\n' "pidfile=\"/run/$name.pid\"" "output_log=\"/var/log/$name.log\"" "error_log=\"/var/log/$name.log\"" "depend() {" "	need net" "	after firewall" "}" "EOF_INIT"
+		printf '%s\n' "chmod 755 '$dir/overlay.d/etc/init.d/$name' || exit 1"
+	done
+	printf '%s\n' "cat >> '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
+	printf '%s\n' "$lines" | awk 'NF { printf "rc-update add %s default\n", $1 }'
+	printf '%s\n' "EOF_FIRST"
+	printf '%s\n' "printf '# image %s: %s daemons as OpenRC scripts in the overlay, in the default runlevel from the first boot\\n' $(sq "$1") '$(printf '%s\n' "$lines" | grep -c .)' >&2"
+}
+
+#@help _image_seed_daemon_write1
+# @command image seed daemon write <image>
+# @summary Act terminal: the template's daemon lines (read at generation time) continue the write_files of user-data -- for each a unit /etc/systemd/system/<name>.service (User the user, so HOME is the user's home; ExecStart the program, a bare name resolved by systemd's own search path, /usr/local included; After and Wants network-online.target; Restart=always after 5 seconds), then the per-once script vm-bake-daemons.sh that enables them at the bake's first boot -- the daemon first runs in a guest. No daemon lines: a comment
+# @group   image
+# @internal
+# @see     image seed write
+# @see     image seed check write
+# @see     template daemon add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_seed_daemon_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 lines="" line="" name="" rest="" user="" prog=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	lines=$(awk -v base="$VM_BAKE_BASE" -v family=daemon -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -n "$lines" || { printf '%s\n' "# image $1: no daemon lines in $t -- no unit in the seed"; return 0; }
+	printf '%s\n' "cat >> '$dir/seed/user-data' <<'EOF_DAEMONS'"
+	printf '%s\n' "$lines" | while IFS= read -r line; do
+		name=${line%% *}; rest=${line#* }; user=${rest%% *}; prog=${rest#* }
+		printf '%s\n' "  - path: /etc/systemd/system/$name.service" "    permissions: '0644'" "    content: |" "      # written by vm-bake (image seed daemon write) -- the daemon $name of the template $t"
+		printf '%s\n' "      [Unit]" "      Description=$name, a daemon of the template $t" "      After=network-online.target" "      Wants=network-online.target" "      [Service]" "      User=$user" "      ExecStart=$prog" "      Restart=always" "      RestartSec=5" "      [Install]" "      WantedBy=multi-user.target"
+	done
+	printf '%s\n' "  - path: /var/lib/cloud/scripts/per-once/vm-bake-daemons.sh" "    permissions: '0755'" "    content: |" "      #!/bin/sh" "      # written by vm-bake (image seed daemon write) -- the bake's first boot: the units of the template's daemons enabled, so every guest of the image starts them at boot"
+	printf '%s\n' "$lines" | awk 'NF { printf "      systemctl enable %s.service\n", $1 }'
+	printf '%s\n' "EOF_DAEMONS"
+	printf '%s\n' "printf '# image %s: %s daemons as systemd units, enabled at the first boot\\n' $(sq "$1") '$(printf '%s\n' "$lines" | grep -c .)' >&2"
 }

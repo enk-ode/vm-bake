@@ -37,6 +37,13 @@ its flavor spelled out (`openvpn--` is the flavorless one): `pkg_add -I`
 skips an ambiguous name without a word, and the first boot's check would
 report it missing.
 
+A `daemon` line (`template daemon add <template> <name> <user>
+'<program>'`, see `TUTORIAL_FREEBSD.md`) becomes an rc.d script
+`/etc/rc.d/<name>` written by install.site (`daemon_user`, `rc_bg=YES`,
+the program's path looked up at start), and `rcctl enable <name>` runs
+from rc.firsttime before the packages are added; the daemon first runs in
+a guest. The name is an identifier, as rc.d demands.
+
 ## What the template becomes
 
 `image install` renders two things from the template, both readable

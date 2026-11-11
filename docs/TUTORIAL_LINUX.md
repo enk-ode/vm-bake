@@ -55,6 +55,12 @@ it. The dowry has to be one file:
 A file the guest changes at runtime does not belong here but into the
 home (`template home copy idem`, see `TUTORIAL_VIEW.md`).
 
+A `daemon` line (`template daemon add <template> <name> <user>
+'<program>'`, see `TUTORIAL_FREEBSD.md`) becomes a systemd unit
+`<name>.service` in `write_files` (User, ExecStart, Restart=always), which
+a per-once script enables at the bake's first boot; the daemon first runs
+in a guest.
+
 ## The bake
 
     vm-bake image make linux debian-dev v1

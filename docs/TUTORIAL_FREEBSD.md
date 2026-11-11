@@ -104,6 +104,27 @@ kept (`hostkey list`), so the guest answers with the same identity after
 every rebuild. `guest stop` shuts it down over ACPI; `guest drop` destroys
 the clone and keeps the key.
 
+## A daemon of the guest
+
+A `daemon` line names a program the guest's init starts at boot and keeps
+running, under a user of the template (or root), as a service of the
+given name. The same line works on every way: the FreeBSD bake writes an
+rc.d script under daemon(8) (restart after five seconds, output to
+`/var/log/<name>.log`) and enables it in rc.conf; OpenBSD gets an rc.d
+script with `rc_bg`, Alpine an OpenRC script, Debian a systemd unit. The
+program is one quoted word, plain -- no shell syntax; a bare program name
+is looked up in the system's path, /usr/local included:
+
+    vm-bake template package add proton-bridge protonmail-bridge
+    vm-bake template package add proton-bridge socat
+    vm-bake template daemon add proton-bridge bridge brj 'protonmail-bridge --noninteractive --log-level info'
+    vm-bake template daemon add proton-bridge relay_imap root 'socat TCP4-LISTEN:1143,fork,reuseaddr,keepalive,nodelay,max-children=25 TCP4:127.0.0.1:1144'
+    vm-bake template daemon show proton-bridge
+
+The name is an identifier (letters, digits, underscore); the user must be
+root or in the template's user list, which the bake checks first (`image
+check daemons`). A daemon never runs in the bake, only in a guest.
+
 ## Rebuilding
 
 A new decision is a new version. The guest moves to the new image, the

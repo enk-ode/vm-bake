@@ -310,9 +310,10 @@
 <p class="Pp">A template is the build recipe of an image: the base (a release, a
     stage, a cloud image, an iso), how it is baked, firmware, resources, and the
     lists of packages, rc.conf lines, users, host services the guest may use,
-    what it must not reach, its data disks and session protocols. Templates
-    inherit: scalars from the nearest ancestor, lists as the union of the chain
-    minus the masks. The root `empty' always exists and holds nothing.</p>
+    what it must not reach, its data disks, session protocols and the daemons
+    its init starts. Templates inherit: scalars from the nearest ancestor, lists
+    as the union of the chain minus the masks. The root `empty' always exists
+    and holds nothing.</p>
 <dl class="Bl-tag">
   <dt id="template"><a class="permalink" href="#template"><b>template
     list</b></a></dt>
@@ -837,6 +838,48 @@
     file show &lt;template&gt;</b></a></dt>
   <dd>The file lines resolved over the chain, each with its origin: the template
       exists; then `template chain table'</dd>
+  <dt id="template~104"><a class="permalink" href="#template~104"><b>template
+    daemon add &lt;template&gt; &lt;name&gt; &lt;user&gt;
+    &lt;program&gt;</b></a></dt>
+  <dd>Add a daemon of the guest to the template&#x2019;s own list &#x2013; a
+      program the init of every image of this template starts at boot and keeps
+      running, under the user, as the service &lt;name&gt;: the template exists,
+      the name is an identifier (a letter or underscore, then letters, digits,
+      underscores: it names the rc.d script, the OpenRC script, the systemd unit
+      and the rc.conf variable &lt;name&gt;<i>enable), the user is a login</i>
+      <i>name (root, or a user of the template&#x2019;s user list &#x2013; image
+      check</i> <i>daemons holds it against that list at the bake), the program
+      is one word</i> <i>of command line (letters, digits, single blanks and
+      .</i>/:=,@+%-, nothing the shell would read); then `template line append'
+      of `&lt;name&gt; &lt;user&gt; &lt;program&gt;'. The bake renders the line
+      per way: an rc.d script under daemon(8) with restart on FreeBSD (image
+      daemon write), an rc.d script with rc_bg on OpenBSD (image site daemon
+      write), an OpenRC script in the overlay on Alpine (image overlay daemon
+      write), a systemd unit with Restart=always on Debian (image seed daemon
+      write). The daemon runs from the first boot of a guest, never in the bake.
+      A bare program name is looked up in the system&#x2019;s path, /usr/local
+      included; HOME is the user&#x2019;s home; where the init keeps no journal,
+      stdout and stderr go to /var/log/&lt;name&gt;.log</dd>
+  <dt id="template~105"><a class="permalink" href="#template~105"><b>template
+    daemon drop &lt;template&gt; &lt;name&gt; &lt;user&gt;
+    &lt;program&gt;</b></a></dt>
+  <dd>Remove the daemon line from the template&#x2019;s own list: the template
+      exists, the line is listed there (template daemon show prints it to copy);
+      then `template line remove'</dd>
+  <dt id="template~106"><a class="permalink" href="#template~106"><b>template
+    daemon mask &lt;template&gt; &lt;name&gt; &lt;user&gt;
+    &lt;program&gt;</b></a></dt>
+  <dd>Hide an inherited daemon line in this template and below: the template
+      exists, name, user and program are valid; then `template line mask'</dd>
+  <dt id="template~107"><a class="permalink" href="#template~107"><b>template
+    daemon unmask &lt;template&gt; &lt;name&gt; &lt;user&gt;
+    &lt;program&gt;</b></a></dt>
+  <dd>Take a mask back: the template exists, the line is masked here; then
+      `template line unmask'</dd>
+  <dt id="template~108"><a class="permalink" href="#template~108"><b>template
+    daemon show &lt;template&gt;</b></a></dt>
+  <dd>The daemon lines resolved over the chain, each with its origin: the
+      template exists; then `template chain table'</dd>
 </dl>
 </section>
 <section class="Ss">
