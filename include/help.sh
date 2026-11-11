@@ -41,13 +41,21 @@
 #@help
 # @topic Inspect-by-default
 # @group setup
-#   Pipeline commands PRINT their shell: review, then append '| sh' to run
-#   ('| sudo sh' where zfs, md or vm-bhyve are involved). Bookkeeping
-#   (template add/drop/mask, setenv) is pinned to sh and acts directly.
-#   Experienced users may flip the safety default so EVERY terminal acts:
-#   vm-bake setenv VM_BAKE_TERMINAL_INTERPRETER sh
-#   (inspect any single command via setintp <function> cat, or per run
-#   under an explicit interpreter).
+#   Every anchor runs under a pin. The bookkeeping (template add/drop/mask,
+#   setenv, dowry add) and the acts of the bakes and the guests are pinned
+#   to sh in the profile (sudo sh where zfs, md or vm-bhyve are involved,
+#   ssh into the builder when VM_BAKE_BAKE_IN says so), the display
+#   terminals (list, show, find) to cat; the class default
+#   VM_BAKE_TERMINAL_INTERPRETER=cat catches a terminal without a pin, so
+#   it prints instead of acting. A command therefore acts when typed; to
+#   see first what it would do, pin it to cat for the moment:
+#   vm-bake setintp image_make_freebsd_from cat   (the plan of the batch)
+#   vm-bake setintp image_disk_create cat         (the shell of one act)
+#   vm-bake unsetintp image_disk_create           (the profile's pin again)
+#   A batch pinned to cat prints its lines and runs none of them, setenv
+#   and unsetenv included. Every call leaves its trace under
+#   <db>/.log/<date>/ with the resolved interpreter, the text handed to it
+#   and its answer -- read that before running anything again.
 #@end
 
 # --- Completion sources: where a usage placeholder takes its candidates ------
@@ -89,6 +97,9 @@
 # @defcompletion kind          none
 # @defcompletion stage         none
 # @defcompletion name          none
+# @defcompletion suite         none
+# @defcompletion component     none
+# @defcompletion keyurl        none
 # @defcompletion group         none
 # @defcompletion topic         none
 # @defcompletion value         none

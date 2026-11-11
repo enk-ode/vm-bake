@@ -962,7 +962,7 @@ _image_disk_mount1() {
 _image_keys_write1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
 	printf '%s\n' "install -d -m 755 '$mnt/usr/share/keys' || exit 1"
-	printf '%s\n' "for d in /usr/share/keys/*/; do test -d \"\$d\" && cp -R \"\${d%/}\" '$mnt/usr/share/keys/' || exit 1; done"
+	printf '%s\n' "cp -R /usr/share/keys/. '$mnt/usr/share/keys/' || exit 1"
 	printf '%s\n' "printf '# image %s: signing keys %s\\n' '$1' \"\$(ls '$mnt/usr/share/keys' | tr '\\n' ' ')\" >&2"
 }
 
@@ -1892,7 +1892,7 @@ ___image_firstboot1() {
 
 #@help __image_firstboot_conf1
 # @command image firstboot conf <image>
-# @summary The throwaway guest's vm-bhyve configuration, by the bake of the image's template (read at generation time): rewrite to 'image firstboot conf cloud-init <image>' (the seed.iso as the CD) or 'image firstboot conf autoinstall <image>' (the site.iso as the CD; the install ISO comes with 'guest install'); both end in 'image firstboot conf write <image> <cd>'
+# @summary The throwaway guest's vm-bhyve configuration, by the bake of the image's template (read at generation time): rewrite to 'image firstboot conf cloud-init <image>' (the seed.iso as the CD) or 'image firstboot conf autoinstall <image>' (the site.iso as the CD; the install ISO comes with 'guest install') or 'image firstboot conf apkovl <image>' (the overlay.iso as the CD, the live ISO likewise with 'guest install'); all end in 'image firstboot conf write <image> <cd>'
 # @group   image
 # @internal
 # @see     image firstboot
@@ -1925,16 +1925,23 @@ __image_firstboot_conf_autoinstall1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf write $(sq "$1") $(sq "$VM_BAKE_IMAGE_DIR/$1/site.iso")"
 }
 
+#@help __image_firstboot_conf_apkovl1
+# @internal the apkovl case of 'image firstboot conf <image>' (image firstboot conf apkovl <image>): rewrite to 'image firstboot conf write <image> <overlay.iso>' -- the live ISO is not in the configuration: 'guest install' hangs it on the first run only, so the restart after the installation comes up from the disk
+#@end
+__image_firstboot_conf_apkovl1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf write $(sq "$1") $(sq "$VM_BAKE_IMAGE_DIR/$1/overlay.iso")"
+}
+
 #@help __image_firstboot_conf2
-# @internal dispatch fallback of 'image firstboot conf <bake> <image>' for a bake that is neither cloud-init nor autoinstall: an error line
+# @internal dispatch fallback of 'image firstboot conf <bake> <image>' for a bake that is neither cloud-init, autoinstall nor apkovl: an error line
 #@end
 __image_firstboot_conf2() {
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image firstboot conf: the template of $2 bakes by $1, which has no first boot (cloud-init | autoinstall)")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image firstboot conf: the template of $2 bakes by $1, which has no first boot (cloud-init | autoinstall | apkovl)")"
 }
 
 #@help _image_firstboot_conf_write2
 # @command image firstboot conf write <image> <cd>
-# @summary Act terminal (the invoking user: the directory is theirs): the throwaway guest's vm-bhyve configuration VM_BAKE_GUEST_DIR/<firstboot>/<firstboot>.conf -- UEFI, cpu and memory from the image's template (read at generation time), the switch, the MAC of VM_BAKE_FIRSTBOOT_ADDRESS, the image's disk0.img as disk0 (custom path) and <cd> as disk1 (ahci-cd: the seed.iso of a cloud-init bake, the site.iso of an autoinstall bake), bhyve_options -w (bhyve ignores the MSRs a guest kernel touches and bhyve does not implement -- OpenBSD's kernel dies without it, Linux does not mind); no dataset and no clone: the guest boots the image itself, once
+# @summary Act terminal (the invoking user: the directory is theirs): the throwaway guest's vm-bhyve configuration VM_BAKE_GUEST_DIR/<firstboot>/<firstboot>.conf -- UEFI, cpu and memory from the image's template (read at generation time), the switch, the MAC of VM_BAKE_FIRSTBOOT_ADDRESS, the image's disk0.img as disk0 (custom path) and <cd> as disk1 (ahci-cd: the seed.iso of a cloud-init bake, the site.iso of an autoinstall bake, the overlay.iso of an apkovl bake), bhyve_options -w (bhyve ignores the MSRs a guest kernel touches and bhyve does not implement -- OpenBSD's kernel dies without it, Linux does not mind); no dataset and no clone: the guest boots the image itself, once
 # @group   image
 # @internal
 # @completion cd files
@@ -2113,7 +2120,7 @@ ___image_create_iso2() {
 
 #@help ___image_install1
 # @command image install <image>
-# @summary Step 2 of the OpenBSD bake, the installation: the image has a record; then the response file (image response write) and the site set (image site write) rendered from the template and packed as site.iso (image site pack), the throwaway guest VM_BAKE_FIRSTBOOT configured with the image's disk and the site.iso (image firstboot conf), linked where vm-bhyve looks, run from the template's install ISO (guest install: the ISO rides along for this one run), its console typed into autoinstall(8) (image console drive), waited for until bhyve is gone (the installer reboots, the installed system adds the packages and powers off), its link and configuration removed again. The root acts (guest link write, guest install, image console drive, guest link drop) are pinned 'sudo sh'; sudo stamps its ticket when a command starts, so a console drive of ten minutes outlives the ticket and guest link drop asks for the PIN again (a bake on illyria failed there). One sudo for the whole batch instead: pin image_install to 'sudo -E sh -c "$VM_BAKE_BATCH_COMBINATOR_INTERPRETER"' (the engine runs a pin through eval, so the class default's name expands to its text, but a variable's text is split into words and its quotes stay letters -- the bare name broke the first one-sudo bake on illyria with 'Unterminated quoted string'; sh -c hands the text to a shell that parses it; -E keeps the environment vm-bake builds and is allowed because a sudoers ALL implies SETENV) and the acts that write the image's files (image_response_write, image_site_write, image_site_pack, image_firstboot_conf_write, image_firstboot_conf_drop) to 'sudo -u <user> sh', which root runs without authentication -- one PIN at the start; the engine's traces and logs of that run are then root's
+# @summary Step 2 of the OpenBSD bake, the installation: the image has a record; then the response file (image response write) and the site set (image site write) rendered from the template and packed as site.iso (image site pack), the throwaway guest VM_BAKE_FIRSTBOOT configured with the image's disk and the site.iso (image firstboot conf), linked where vm-bhyve looks, run from the template's install ISO (guest install: the ISO rides along for this one run), its console typed into autoinstall(8) (image console drive), waited for until bhyve is gone (the installer reboots, the installed system adds the packages and powers off), its link and configuration removed again. The root acts (guest link write, guest install, image console drive, guest link drop) are pinned 'sudo sh'; sudo stamps its ticket when a command starts, so a console drive of ten minutes outlives the ticket and guest link drop asks for the PIN again (a bake on illyria failed there). One sudo for the whole batch instead: pin image_install to 'sudo -E sh -c "$VM_BAKE_BATCH_COMBINATOR_INTERPRETER"' (the engine runs a pin through eval, so the class default's name expands to its text, but a variable's text is split into words and its quotes stay letters -- the bare name broke the first one-sudo bake on illyria with 'Unterminated quoted string'; sh -c hands the text to a shell that parses it; -E keeps the environment vm-bake builds and is allowed because a sudoers ALL implies SETENV) and the acts that write the image's files (image_response_write, the five acts of image site write, image_site_files_place, image_site_pack, image_firstboot_conf_write, image_firstboot_conf_drop) to 'sudo -u <user> sh', which root runs without authentication -- one PIN at the start; the engine's traces and logs of that run are then root's
 # @group   image
 # @example vm-bake image install img:openbsd-dev:v1
 # @see     image make openbsd
@@ -2121,6 +2128,7 @@ ___image_create_iso2() {
 # @see     image site write
 # @see     image console drive
 # @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 ___image_install1() {
 	local t="" cur="" chain="" p="" n=0 a="" base="" iso="" srcs=""
@@ -2188,22 +2196,39 @@ _image_response_write1() {
 	printf '%s\n' "printf '# image %s: install.conf -- %s on %s netmask %s, sets %s/%s from the install CD and site%s.tgz from the site CD, X %s, timezone %s\\n' $(sq "$1") '$VM_BAKE_FIRSTBOOT' '${VM_BAKE_FIRSTBOOT_ADDRESS%/*}' '$mask' '$rel' '$arch' '$nn' '$x' '$tz' >&2"
 }
 
-#@help _image_site_write1
+#@help ___image_site_write1
 # @command image site write <image>
-# @summary Act terminal: the site set's one file, VM_BAKE_IMAGE_DIR/<image>/site.d/install.site, which autoinstall(8) runs chrooted in the installed system at the end -- sshd on VM_BAKE_SSH_PORT without root or passwords, AuthorizedKeysFile /etc/ssh/authorized_keys/%u before the home, X11Forwarding when the template says 'service display x' (OpenBSD's stock sshd_config carries an active 'AuthorizedKeysFile .ssh/authorized_keys', and sshd takes the first occurrence of a keyword, so the keywords set here are commented out in the stock file first -- the first OpenBSD guest on illyria refused its key over that); the template's users with their host uids in wheel, each with VM_BAKE_HOST_KEY as authorized key; /etc/doas.conf permitting them without a password when the template's packages name doas (doas is in OpenBSD's base: the word switches the escalation on and is not handed to pkg_add); the env lines appended to /etc/profile; /etc/installurl; root's password locked; the address and netmask of the bake under /etc/vm-bake and /usr/local/libexec/vm-bake-seed as the only line of /etc/hostname.vio0 (at every boot it mounts a seed CD when there is one -- guest seed write autoinstall -- and names, addresses and keys the guest, else addresses the bake); /etc/rc.firsttime extended by pkg_add -I of the packages, a check of every one against pkg_info (the stem before a flavor's '--' followed by a version), the report line on the console that the console driver waits for ('# vm-bake firstboot: missing <packages>' or '# vm-bake firstboot: packages complete') and the power-off. A package with flavors is named with its flavor in the template, 'openvpn--' for the default one: pkg_add -I skips an ambiguous stem without a word. The template is read at generation time
+# @summary The site set's install.site, VM_BAKE_IMAGE_DIR/<image>/site.d/install.site, written aspect by aspect -- 'image site head write' (the file, its directories, sshd on VM_BAKE_SSH_PORT), 'image site user write' (the template's users with the host key, doas for them when the template lists doas), 'image site env write' (the env lines into /etc/profile), 'image site net write' (installurl, root locked, the bake's address and the seed hook as hostname.vio0), 'image site firsttime write' (rc.firsttime: the packages, each checked, the report line, power off; the file made executable). autoinstall(8) runs install.site chrooted in the installed system; every writer reads the template at generation time and appends to the one file, so the acts run in this order
 # @group   image
 # @internal
 # @see     image install
+# @see     image site head write
+# @see     image site user write
+# @see     image site env write
+# @see     image site net write
+# @see     image site firsttime write
 # @see     image site pack
-# @see     guest seed write autoinstall
+#@end
+___image_site_write1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site head write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site user write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site env write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site net write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image site firsttime write $(sq "$1")"
+}
+
+#@help _image_site_head_write1
+# @command image site head write <image>
+# @summary Act terminal: install.site begun -- site.d made, the script's header with set -e, the directories it fills (/etc/ssh/authorized_keys, /etc/vm-bake, /usr/local/libexec), and sshd: the stock lines for Port, PermitRootLogin, PasswordAuthentication, KbdInteractiveAuthentication, AuthorizedKeysFile and X11Forwarding commented out, then VM_BAKE_SSH_PORT, no root, keys only under /etc/ssh/authorized_keys/<user>, and X11Forwarding when the template says 'service display x' (read at generation time)
+# @group   image
+# @internal
+# @see     image site write
 # @env     VM_BAKE_IMAGE_DIR  the image's directory
-# @env     VM_BAKE_HOST_KEY  the public key file; a leading ~/ is the invoking user's home
-# @env     VM_BAKE_SSH_PORT  the port sshd listens on in every guest of this image
-# @env     VM_BAKE_FIRSTBOOT_ADDRESS  the bake's address, the fallback of the seed script
+# @env     VM_BAKE_SSH_PORT  the port sshd listens on in every guest
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
-_image_site_write1() {
-	local name="$1" dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 pkgs="" users="" envl="" svc="" key="$VM_BAKE_HOST_KEY" keytext="" line="" u="" s="" uid="" doas=no x11=no mask=""
+_image_site_head_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 svc="" x11=no
 	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
 	cur=$t
 	while test "$cur" != empty && test "$n" -lt 32; do
@@ -2211,16 +2236,8 @@ _image_site_write1() {
 		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
 		cur=$p; n=$((n + 1))
 	done
-	pkgs=$(awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
-	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
-	envl=$(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | sed 's/^\([^=]*\)=\(.*\)$/export \1="\2"/')
 	svc=$(awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
-	printf '%s\n' "$pkgs" | grep -qx doas && doas=yes
-	pkgs=$(printf '%s\n' "$pkgs" | grep -vx doas || true)
 	printf '%s\n' "$svc" | grep -qx 'display x' && x11=yes
-	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
-	keytext=$(cat "$key" 2>/dev/null || true)
-	mask=$(printf '%s\n' "${VM_BAKE_FIRSTBOOT_ADDRESS#*/}" | awk '{ m = $1 ? 4294967296 - 2 ^ (32 - $1) : 0; printf "%d.%d.%d.%d", int(m / 16777216) % 256, int(m / 65536) % 256, int(m / 256) % 256, m % 256 }')
 	printf '%s\n' "install -d -m 700 '$dir/site.d' || exit 1"
 	printf '%s\n' "cat > '$dir/site.d/install.site' <<'EOF_SITE'"
 	printf '%s\n' '#!/bin/sh' '# written by vm-bake (image site write) -- run by autoinstall(8), chrooted in the installed system' 'set -e'
@@ -2228,43 +2245,135 @@ _image_site_write1() {
 	printf '%s\n' "sed -i -E 's/^[[:space:]]*(Port|PermitRootLogin|PasswordAuthentication|KbdInteractiveAuthentication|AuthorizedKeysFile|X11Forwarding)[[:space:]]/#&/' /etc/ssh/sshd_config"
 	printf '%s\n' "cat >> /etc/ssh/sshd_config <<'EOF_SSHD'" "Port $VM_BAKE_SSH_PORT" "PermitRootLogin no" "PasswordAuthentication no" "KbdInteractiveAuthentication no" "AuthorizedKeysFile /etc/ssh/authorized_keys/%u .ssh/authorized_keys"
 	test "$x11" = no || printf '%s\n' "X11Forwarding yes"
-	printf '%s\n' "EOF_SSHD"
-	if test -n "$users"; then
-		IFS='
-'; set -- $users; IFS='
-'
-		for line; do
-			u=${line%% *}; s=${line#* }; uid=$s
-			test "$s" != host || uid=$(id -u "$u" 2>/dev/null || true)
-			printf '%s\n' "useradd -m${uid:+ -u $uid} -G wheel -s /bin/ksh '$u'"
-			printf '%s\n' "printf '%s\\n' '$keytext' > '/etc/ssh/authorized_keys/$u' && chmod 644 '/etc/ssh/authorized_keys/$u'"
-		done
-		if test "$doas" = yes; then
-			printf '%s\n' "cat > /etc/doas.conf <<'EOF_DOAS'"
-			for line; do printf '%s\n' "permit nopass keepenv ${line%% *} as root"; done
-			printf '%s\n' "EOF_DOAS" "chmod 600 /etc/doas.conf"
-		fi
+	printf '%s\n' "EOF_SSHD" "EOF_SITE"
+	printf '%s\n' "printf '# image %s: install.site begun -- sshd on %s, X11 %s\\n' $(sq "$1") '$VM_BAKE_SSH_PORT' '$x11' >&2"
+}
+
+#@help _image_site_user_write1
+# @command image site user write <image>
+# @summary Act terminal: the template's users (read at generation time) appended to install.site -- useradd with the host's uid for 'host', in wheel, ksh, VM_BAKE_HOST_KEY as the key under /etc/ssh/authorized_keys/<user>; when the template's packages name doas, /etc/doas.conf with 'permit nopass keepenv <user> as root' for each (doas is base on OpenBSD: the word is read, no package is added). No users: a comment
+# @group   image
+# @internal
+# @see     image site write
+# @see     template user add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_HOST_KEY  the public key of the host, every user's authorized key
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_site_user_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 users="" key="$VM_BAKE_HOST_KEY" keytext="" line="" u="" s="" uid="" doas=no oifs="$IFS"
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx doas && doas=yes
+	test -n "$users" || { printf '%s\n' "# image $1: no users in $t -- install.site makes none"; return 0; }
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	keytext=$(cat "$key" 2>/dev/null || true)
+	printf '%s\n' "cat >> '$dir/site.d/install.site' <<'EOF_SITE'"
+	IFS='
+'; set -- $users; IFS=$oifs
+	for line; do
+		u=${line%% *}; s=${line#* }; uid=$s
+		test "$s" != host || uid=$(id -u "$u" 2>/dev/null || true)
+		printf '%s\n' "useradd -m${uid:+ -u $uid} -G wheel -s /bin/ksh '$u'"
+		printf '%s\n' "printf '%s\\n' '$keytext' > '/etc/ssh/authorized_keys/$u' && chmod 644 '/etc/ssh/authorized_keys/$u'"
+	done
+	if test "$doas" = yes; then
+		printf '%s\n' "cat > /etc/doas.conf <<'EOF_DOAS'"
+		for line; do printf '%s\n' "permit nopass keepenv ${line%% *} as root"; done
+		printf '%s\n' "EOF_DOAS" "chmod 600 /etc/doas.conf"
 	fi
-	if test -n "$envl"; then
-		printf '%s\n' "cat >> /etc/profile <<'EOF_ENV'" "# written by vm-bake (template env) -- the sessions' environment"
-		printf '%s\n' "$envl"
-		printf '%s\n' "EOF_ENV"
-	fi
+	printf '%s\n' "EOF_SITE"
+	printf '%s\n' "printf '# image %s: install.site -- users %s, doas %s\\n' $(sq "$1") $(sq "$(printf '%s\n' "$users" | awk '{ print $1 }' | tr '\n' ' ' | sed 's/ $//')") '$doas' >&2"
+}
+
+#@help _image_site_env_write1
+# @command image site env write <image>
+# @summary Act terminal: the template's env lines (read at generation time) appended to install.site as export lines at the end of /etc/profile, the sessions' environment. No env lines: a comment
+# @group   image
+# @internal
+# @see     image site write
+# @see     template env add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_site_env_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 envl=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	envl=$(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | sed 's/^\([^=]*\)=\(.*\)$/export \1="\2"/')
+	test -n "$envl" || { printf '%s\n' "# image $1: no env lines in $t -- /etc/profile stays"; return 0; }
+	printf '%s\n' "cat >> '$dir/site.d/install.site' <<'EOF_SITE'"
+	printf '%s\n' "cat >> /etc/profile <<'EOF_ENV'" "# written by vm-bake (template env) -- the sessions' environment"
+	printf '%s\n' "$envl"
+	printf '%s\n' "EOF_ENV" "EOF_SITE"
+	printf '%s\n' "printf '# image %s: install.site -- %s env lines into /etc/profile\\n' $(sq "$1") '$(printf '%s\n' "$envl" | grep -c .)' >&2"
+}
+
+#@help _image_site_net_write1
+# @command image site net write <image>
+# @summary Act terminal: appended to install.site -- installurl (cdn.openbsd.org), root locked (usermod -p '*'), the bake's address and netmask under /etc/vm-bake, and the seed hook /usr/local/libexec/vm-bake-seed as the one line of /etc/hostname.vio0: at every boot it looks on cd0 and cd1 for a seed CD (guest seed write autoinstall -- the marker vm-bake-seed, address, netmask, myname, mygate, resolv.conf and the ssh host key), takes what it finds and configures vio0; without a seed the bake's address holds. The two CD devices are two calls of one function in the hook, no loop
+# @group   image
+# @internal
+# @see     image site write
+# @see     guest seed write autoinstall
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_FIRSTBOOT_ADDRESS  the bake's address, with prefix length
+#@end
+_image_site_net_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" mask=""
+	mask=$(printf '%s\n' "${VM_BAKE_FIRSTBOOT_ADDRESS#*/}" | awk '{ m = $1 ? 4294967296 - 2 ^ (32 - $1) : 0; printf "%d.%d.%d.%d", int(m / 16777216) % 256, int(m / 65536) % 256, int(m / 256) % 256, m % 256 }')
+	printf '%s\n' "cat >> '$dir/site.d/install.site' <<'EOF_SITE'"
 	printf '%s\n' "printf '%s\\n' 'https://cdn.openbsd.org/pub/OpenBSD' > /etc/installurl"
 	printf '%s\n' "usermod -p '*' root"
 	printf '%s\n' "printf '%s\\n' '${VM_BAKE_FIRSTBOOT_ADDRESS%/*}' > /etc/vm-bake/address" "printf '%s\\n' '$mask' > /etc/vm-bake/netmask"
-	printf '%s\n' "cat > /usr/local/libexec/vm-bake-seed <<'EOF_SEED'" '#!/bin/sh' "# written by vm-bake (image site write) -- the one line of /etc/hostname.vio0: a seed CD (guest seed write autoinstall) names, addresses and keys this guest; without one, the address of the bake" 'a=$(cat /etc/vm-bake/address) m=$(cat /etc/vm-bake/netmask)' 'for c in cd0 cd1; do' '	mount -r -t cd9660 /dev/${c}a /mnt 2>/dev/null || continue' '	if test -f /mnt/vm-bake-seed; then' '		a=$(cat /mnt/address) m=$(cat /mnt/netmask)' '		cp /mnt/myname /mnt/mygate /mnt/resolv.conf /etc/' '		install -m 600 /mnt/ssh_host_ed25519_key /etc/ssh/ssh_host_ed25519_key' '		install -m 644 /mnt/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ed25519_key.pub' '		hostname "$(cat /etc/myname)"' '	fi' '	umount /mnt' 'done' 'ifconfig vio0 inet "$a" netmask "$m" up' "EOF_SEED"
+	printf '%s\n' "cat > /usr/local/libexec/vm-bake-seed <<'EOF_SEED'" '#!/bin/sh' "# written by vm-bake (image site net write) -- the one line of /etc/hostname.vio0: a seed CD (guest seed write autoinstall) names, addresses and keys this guest; without one, the address of the bake" 'a=$(cat /etc/vm-bake/address) m=$(cat /etc/vm-bake/netmask)' 'seed() {' '	mount -r -t cd9660 "/dev/${1}a" /mnt 2>/dev/null || return 0' '	if test -f /mnt/vm-bake-seed; then' '		a=$(cat /mnt/address) m=$(cat /mnt/netmask)' '		cp /mnt/myname /mnt/mygate /mnt/resolv.conf /etc/' '		install -m 600 /mnt/ssh_host_ed25519_key /etc/ssh/ssh_host_ed25519_key' '		install -m 644 /mnt/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ed25519_key.pub' '		hostname "$(cat /etc/myname)"' '	fi' '	umount /mnt' '}' 'seed cd0' 'seed cd1' 'ifconfig vio0 inet "$a" netmask "$m" up' "EOF_SEED"
 	printf '%s\n' "chmod 755 /usr/local/libexec/vm-bake-seed" "printf '%s\\n' '!/usr/local/libexec/vm-bake-seed' > /etc/hostname.vio0"
-	printf '%s\n' "cat >> /etc/rc.firsttime <<'EOF_FIRST'" "# written by vm-bake (image site write) -- the bake's first boot: the packages, each checked against pkg_info, the report line on the console, then power off; the host seals the disk"
+	printf '%s\n' "EOF_SITE"
+	printf '%s\n' "printf '# image %s: install.site -- installurl, root locked, %s netmask %s as the bake address, the seed hook as hostname.vio0\\n' $(sq "$1") '${VM_BAKE_FIRSTBOOT_ADDRESS%/*}' '$mask' >&2"
+}
+
+#@help _image_site_firsttime_write1
+# @command image site firsttime write <image>
+# @summary Act terminal: the end of install.site -- /etc/rc.firsttime, the bake's first boot: the template's packages (read at generation time) with pkg_add -I onto the console, pkg_info into /etc/vm-bake/packages, one check line per package (the stem before a flavor's --), the report '# vm-bake firstboot: missing <packages>' or '# vm-bake firstboot: packages complete' on the console (image console drive reads it), power off; then install.site made executable
+# @group   image
+# @internal
+# @see     image site write
+# @see     image console drive
+# @see     template package add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_site_firsttime_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 pkgs=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	pkgs=$(awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -vx doas || true)
+	printf '%s\n' "cat >> '$dir/site.d/install.site' <<'EOF_SITE'"
+	printf '%s\n' "cat >> /etc/rc.firsttime <<'EOF_FIRST'" "# written by vm-bake (image site firsttime write) -- the bake's first boot: the packages, each checked against pkg_info, the report line on the console, then power off; the host seals the disk"
 	test -z "$pkgs" || printf '%s\n' "pkg_add -I $(printf '%s\n' "$pkgs" | tr '\n' ' ')2>&1 | tee /dev/console"
 	printf '%s\n' "pkg_info -q > /etc/vm-bake/packages"
 	printf '%s\n' "missing="
-	test -z "$pkgs" || printf '%s\n' "for p in $(printf '%s\n' "$pkgs" | tr '\n' ' ' | sed 's/ $//'); do grep -q \"^\${p%%--*}-[0-9]\" /etc/vm-bake/packages || missing=\"\$missing \$p\"; done"
+	for p in $pkgs; do printf '%s\n' "grep -q '^${p%%--*}-[0-9]' /etc/vm-bake/packages || missing=\"\$missing $p\""; done
 	printf '%s\n' "test -n \"\$missing\" && printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" > /dev/console || printf '# vm-bake firstboot: packages complete\\n' > /dev/console"
-	printf '%s\n' "shutdown -p now" "EOF_FIRST"
-	printf '%s\n' "EOF_SITE"
+	printf '%s\n' "shutdown -p now" "EOF_FIRST" "EOF_SITE"
 	printf '%s\n' "chmod 755 '$dir/site.d/install.site'"
-	printf '%s\n' "printf '# image %s: install.site -- sshd on %s, users %s, doas %s, X11 %s, %s packages at the first boot\\n' $(sq "$name") '$VM_BAKE_SSH_PORT' $(sq "$(printf '%s\n' "$users" | awk '{ print $1 }' | tr '\n' ' ' | sed 's/ $//')") '$doas' '$x11' '$(printf '%s\n' "$pkgs" | grep -c . || true)' >&2"
+	printf '%s\n' "printf '# image %s: install.site done -- %s packages at the first boot\\n' $(sq "$1") '$(printf '%s\n' "$pkgs" | grep -c . || true)' >&2"
 }
 
 #@help _image_site_pack1
@@ -2321,6 +2430,7 @@ __image_console_drive2() {
 # @see     image console drive
 # @see     image response write
 # @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, the tmux session
+# @env     VM_BAKE_CONSOLE  tmux or nmdm, named in the error when the session or the device does not appear
 #@end
 _image_console_drive_tmux1() {
 	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT")"
@@ -2339,7 +2449,7 @@ n=0; until booting; do n=$((n + 1)); test "$n" -le 5 || give_up "no booting afte
 wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
 send 's'; sleep 2
 send 'cd /dev && sh MAKEDEV cd0 cd1; cd /'
-send 's=; for d in cd0 cd1; do mount_cd9660 /dev/${d}a /mnt 2>/dev/null || continue; test -f /mnt/install.conf && s=$d; umount /mnt; done'
+send 's=; mount_cd9660 /dev/cd0a /mnt 2>/dev/null && { test -f /mnt/install.conf && s=cd0; umount /mnt; }; mount_cd9660 /dev/cd1a /mnt 2>/dev/null && { test -f /mnt/install.conf && s=cd1; umount /mnt; }'
 send 'case $s in cd0) i=cd1 ;; *) i=cd0 ;; esac; mount_cd9660 /dev/${s}a /mnt && sed "s/@INSTCD@/$i/;s/@SITECD@/$s/" /mnt/install.conf > /auto_install.conf && umount /mnt && echo "response file from $s, sets from $i"'
 wait_for 'response file from cd' 30
 send 'exit'
@@ -2365,6 +2475,7 @@ EOF_STEPS
 # @see     image console drive tmux
 # @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, in the device name
 # @env     VM_BAKE_GUEST_DIR  the guests' directory, where the console log lies
+# @env     VM_BAKE_CONSOLE  tmux or nmdm, named in the error when the session or the device does not appear
 #@end
 _image_console_drive_nmdm1() {
 	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT") dev=$(sq "/dev/nmdm-$VM_BAKE_FIRSTBOOT.1B") log=$(sq "$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/console.log")"
@@ -2385,7 +2496,7 @@ n=0; until booting; do n=$((n + 1)); test "$n" -le 5 || give_up "no booting afte
 wait_for '(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?' 300
 send 's'; sleep 2
 send 'cd /dev && sh MAKEDEV cd0 cd1; cd /'
-send 's=; for d in cd0 cd1; do mount_cd9660 /dev/${d}a /mnt 2>/dev/null || continue; test -f /mnt/install.conf && s=$d; umount /mnt; done'
+send 's=; mount_cd9660 /dev/cd0a /mnt 2>/dev/null && { test -f /mnt/install.conf && s=cd0; umount /mnt; }; mount_cd9660 /dev/cd1a /mnt 2>/dev/null && { test -f /mnt/install.conf && s=cd1; umount /mnt; }'
 send 'case $s in cd0) i=cd1 ;; *) i=cd0 ;; esac; mount_cd9660 /dev/${s}a /mnt && sed "s/@INSTCD@/$i/;s/@SITECD@/$s/" /mnt/install.conf > /auto_install.conf && umount /mnt && echo "response file from $s, sets from $i"'
 wait_for 'response file from cd' 30
 send 'exit'
@@ -2413,6 +2524,583 @@ EOF_STEPS
 ___image_close_iso1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image digest write $(sq "$1")"
+}
+
+#@help __image_make_alpine1
+# @internal arity-1 sibling of 'image make alpine' (image make alpine <image>  -- the full name img:<template>:<version>): rewrite to 'image make alpine from <template> <version> <image>'
+#@end
+__image_make_alpine1() {
+	local t="${1#img:}"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make alpine from $(sq "${t%%:*}") $(sq "${1##*:}") $(sq "$1")"
+}
+
+#@help __image_make_alpine2
+# @command image make alpine <template> <version>
+# @summary Bake an Alpine image from the template under the version: the image is img:<template>:<version>, handed to 'image make alpine from' -- the same three spellings as 'image make linux' (the full name alone, or a name of its own as third word)
+# @group   image
+# @param   version  the version field of the image name, a word of [A-Za-z0-9_.+-]
+# @example vm-bake image make alpine alpine-dev v1
+# @see     image make alpine from
+# @see     image make openbsd
+# @see     image make linux
+# @see     image list
+#@end
+__image_make_alpine2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make alpine from $(sq "$1") $(sq "$2") $(sq "img:$1:$2")"
+}
+
+#@help __image_make_alpine3
+# @internal arity-3 sibling of 'image make alpine' (image make alpine <template> <version> <image>  -- a name of its own): rewrite to 'image make alpine from <template> <version> <image>'
+#@end
+__image_make_alpine3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image make alpine from $(sq "$1") $(sq "$2") $(sq "$3")"
+}
+
+#@help ___image_make_alpine_from3
+# @command image make alpine from <template> <version> <image>
+# @summary The bake behind the three spellings of 'image make alpine': the template exists, the image name is img:<name>:<version> and free; then 'image create apkovl' (an empty disk0.img of the resource's size), 'image install apkovl' (the overlay rendered from the template as overlay.iso, one run of the throwaway guest VM_BAKE_FIRSTBOOT from the live ISO, which takes the overlay from the second CD and installs itself unattended; the installed system boots once more, adds the packages and powers off), 'image close iso' (the digest) and 'image seal' -- no builder and no chroot: an Alpine disk is never mounted on the host
+# @group   image
+# @internal
+# @see     image make alpine
+# @see     image create apkovl
+# @see     image install apkovl
+#@end
+___image_make_alpine_from3() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image make alpine: template $1, version $2 -> image $3 (create apkovl, install apkovl, close iso, seal)")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image name valid $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check absent $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image create apkovl $(sq "$1") $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image install apkovl $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image close iso $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image seal $(sq "$3")"
+}
+
+#@help __image_check_apkovl1
+# @command image check apkovl <template>
+# @summary The template's resolved base is of kind iso, its file is named alpine-<flavor>-<release>-<arch>.iso (a live ISO of Alpine, alpine-virt-3.22.1-x86_64.iso say; the flavor virt carries the kernel linux-virt with the virtio and 9p drivers) and readable, and its resolved bake is apkovl (all read at generation time): a comment line, else an error line
+# @group   image
+# @internal
+# @see     image create apkovl
+# @see     template base iso
+# @see     template bake apkovl
+#@end
+__image_check_apkovl1() {
+	local cur="$1" chain="" p="" n=0 a="" base="" bake="" kind="" path="" f=""
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/bake" && IFS= read -r bake < "$VM_BAKE_BASE/template/$a/bake"; done
+	kind=${base%% *}; path=$(printf '%s' "$base" | awk '{ print $3 }'); f=${path##*/}
+	case "$f" in alpine-*.iso) ;; *) f="" ;; esac
+	if test "$kind" = iso && test "$bake" = apkovl && test -n "$f" && test -r "$path"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment $(sq "image: $1 installs from $path by apkovl")"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image create apkovl: template $1 needs a readable base of kind iso named alpine-*.iso (has ${base:-none}) and the bake apkovl (has ${bake:-none}): template base iso, template bake apkovl")"
+	fi
+}
+
+#@help ___image_create_apkovl2
+# @command image create apkovl <template> <image>
+# @summary Step 1 of the Alpine bake, the disk: the template exists with a resource, its base is a live ISO of Alpine and its bake apkovl, the image name is free; then the bake lock, the record, the dataset and an empty disk0.img of the resource's disk size (image disk create) -- setup-disk partitions and fills it
+# @group   image
+# @internal
+# @see     image make alpine
+# @see     image install apkovl
+# @env     VM_BAKE_IMAGE_DIR  where the image's dataset is created
+#@end
+___image_create_apkovl2() {
+	local cur="$1" chain="" p="" n=0 a="" size=""
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/resource" && IFS= read -r size < "$VM_BAKE_BASE/template/$a/resource"; done
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check resource $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check apkovl $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image name valid $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check absent $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image lock take $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image record write $(sq "$1") $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image tree ensure"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image dataset create $(sq "$2")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk create $(sq "$2") $(sq "${size##* }")"
+}
+
+#@help ___image_install_apkovl1
+# @command image install apkovl <image>
+# @summary Step 2 of the Alpine bake, the installation: the image has a record; then the overlay rendered from the template (image overlay write: the answer file of setup-alpine, the installer hook of the live system and the first boot's script) with the files of the template's file lines (image overlay files place), packed as the apkovl and the apkovl as overlay.iso (image overlay pack), the throwaway guest VM_BAKE_FIRSTBOOT configured with the image's disk and the overlay.iso (image firstboot conf), linked where vm-bhyve looks, run from the template's live ISO (guest install: the ISO rides along for this one run; the live system looks on every mountable device for a *.apkovl.tar.gz, finds ours on the second CD, unpacks it over itself before any service starts, and its local service runs setup-alpine against the answer file), its console read until the installer powers the guest off and, started again from its disk, the first boot reports its packages (image console watch), waited for until bhyve is gone, its link and configuration removed again. The root acts (guest link write, guest install, image console watch, guest link drop) are pinned 'sudo sh'; for one sudo over the whole batch pin image_install_apkovl to 'sudo -E sh -c "$VM_BAKE_BATCH_COMBINATOR_INTERPRETER"' and the acts that write the image's files (the ten acts of image overlay write, image_overlay_files_place, image_overlay_pack, image_firstboot_conf_write, image_firstboot_conf_drop) to 'sudo -u <user> sh', as 'image install' explains
+# @group   image
+# @internal
+# @see     image make alpine
+# @see     image overlay write
+# @see     image overlay files place
+# @see     image overlay pack
+# @see     image console watch
+# @see     image install
+# @see     guest install
+# @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+___image_install_apkovl1() {
+	local t="" cur="" chain="" p="" n=0 a="" base="" iso="" srcs=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/base" && IFS= read -r base < "$VM_BAKE_BASE/template/$a/base"; done
+	iso=$(printf '%s' "$base" | awk '{ print $3 }')
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay files place $(sq "$1")"
+	srcs=$(awk -v base="$VM_BAKE_BASE" -v family=source -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -z "$srcs" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image $1: source lines are apt sources, an Alpine image takes its packages from the repositories setup-apkrepos picks: $(printf '%s' "$srcs" | awk '{ print $1 }' | tr '\n' ' ')")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay pack $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link write $(sq "$VM_BAKE_FIRSTBOOT")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest install $(sq "$VM_BAKE_FIRSTBOOT") $(sq "$iso")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image console watch $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot gone"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest link drop $(sq "$VM_BAKE_FIRSTBOOT")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image firstboot conf drop"
+}
+
+#@help ___image_overlay_write1
+# @command image overlay write <image>
+# @summary The overlay of the Alpine bake under VM_BAKE_IMAGE_DIR/<image>/overlay.d, written aspect by aspect; everything lies under etc because setup-disk carries the live system's etc onto the disk (lbu package) and nothing else. 'image overlay answer write' (the answer file of setup-alpine and the link that starts the local service), 'image overlay install write' (the live system's hook: setup-alpine unattended, power off), then the first boot's script etc/local.d/vm-bake-firstboot.start -- 'image overlay firstboot write' (its head: nothing on the live tmpfs, the packages added and checked), 'image overlay sshd write', 'image overlay user write', 'image overlay env write', 'image overlay file write' (the template's files from their staging), 'image overlay view write' (the modules, the view's fstab lines), 'image overlay net write' (root locked, the bake's address, the seed hook as the up command of eth0), 'image overlay report write' (the report line on the console, power off, both hooks executable). Every writer reads the template at generation time and appends to the one file, so the acts run in this order
+# @group   image
+# @internal
+# @see     image install apkovl
+# @see     image overlay answer write
+# @see     image overlay install write
+# @see     image overlay firstboot write
+# @see     image overlay sshd write
+# @see     image overlay user write
+# @see     image overlay env write
+# @see     image overlay file write
+# @see     image overlay view write
+# @see     image overlay net write
+# @see     image overlay report write
+# @see     image overlay files place
+# @see     image overlay pack
+#@end
+___image_overlay_write1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay answer write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay install write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay firstboot write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay sshd write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay user write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay env write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay file write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay view write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay net write $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image overlay report write $(sq "$1")"
+}
+
+#@help _image_overlay_answer_write1
+# @command image overlay answer write <image>
+# @summary Act terminal: overlay.d begun -- its directories, the link etc/runlevels/default/local that starts the local service on the live system, and etc/vm-bake/answerfile, the answers of setup-alpine -f: no keymap, hostname VM_BAKE_FIRSTBOOT, mdev, eth0 static on VM_BAKE_FIRSTBOOT_ADDRESS with the gateway VM_BAKE_GUEST_GATEWAY, DNS domain VM_BAKE_GUEST_DOMAIN and nameserver VM_BAKE_GUEST_GATEWAY, the host's timezone (/var/db/zoneinfo, else UTC), no proxy, the repositories the first mirror of the list and community (-1 -c), no user (the first boot makes the template's users with their host uids), openssh, chrony, the whole disk vda in the sys mode (-m sys), no lbu and no apk cache
+# @group   image
+# @internal
+# @see     image overlay write
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, the hostname of the installation
+# @env     VM_BAKE_FIRSTBOOT_ADDRESS  the installation's address, with prefix length
+# @env     VM_BAKE_GUEST_GATEWAY  gateway and nameserver of the installation
+# @env     VM_BAKE_GUEST_DOMAIN  its DNS domain
+#@end
+_image_overlay_answer_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" mask="" tz=""
+	mask=$(printf '%s\n' "${VM_BAKE_FIRSTBOOT_ADDRESS#*/}" | awk '{ m = $1 ? 4294967296 - 2 ^ (32 - $1) : 0; printf "%d.%d.%d.%d", int(m / 16777216) % 256, int(m / 65536) % 256, int(m / 256) % 256, m % 256 }')
+	IFS= read -r tz 2>/dev/null < /var/db/zoneinfo || tz=UTC
+	printf '%s\n' "install -d -m 755 '$dir/overlay.d/etc/local.d' '$dir/overlay.d/etc/vm-bake' '$dir/overlay.d/etc/runlevels/default' || exit 1"
+	printf '%s\n' "ln -sf /etc/init.d/local '$dir/overlay.d/etc/runlevels/default/local'"
+	printf '%s\n' "cat > '$dir/overlay.d/etc/vm-bake/answerfile' <<'EOF_ANSWER'"
+	printf '%s\n' "# written by vm-bake (image overlay answer write) -- the answers of setup-alpine -f" "KEYMAPOPTS=none" "HOSTNAMEOPTS=$VM_BAKE_FIRSTBOOT" "DEVDOPTS=mdev" "INTERFACESOPTS=\"auto lo" "iface lo inet loopback" "" "auto eth0" "iface eth0 inet static" "    address ${VM_BAKE_FIRSTBOOT_ADDRESS%/*}" "    netmask $mask" "    gateway $VM_BAKE_GUEST_GATEWAY" "\"" "DNSOPTS=\"-d $VM_BAKE_GUEST_DOMAIN $VM_BAKE_GUEST_GATEWAY\"" "TIMEZONEOPTS=$tz" "PROXYOPTS=none" "APKREPOSOPTS=\"-1 -c\"" "USEROPTS=none" "SSHDOPTS=openssh" "NTPOPTS=chrony" "DISKOPTS=\"-m sys /dev/vda\"" "LBUOPTS=none" "APKCACHEOPTS=none"
+	printf '%s\n' "EOF_ANSWER"
+	printf '%s\n' "printf '# image %s: answerfile -- setup-alpine for %s on %s netmask %s, gateway %s, timezone %s\\n' $(sq "$1") '$VM_BAKE_FIRSTBOOT' '${VM_BAKE_FIRSTBOOT_ADDRESS%/*}' '$mask' '$VM_BAKE_GUEST_GATEWAY' '$tz' >&2"
+}
+
+#@help _image_overlay_install_write1
+# @command image overlay install write <image>
+# @summary Act terminal: etc/local.d/vm-bake-install.start, run by the local service of the live system: it removes itself first (what stays in etc travels onto the disk), names vda in ERASE_DISKS (setup-disk asks otherwise), runs setup-alpine -e -f against the answer file (-e: no root password prompt; root is locked at the first boot) and reports on the console -- '# vm-bake install: complete, powering off' and the power-off, or '# vm-bake install: failed' (image console watch reads both; the line goes to ttyS0 as well as to the console, whichever the kernel was told)
+# @group   image
+# @internal
+# @see     image overlay write
+# @see     image console watch
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+#@end
+_image_overlay_install_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1"
+	printf '%s\n' "cat > '$dir/overlay.d/etc/local.d/vm-bake-install.start' <<'EOF_INSTALL'"
+	printf '%s\n' '#!/bin/sh' '# written by vm-bake (image overlay install write) -- run by the local service of the live system: the unattended installation, then power off; what stays in /etc travels onto the disk, so this hook removes itself first' 'rm -f /etc/local.d/vm-bake-install.start' 'export ERASE_DISKS=/dev/vda' 'if setup-alpine -e -f /etc/vm-bake/answerfile; then' "	sync; printf '# vm-bake install: complete, powering off\\n' | tee /dev/ttyS0 > /dev/console; poweroff" 'else' "	printf '# vm-bake install: failed\\n' | tee /dev/ttyS0 > /dev/console" 'fi'
+	printf '%s\n' "EOF_INSTALL"
+	printf '%s\n' "printf '# image %s: vm-bake-install.start -- setup-alpine -e -f, ERASE_DISKS=/dev/vda, power off\\n' $(sq "$1") >&2"
+}
+
+#@help _image_overlay_firstboot_write1
+# @command image overlay firstboot write <image>
+# @summary Act terminal: etc/local.d/vm-bake-firstboot.start begun -- it travels onto the disk with etc and does nothing on the live system, whose root is a tmpfs; at the first boot from the disk it removes itself, makes the directories the writers below fill, adds the template's packages (read at generation time) with apk add onto the console, writes apk info into /etc/vm-bake/packages and checks every package against it, one line each, into the variable missing that 'image overlay report write' reports
+# @group   image
+# @internal
+# @see     image overlay write
+# @see     image overlay report write
+# @see     template package add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_overlay_firstboot_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 pkgs=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	pkgs=$(awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	printf '%s\n' "cat > '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
+	printf '%s\n' '#!/bin/sh' "# written by vm-bake (image overlay write) -- the bake's first boot from the disk (on the live system, whose root is a tmpfs, it does nothing): the packages, each checked against apk info, sshd, the users, the seed hook, the report line on the console, then power off; the host seals the disk" "test \"\$(awk '\$2 == \"/\" { print \$3 }' /proc/mounts)\" != tmpfs || exit 0" 'rm -f /etc/local.d/vm-bake-firstboot.start' 'install -d -m 755 /etc/ssh/authorized_keys /etc/vm-bake /etc/profile.d /usr/local/libexec /media/vmbake'
+	test -z "$pkgs" || printf '%s\n' "apk add --no-progress $(printf '%s\n' "$pkgs" | tr '\n' ' ')2>&1 | tee /dev/console"
+	printf '%s\n' "apk info > /etc/vm-bake/packages"
+	printf '%s\n' "missing="
+	for p in $pkgs; do printf '%s\n' "grep -qx '$p' /etc/vm-bake/packages || missing=\"\$missing $p\""; done
+	printf '%s\n' "EOF_FIRST"
+	printf '%s\n' "printf '# image %s: vm-bake-firstboot.start begun -- %s packages, each checked\\n' $(sq "$1") '$(printf '%s\n' "$pkgs" | grep -c . || true)' >&2"
+}
+
+#@help _image_overlay_sshd_write1
+# @command image overlay sshd write <image>
+# @summary Act terminal: appended to the first boot's script -- sshd: the stock lines for Port, PermitRootLogin, PasswordAuthentication, KbdInteractiveAuthentication and AuthorizedKeysFile commented out, then VM_BAKE_SSH_PORT, no root, keys only under /etc/ssh/authorized_keys/<user>
+# @group   image
+# @internal
+# @see     image overlay write
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_SSH_PORT  the port sshd listens on in every guest
+#@end
+_image_overlay_sshd_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1"
+	printf '%s\n' "cat >> '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
+	printf '%s\n' "sed -i -E 's/^[[:space:]]*(Port|PermitRootLogin|PasswordAuthentication|KbdInteractiveAuthentication|AuthorizedKeysFile|X11Forwarding)[[:space:]]/#&/' /etc/ssh/sshd_config"
+	printf '%s\n' "cat >> /etc/ssh/sshd_config <<'EOF_SSHD'" "Port $VM_BAKE_SSH_PORT" "PermitRootLogin no" "PasswordAuthentication no" "KbdInteractiveAuthentication no" "AuthorizedKeysFile /etc/ssh/authorized_keys/%u .ssh/authorized_keys" "EOF_SSHD"
+	printf '%s\n' "EOF_FIRST"
+	printf '%s\n' "printf '# image %s: the first boot -- sshd on %s, no root, keys only\\n' $(sq "$1") '$VM_BAKE_SSH_PORT' >&2"
+}
+
+#@help _image_overlay_user_write1
+# @command image overlay user write <image>
+# @summary Act terminal: the template's users (read at generation time) appended to the first boot's script -- adduser with the host's uid for 'host', in wheel, /bin/sh, no password (the shadow field set to * so that sshd takes the key: adduser -D writes !, which OpenSSH reads as locked), VM_BAKE_HOST_KEY as the key under /etc/ssh/authorized_keys/<user>; when the template's packages name doas (a package here, added by the first boot), /etc/doas.conf gets 'permit nopass keepenv <user> as root' for each. No users: a comment
+# @group   image
+# @internal
+# @see     image overlay write
+# @see     template user add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_HOST_KEY  the public key of the host, every user's authorized key
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_overlay_user_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 users="" key="$VM_BAKE_HOST_KEY" keytext="" line="" u="" s="" uid="" doas=no oifs="$IFS"
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	users=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | grep -qx doas && doas=yes
+	test -n "$users" || { printf '%s\n' "# image $1: no users in $t -- the first boot makes none"; return 0; }
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	keytext=$(cat "$key" 2>/dev/null || true)
+	printf '%s\n' "cat >> '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
+	IFS='
+'; set -- $users; IFS=$oifs
+	for line; do
+		u=${line%% *}; s=${line#* }; uid=$s
+		test "$s" != host || uid=$(id -u "$u" 2>/dev/null || true)
+		printf '%s\n' "adduser -D${uid:+ -u $uid} -G wheel -s /bin/sh '$u'"
+		printf '%s\n' "sed -i 's/^$u:!:/$u:*:/' /etc/shadow"
+		printf '%s\n' "printf '%s\\n' '$keytext' > '/etc/ssh/authorized_keys/$u' && chmod 644 '/etc/ssh/authorized_keys/$u'"
+	done
+	if test "$doas" = yes; then
+		printf '%s\n' "cat >> /etc/doas.conf <<'EOF_DOAS'"
+		for line; do printf '%s\n' "permit nopass keepenv ${line%% *} as root"; done
+		printf '%s\n' "EOF_DOAS" "chmod 600 /etc/doas.conf"
+	fi
+	printf '%s\n' "EOF_FIRST"
+	printf '%s\n' "printf '# image %s: the first boot -- users %s, doas %s\\n' $(sq "$1") $(sq "$(printf '%s\n' "$users" | awk '{ print $1 }' | tr '\n' ' ' | sed 's/ $//')") '$doas' >&2"
+}
+
+#@help _image_overlay_env_write1
+# @command image overlay env write <image>
+# @summary Act terminal: the template's env lines (read at generation time) appended to the first boot's script as /etc/profile.d/vm-bake.sh, export lines, the sessions' environment. No env lines: a comment
+# @group   image
+# @internal
+# @see     image overlay write
+# @see     template env add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_overlay_env_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 envl=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	envl=$(awk -v base="$VM_BAKE_BASE" -v family=env -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | sed 's/^\([^=]*\)=\(.*\)$/export \1="\2"/')
+	test -n "$envl" || { printf '%s\n' "# image $1: no env lines in $t -- no profile.d file"; return 0; }
+	printf '%s\n' "cat >> '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
+	printf '%s\n' "cat > /etc/profile.d/vm-bake.sh <<'EOF_ENV'" "# written by vm-bake (template env) -- the sessions' environment"
+	printf '%s\n' "$envl"
+	printf '%s\n' "EOF_ENV" "EOF_FIRST"
+	printf '%s\n' "printf '# image %s: the first boot -- %s env lines as /etc/profile.d/vm-bake.sh\\n' $(sq "$1") '$(printf '%s\n' "$envl" | grep -c .)' >&2"
+}
+
+#@help _image_overlay_file_write1
+# @command image overlay file write <image>
+# @summary Act terminal: the template's file lines (read at generation time) appended to the first boot's script -- each file installed from its staging under /etc/vm-bake/files (image overlay files place puts it there) at its path with the mode of the line, one line per file, then the staging removed. No file lines: a comment
+# @group   image
+# @internal
+# @see     image overlay write
+# @see     image overlay files place
+# @see     template file add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_overlay_file_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 files="" line=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	files=$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	test -n "$files" || { printf '%s\n' "# image $1: no file lines in $t -- the first boot installs none"; return 0; }
+	printf '%s\n' "cat >> '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
+	printf '%s\n' "$files" | while IFS= read -r line; do
+		set -- $line
+		printf '%s\n' "install -d -m 755 '$(dirname "$2")' && install -m $3 '/etc/vm-bake/files$2' '$2'"
+	done
+	printf '%s\n' "rm -rf /etc/vm-bake/files" "EOF_FIRST"
+	printf '%s\n' "printf '# image %s: the first boot -- %s files from their staging\\n' $(sq "$1") '$(printf '%s\n' "$files" | grep -c .)' >&2"
+}
+
+#@help _image_overlay_view_write1
+# @command image overlay view write <image>
+# @summary Act terminal: appended to the first boot's script -- the modules sr_mod and isofs into /etc/modules (the seed CD), and when the template says 'service files view' (read at generation time) 9p and 9pnet_virtio too, /var/git made and given to the host-uid user, and the fstab lines of the view: the share home over 9p (trans=virtio, 9p2000.L) on that user's home and the bind of /var/git to VM_BAKE_REPO_LOCAL below it; a template without a view gets the CD modules alone
+# @group   image
+# @internal
+# @see     image overlay write
+# @see     image seed view write
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_REPO_LOCAL  the clones' directory under the guest's home
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_overlay_view_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 svc="" hostuser="" view=no
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	svc=$(awk -v base="$VM_BAKE_BASE" -v family=service -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	hostuser=$(awk -v base="$VM_BAKE_BASE" -v family=user -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | awk '$2 == "host" { print $1; exit }')
+	printf '%s\n' "$svc" | grep -qx 'files view' && view=yes
+	printf '%s\n' "cat >> '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
+	printf '%s\n' "printf '%s\\n' sr_mod isofs >> /etc/modules"
+	if test "$view" = yes; then
+		printf '%s\n' "printf '%s\\n' 9p 9pnet_virtio >> /etc/modules" "install -d -m 755 /var/git '/home/$hostuser/$VM_BAKE_REPO_LOCAL' && chown '$hostuser:$hostuser' /var/git"
+		printf '%s\n' "printf '%s\\n' 'home /home/$hostuser 9p trans=virtio,version=9p2000.L,rw,nofail 0 0' '/var/git /home/$hostuser/$VM_BAKE_REPO_LOCAL none bind,nofail 0 0' >> /etc/fstab"
+	fi
+	printf '%s\n' "EOF_FIRST"
+	printf '%s\n' "printf '# image %s: the first boot -- CD modules, view %s\\n' $(sq "$1") '$view' >&2"
+}
+
+#@help _image_overlay_net_write1
+# @command image overlay net write <image>
+# @summary Act terminal: appended to the first boot's script -- root locked (passwd -l), the bake's address, netmask and gateway under /etc/vm-bake, the seed hook /usr/local/libexec/vm-bake-seed and /etc/network/interfaces with eth0 manual and the hook as its up command: at every boot the hook looks on sr0 and sr1 for a seed CD (guest seed write autoinstall -- the same CD an OpenBSD guest reads: the marker vm-bake-seed, address, netmask, myname, mygate, resolv.conf and the ssh host key), takes what it finds (the hostname is the first label of myname) and configures eth0 and the default route; without a seed the bake's address holds. The two CD devices are two calls of one function in the hook, no loop
+# @group   image
+# @internal
+# @see     image overlay write
+# @see     guest seed write autoinstall
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_FIRSTBOOT_ADDRESS  the bake's address, with prefix length
+# @env     VM_BAKE_GUEST_GATEWAY  the bake's gateway
+#@end
+_image_overlay_net_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" mask=""
+	mask=$(printf '%s\n' "${VM_BAKE_FIRSTBOOT_ADDRESS#*/}" | awk '{ m = $1 ? 4294967296 - 2 ^ (32 - $1) : 0; printf "%d.%d.%d.%d", int(m / 16777216) % 256, int(m / 65536) % 256, int(m / 256) % 256, m % 256 }')
+	printf '%s\n' "cat >> '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
+	printf '%s\n' "passwd -l root"
+	printf '%s\n' "printf '%s\\n' '${VM_BAKE_FIRSTBOOT_ADDRESS%/*}' > /etc/vm-bake/address" "printf '%s\\n' '$mask' > /etc/vm-bake/netmask" "printf '%s\\n' '$VM_BAKE_GUEST_GATEWAY' > /etc/vm-bake/gateway"
+	printf '%s\n' "cat > /usr/local/libexec/vm-bake-seed <<'EOF_SEED'" '#!/bin/sh' "# written by vm-bake (image overlay net write) -- the up command of eth0: a seed CD (guest seed write autoinstall) names, addresses and keys this guest; without one, the address of the bake" 'a=$(cat /etc/vm-bake/address) m=$(cat /etc/vm-bake/netmask) g=$(cat /etc/vm-bake/gateway)' 'seed() {' '	mount -r -t iso9660 "$1" /media/vmbake 2>/dev/null || return 0' '	if test -f /media/vmbake/vm-bake-seed; then' '		a=$(cat /media/vmbake/address) m=$(cat /media/vmbake/netmask) g=$(cat /media/vmbake/mygate)' '		cut -d. -f1 /media/vmbake/myname > /etc/hostname' '		cp /media/vmbake/resolv.conf /etc/resolv.conf' '		install -m 600 /media/vmbake/ssh_host_ed25519_key /etc/ssh/ssh_host_ed25519_key' '		install -m 644 /media/vmbake/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ed25519_key.pub' '		hostname -F /etc/hostname' '	fi' '	umount /media/vmbake' '}' 'seed /dev/sr0' 'seed /dev/sr1' 'ifconfig eth0 "$a" netmask "$m" up' 'route add default gw "$g" 2>/dev/null || true' "EOF_SEED"
+	printf '%s\n' "chmod 755 /usr/local/libexec/vm-bake-seed"
+	printf '%s\n' "cat > /etc/network/interfaces <<'EOF_IF'" "auto lo" "iface lo inet loopback" "" "auto eth0" "iface eth0 inet manual" "    up /usr/local/libexec/vm-bake-seed" "EOF_IF"
+	printf '%s\n' "EOF_FIRST"
+	printf '%s\n' "printf '# image %s: the first boot -- root locked, %s netmask %s gateway %s as the bake address, the seed hook as the up command of eth0\\n' $(sq "$1") '${VM_BAKE_FIRSTBOOT_ADDRESS%/*}' '$mask' '$VM_BAKE_GUEST_GATEWAY' >&2"
+}
+
+#@help _image_overlay_report_write1
+# @command image overlay report write <image>
+# @summary Act terminal: the end of the first boot's script -- the report '# vm-bake firstboot: missing <packages>' (the variable missing of image overlay firstboot write) or '# vm-bake firstboot: packages complete' on the console and on ttyS0 (image console watch reads it), sync and power off; then both hooks of the overlay made executable
+# @group   image
+# @internal
+# @see     image overlay write
+# @see     image overlay firstboot write
+# @see     image console watch
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+#@end
+_image_overlay_report_write1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1"
+	printf '%s\n' "cat >> '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start' <<'EOF_FIRST'"
+	printf '%s\n' "test -n \"\$missing\" && printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" | tee /dev/ttyS0 > /dev/console || printf '# vm-bake firstboot: packages complete\\n' | tee /dev/ttyS0 > /dev/console"
+	printf '%s\n' "sync; poweroff" "EOF_FIRST"
+	printf '%s\n' "chmod 755 '$dir/overlay.d/etc/local.d/vm-bake-install.start' '$dir/overlay.d/etc/local.d/vm-bake-firstboot.start'"
+	printf '%s\n' "printf '# image %s: vm-bake-firstboot.start done -- the report line, power off; both hooks executable\\n' $(sq "$1") >&2"
+}
+
+#@help _image_overlay_files_place1
+# @command image overlay files place <image>
+# @summary Act terminal: the template's file lines (read at generation time) into the overlay of an Alpine image -- each dowry's object under VM_BAKE_IMAGE_DIR/<image>/overlay.d/etc/vm-bake/files at its path with the mode of the line, because only etc travels from the live system onto the disk; the first boot (image overlay write) installs each at its path and removes the staging directory. No file lines: a comment
+# @group   image
+# @internal
+# @see     image install apkovl
+# @see     image overlay write
+# @see     image overlay pack
+# @see     template file add
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_overlay_files_place1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1" t="" cur="" chain="" p="" n=0 files="" line=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	files=$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
+	if test -z "$files"; then
+		printf '%s\n' "# image $1: no file lines in $t -- the overlay carries the answer file and the two hooks alone"
+		return 0
+	fi
+	printf '%s\n' "$files" | while IFS= read -r line; do
+		set -- $line
+		printf '%s\n' "install -d -m 755 '$dir/overlay.d/etc/vm-bake/files$(dirname "$2")' && install -m $3 '$VM_BAKE_BASE/dowry/$1/object' '$dir/overlay.d/etc/vm-bake/files$2' || exit 1"
+	done
+	printf '%s\n' "printf '# image %s: %s files from dowries in the overlay\\n' $(sq "$1") '$(printf '%s\n' "$files" | grep -c .)' >&2"
+}
+
+#@help _image_overlay_pack1
+# @command image overlay pack <image>
+# @summary Act terminal: the files and links of overlay.d packed as VM_BAKE_IMAGE_DIR/<image>/overlay/vmbake.apkovl.tar.gz (bsdtar from a find list, owned by root:root; the files alone, no directory entry: the live system unpacks the overlay over its root), then the overlay directory becomes overlay.iso (makefs cd9660, rockridge, label vmbakeovl), the CD the throwaway guest carries besides the live ISO -- the live system's init mounts every block device that carries a filesystem and takes the first *.apkovl.tar.gz it finds in a root directory
+# @group   image
+# @internal
+# @see     image install apkovl
+# @see     image overlay write
+# @see     image overlay files place
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+#@end
+_image_overlay_pack1() {
+	local dir="$VM_BAKE_IMAGE_DIR/$1"
+	printf '%s\n' "install -d -m 700 '$dir/overlay' || exit 1"
+	printf '%s\n' "(cd '$dir/overlay.d' && find . -type f -o -type l | sed 's|^\\./||' | bsdtar -czf '$dir/overlay/vmbake.apkovl.tar.gz' --uid 0 --gid 0 --uname root --gname root -n -T -) || exit 1"
+	printf '%s\n' "rm -f '$dir/overlay.iso' && makefs -t cd9660 -o rockridge -o label=vmbakeovl '$dir/overlay.iso' '$dir/overlay' && chmod 600 '$dir/overlay.iso' || exit 1"
+	printf '%s\n' "printf '# image %s: overlay.iso -- vmbake.apkovl.tar.gz with %s entries\\n' $(sq "$1") \"\$(cd '$dir/overlay.d' && find . -type f -o -type l | wc -l | tr -d ' ')\" >&2"
+}
+
+#@help __image_console_watch1
+# @command image console watch <image>
+# @summary The throwaway guest's serial console read while the live system installs and the first boot reports, by VM_BAKE_CONSOLE (the way vm-bhyve offers consoles): rewrite to 'image console watch tmux <image>' or 'image console watch nmdm <image>' -- nothing is typed, the overlay answers everything
+# @group   image
+# @internal
+# @see     image install apkovl
+# @see     image console drive
+# @env     VM_BAKE_CONSOLE  tmux or nmdm, vm-bhyve's console= setting
+#@end
+__image_console_watch1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image console watch $(sq "$VM_BAKE_CONSOLE") $(sq "$1")"
+}
+
+#@help __image_console_watch2
+# @internal dispatch fallback of 'image console watch <console> <image>' for a console that is neither tmux nor nmdm: an error line
+#@end
+__image_console_watch2() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image console watch: VM_BAKE_CONSOLE is $1, which is no console of vm-bhyve (tmux | nmdm)")"
+}
+
+#@help _image_console_watch_tmux1
+# @command image console watch tmux <image>
+# @summary Act terminal (root): the installation of the throwaway guest watched over vm-bhyve's tmux session (capture-pane reads; nothing is typed): the live system's hook (image overlay write) reports '# vm-bake install: complete, powering off' or '# vm-bake install: failed' (the latter ends the wait at once); when the guest is down it is started again with 'vm start', from its disk (vm-bhyve keeps the live ISO first in the boot order through every restart of its run loop, so a reboot would run the live system and its installer once more) -- that is the first boot, and the watch stays on the console until the first boot's script reports: '# vm-bake firstboot: missing <packages>' ends the bake with an error naming them, '# vm-bake firstboot: packages complete' hands over to 'image firstboot gone'. Every wait has its seconds and ends in an error with the last screen and the guest powered off (vm poweroff -f): a guest whose install went wrong sits in vm-bhyve's restart loop otherwise, and the next 'guest install' would find it running
+# @group   image
+# @internal
+# @see     image console watch
+# @see     image overlay write
+# @see     image console drive tmux
+# @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, the tmux session
+# @env     VM_BAKE_CONSOLE  tmux or nmdm, named in the error when the session or the device does not appear
+#@end
+_image_console_watch_tmux1() {
+	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT")"
+	printf '%s\n' 'pane() { tmux capture-pane -p -t "$g" 2>/dev/null || true; }'
+	printf '%s\n' 'n=0; until tmux has-session -t "$g" 2>/dev/null; do n=$((n + 1)); test "$n" -lt 60 || { printf "# Error: console %s: no tmux session within a minute (VM_BAKE_CONSOLE says tmux; vm-bhyve console= in system.conf?)\n" "$g" >&2; exit 1; }; sleep 1; done'
+	cat <<'EOF_STEPS'
+give_up() { printf '# Error: console %s: %s\n' "$g" "$1" >&2; pane | tail -15 >&2; vm poweroff -f "$g" >/dev/null 2>&1; printf '# console %s: powered off\n' "$g" >&2; exit 1; }
+wait_for() { n=0; until pane | grep -- "$1" >/dev/null; do pane | grep "# vm-bake install: failed" >/dev/null && give_up "setup-alpine failed on the live system before $1"; n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 within $2 s"; sleep 1; done; }
+wait_for '# vm-bake install: complete' 1800
+n=0; until vm list | grep "^$g  *.*Stopped" >/dev/null; do n=$((n + 1)); test "$n" -le 60 || give_up "still running two minutes after the installer's power-off"; sleep 2; done
+vm start "$g" >&2 || give_up "vm start failed after the install"
+printf '# console %s: installed, powered off by the installer and started again from its disk for the first boot\n' "$g" >&2
+wait_for '# vm-bake firstboot:' 1800
+pane | grep -q '# vm-bake firstboot: missing' && give_up "the first boot left packages out: $(pane | grep '# vm-bake firstboot: missing' | tail -1 | tr -d '\r' | sed 's/.*missing //')"
+printf '# console %s: the first boot reports its packages complete\n' "$g" >&2
+EOF_STEPS
+}
+
+#@help _image_console_watch_nmdm1
+# @command image console watch nmdm <image>
+# @summary Act terminal (root): the same watch as 'image console watch tmux', over vm-bhyve's nmdm pair -- /dev/nmdm-<firstboot>.1B opened once on descriptor 3 in raw mode without echo (a freshly opened tty would send every byte the guest prints back into it as keystrokes), read into VM_BAKE_GUEST_DIR/<firstboot>/console.log by a cat in the background, the last forty lines standing for the screen
+# @group   image
+# @internal
+# @see     image console watch
+# @see     image console drive nmdm
+# @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, in the device name
+# @env     VM_BAKE_GUEST_DIR  the guests' directory, where the console log lies
+# @env     VM_BAKE_CONSOLE  tmux or nmdm, named in the error when the session or the device does not appear
+#@end
+_image_console_watch_nmdm1() {
+	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT") dev=$(sq "/dev/nmdm-$VM_BAKE_FIRSTBOOT.1B") log=$(sq "$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/console.log")"
+	printf '%s\n' 'n=0; until test -c "$dev"; do n=$((n + 1)); test "$n" -lt 60 || { printf "# Error: console %s: no %s within a minute (VM_BAKE_CONSOLE says nmdm; vm-bhyve console= in system.conf?)\n" "$g" "$dev" >&2; exit 1; }; sleep 1; done'
+	printf '%s\n' 'exec 3<> "$dev"; stty raw -echo <&3'
+	printf '%s\n' ': > "$log"; cat <&3 >> "$log" & rd=$!' 'trap '"'"'kill "$rd" 2>/dev/null'"'"' EXIT'
+	printf '%s\n' 'pane() { tail -n 40 "$log" 2>/dev/null | tr -d "\r" | cat -v; }'
+	cat <<'EOF_STEPS'
+give_up() { printf '# Error: console %s: %s\n' "$g" "$1" >&2; pane | tail -15 >&2; vm poweroff -f "$g" >/dev/null 2>&1; printf '# console %s: powered off\n' "$g" >&2; exit 1; }
+wait_for() { n=0; until pane | grep -- "$1" >/dev/null; do pane | grep "# vm-bake install: failed" >/dev/null && give_up "setup-alpine failed on the live system before $1"; n=$((n + 1)); test "$n" -lt "$2" || give_up "no $1 within $2 s"; sleep 1; done; }
+wait_for '# vm-bake install: complete' 1800
+n=0; until vm list | grep "^$g  *.*Stopped" >/dev/null; do n=$((n + 1)); test "$n" -le 60 || give_up "still running two minutes after the installer's power-off"; sleep 2; done
+vm start "$g" >&2 || give_up "vm start failed after the install"
+printf '# console %s: installed, powered off by the installer and started again from its disk for the first boot\n' "$g" >&2
+wait_for '# vm-bake firstboot:' 1800
+pane | grep -q '# vm-bake firstboot: missing' && give_up "the first boot left packages out: $(pane | grep '# vm-bake firstboot: missing' | tail -1 | tr -d '\r' | sed 's/.*missing //')"
+printf '# console %s: the first boot reports its packages complete\n' "$g" >&2
+EOF_STEPS
 }
 
 
@@ -2798,7 +3486,7 @@ _image_seed_check_write1() {
 	printf '%s\n' "  - path: /var/lib/cloud/scripts/per-once/vm-bake-packages.sh" "    permissions: '0755'" "    content: |"
 	printf '%s\n' "      #!/bin/sh" "      # written by vm-bake (image seed check write) -- the bake's first boot, after the packages: each checked against dpkg, the report line on the console"
 	printf '%s\n' "      install -d -m 755 /etc/vm-bake" "      dpkg-query -W -f='\${binary:Package} \${Version}\\n' > /etc/vm-bake/packages" "      missing="
-	printf '%s\n' "      for p in $pkgs; do dpkg-query -W -f='\${Status}' \"\$p\" 2>/dev/null | grep -q 'install ok installed' || missing=\"\$missing \$p\"; done"
+	for p in $pkgs; do printf '%s\n' "      dpkg-query -W -f='\${Status}' $p 2>/dev/null | grep -q 'install ok installed' || missing=\"\$missing $p\""; done
 	printf '%s\n' "      test -n \"\$missing\" && printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" > /dev/console || printf '# vm-bake firstboot: packages complete\\n' > /dev/console"
 	printf '%s\n' "EOF_CHECK"
 }
@@ -2831,6 +3519,7 @@ __image_firstboot_report1() {
 # @see     image firstboot report
 # @see     image console drive tmux
 # @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, the tmux session
+# @env     VM_BAKE_CONSOLE  tmux or nmdm, named in the error when the session or the device does not appear
 #@end
 _image_firstboot_report_tmux0() {
 	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT")"
@@ -2853,6 +3542,7 @@ EOF_REPORT
 # @see     image console drive nmdm
 # @env     VM_BAKE_FIRSTBOOT  the throwaway guest's name, in the device name
 # @env     VM_BAKE_GUEST_DIR  the guests' directory, where the console log lies
+# @env     VM_BAKE_CONSOLE  tmux or nmdm, named in the error when the session or the device does not appear
 #@end
 _image_firstboot_report_nmdm0() {
 	printf '%s\n' "g=$(sq "$VM_BAKE_FIRSTBOOT") dev=$(sq "/dev/nmdm-$VM_BAKE_FIRSTBOOT.1B") log=$(sq "$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/console.log") lock=$(sq "$VM_BAKE_GUEST_DIR/$VM_BAKE_FIRSTBOOT/run.lock")"

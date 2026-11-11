@@ -648,7 +648,7 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify key_fetch key_verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_source_write seed_sshd_write seed_file_write seed_check_write seed_view_write seed_pack firstboot_conf_write firstboot_report_tmux firstboot_report_nmdm firstboot_gone firstboot_conf_drop response_write site_write site_files_place site_pack console_drive_tmux console_drive_nmdm file_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify key_fetch key_verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_source_write seed_sshd_write seed_file_write seed_check_write seed_view_write seed_pack firstboot_conf_write firstboot_report_tmux firstboot_report_nmdm firstboot_gone firstboot_conf_drop response_write site_files_place site_pack console_drive_tmux console_drive_nmdm overlay_files_place overlay_pack site_head_write site_user_write site_env_write site_net_write site_firsttime_write overlay_answer_write overlay_install_write overlay_firstboot_write overlay_sshd_write overlay_user_write overlay_env_write overlay_file_write overlay_view_write overlay_net_write overlay_report_write console_watch_tmux console_watch_nmdm file_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
 GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write seed_write_cloud_init seed_write_autoinstall home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run install halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure"
 pin_image_cat() {
   local f
@@ -855,7 +855,7 @@ test_image_emissions() {
     fail "image-kind emissions: $out"
   fi
   out=$(run_vmbake image keys write x; run_vmbake image pkg base x FreeBSD:15:amd64 1501000)
-  if printf '%s\n' "$out" | grep -q 'for d in /usr/share/keys/\*/; do' && printf '%s\n' "$out" | grep -q "pkg -r '$TEST_DIR/img/x/mnt' -o ABI='FreeBSD:15:amd64' -o OSVERSION='1501000' -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install FreeBSD-set-minimal FreeBSD-kernel-generic FreeBSD-ssh pkg"; then
+  if printf '%s\n' "$out" | grep -q "cp -R /usr/share/keys/. '$TEST_DIR/img/x/mnt/usr/share/keys/' || exit 1" && printf '%s\n' "$out" | grep -q "pkg -r '$TEST_DIR/img/x/mnt' -o ABI='FreeBSD:15:amd64' -o OSVERSION='1501000' -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install FreeBSD-set-minimal FreeBSD-kernel-generic FreeBSD-ssh pkg"; then
     pass "keys copied where it runs, then pkg -r with the pinned ABI and OSVERSION"
   else
     fail "keys/pkg base: $out"
@@ -1758,7 +1758,7 @@ test_guest_report() {
   view_chain
   local out plan
   out=$(run_vmbake guest show caledonia)
-  if printf '%s\n' "$out" | grep -q "^# guest caledonia" && printf '%s\n' "$out" | grep -q "^#   image     x" && printf '%s\n' "$out" | grep -q "^#   chain     empty > freebsd > freebsd-15.1 > freebsd-dev" && printf '%s\n' "$out" | grep -q "^#   view      $TEST_DIR/view/caledonia on the host" && printf '%s\n' "$out" | grep -q "slot 30, share home" && [ "$(printf '%s\n' "$out" | grep -c '^# [a-z]* (origin')" = "12" ]; then
+  if printf '%s\n' "$out" | grep -q "^# guest caledonia" && printf '%s\n' "$out" | grep -q "^#   image     x" && printf '%s\n' "$out" | grep -q "^#   chain     empty > freebsd > freebsd-15.1 > freebsd-dev" && printf '%s\n' "$out" | grep -q "^#   view      $TEST_DIR/view/caledonia on the host" && printf '%s\n' "$out" | grep -q "slot 30, share home" && [ "$(printf '%s\n' "$out" | grep -c '^# [a-z]* (origin')" = "14" ]; then
     pass "guest show names record, template chain, view and every list family"
   else
     fail "guest show: $out"
@@ -2263,7 +2263,7 @@ test_linux_plan() {
   else
     fail "seed with file: $out"
   fi
-  if printf '%s\n' "$out" | grep -q "^  - path: /var/lib/cloud/scripts/per-once/vm-bake-packages.sh$" && printf '%s\n' "$out" | grep -qF "      for p in git sudo; do dpkg-query -W -f='\${Status}' \"\$p\" 2>/dev/null | grep -q 'install ok installed' || missing=\"\$missing \$p\"; done" && printf '%s\n' "$out" | grep -qF "printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" > /dev/console || printf '# vm-bake firstboot: packages complete\\n' > /dev/console" && printf '%s\n' "$out" | grep -q "dpkg-query -W -f='\${binary:Package} \${Version}\\\\n' > /etc/vm-bake/packages"; then
+  if printf '%s\n' "$out" | grep -q "^  - path: /var/lib/cloud/scripts/per-once/vm-bake-packages.sh$" && printf '%s\n' "$out" | grep -qF "      dpkg-query -W -f='\${Status}' git 2>/dev/null | grep -q 'install ok installed' || missing=\"\$missing git\"" && printf '%s\n' "$out" | grep -qF "      dpkg-query -W -f='\${Status}' sudo 2>/dev/null | grep -q 'install ok installed' || missing=\"\$missing sudo\"" && ! printf '%s\n' "$out" | grep -q "for p in" && printf '%s\n' "$out" | grep -qF "printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" > /dev/console || printf '# vm-bake firstboot: packages complete\\n' > /dev/console" && printf '%s\n' "$out" | grep -q "dpkg-query -W -f='\${binary:Package} \${Version}\\\\n' > /etc/vm-bake/packages"; then
     pass "image seed write: the per-once script asks dpkg for every package of the template and reports missing or complete on the console"
   else
     fail "seed check: $out"
@@ -2445,7 +2445,7 @@ quoted default ran" ]; then
   else
     fail "image site write: $out"
   fi
-  if printf '%s\n' "$out" | grep -qF 'for p in git; do grep -q "^${p%%--*}-[0-9]" /etc/vm-bake/packages || missing="$missing $p"; done' && printf '%s\n' "$out" | grep -qF "test -n \"\$missing\" && printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" > /dev/console || printf '# vm-bake firstboot: packages complete\\n' > /dev/console" && [ "$(printf '%s\n' "$out" | grep -n '^shutdown -p now$' | cut -d: -f1)" -gt "$(printf '%s\n' "$out" | grep -n '# vm-bake firstboot: packages complete' | cut -d: -f1)" ]; then
+  if printf '%s\n' "$out" | grep -qF "grep -q '^git-[0-9]' /etc/vm-bake/packages || missing=\"\$missing git\"" && ! printf '%s\n' "$out" | grep -q "for p in" && printf '%s\n' "$out" | grep -qF "test -n \"\$missing\" && printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" > /dev/console || printf '# vm-bake firstboot: packages complete\\n' > /dev/console" && [ "$(printf '%s\n' "$out" | grep -n '^shutdown -p now$' | cut -d: -f1)" -gt "$(printf '%s\n' "$out" | grep -n '# vm-bake firstboot: packages complete' | cut -d: -f1)" ]; then
     pass "image site write: the first boot checks every package against pkg_info (the stem before a flavor's --), reports missing or complete on the console, and powers off after the report"
   else
     fail "image site write, the first boot's check: $out"
@@ -2533,6 +2533,162 @@ quoted default ran" ]; then
   fi
 }
 
+alpine_chain() {
+  : > "$TEST_DIR/alpine-virt-3.22.1-x86_64.iso"
+  run_vmbake template add alpine > /dev/null
+  run_vmbake template add alpine-3.22 alpine > /dev/null
+  run_vmbake template base iso alpine-3.22 amd64 "$TEST_DIR/alpine-virt-3.22.1-x86_64.iso" 0000000000000000000000000000000000000000000000000000000000000000 > /dev/null
+  run_vmbake template bake apkovl alpine-3.22 > /dev/null
+  run_vmbake template add alpine-dev alpine-3.22 > /dev/null
+  run_vmbake template resource alpine-dev 2 2G 20G > /dev/null
+  run_vmbake template package add alpine-dev git > /dev/null
+  run_vmbake template package add alpine-dev doas > /dev/null
+  run_vmbake template env add alpine-dev EDITOR vi > /dev/null
+  run_vmbake template user add alpine-dev "$(id -un)" host > /dev/null
+  run_vmbake template service add alpine-dev files view > /dev/null
+}
+
+test_alpine_plan() {
+  test_header "alpine: image make alpine as plans, the overlay (answer file, installer hook, first boot), the console watch, the guest's seed"
+  test_setup
+  image_chain
+  openbsd_chain
+  alpine_chain
+  local plan out img="img:alpine-dev:v1" u="$(id -un)"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake template bake apkovl alpine-3.22 | grep -q "template leaf record 'alpine-3.22' bake apkovl" && run_vmbake template bake foo alpine-3.22 | grep -q "chroot | cloud-init | autoinstall | apkovl"; then
+    pass "template bake apkovl records the bake, an unknown way names the four"
+  else
+    fail "template bake apkovl: $(run_vmbake template bake foo alpine-3.22)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  plan=$(run_vmbake image make alpine alpine-dev v1)
+  if printf '%s\n' "$plan" | grep -q "image make alpine from 'alpine-dev' 'v1' '$img'" && run_vmbake image make alpine $img | grep -q "image make alpine from 'alpine-dev' 'v1' '$img'" && run_vmbake image make alpine alpine-dev v1 img:k8s:v1 | grep -q "image make alpine from 'alpine-dev' 'v1' 'img:k8s:v1'"; then
+    pass "the three spellings of image make alpine rewrite to image make alpine from"
+  else
+    fail "image make alpine spellings: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  plan=$(run_vmbake image make alpine from alpine-dev v1 $img)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "8" ] && printf '%s\n' "$plan" | sed -n 5p | grep -q "image create apkovl 'alpine-dev' '$img'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image install apkovl '$img'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "image close iso '$img'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image seal '$img'"; then
+    pass "image make alpine from: note, template, name, free, then create apkovl, install apkovl, close iso, seal"
+  else
+    fail "image make alpine from plan: $plan"
+  fi
+  plan=$(run_vmbake image create apkovl alpine-dev $img)
+  if printf '%s\n' "$plan" | grep -q "image check apkovl 'alpine-dev'" && printf '%s\n' "$plan" | tail -1 | grep -q "image disk create '$img' '20G'" && printf '%s\n' "$plan" | grep -n "image record write\|image dataset create\|image disk create" | tr '\n' ' ' | grep -q "record write.* dataset create.* disk create" && ! printf '%s\n' "$plan" | grep -q "image fetch"; then
+    pass "image create apkovl: the apkovl check, the record, the dataset, an empty disk of the template's disk size, nothing fetched"
+  else
+    fail "image create apkovl plan: $plan"
+  fi
+  run_vmbake image record write alpine-dev $img > /dev/null
+  plan=$(run_vmbake image install apkovl $img)
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ] && printf '%s\n' "$plan" | sed -n 2p | grep -q "image overlay write '$img'" && printf '%s\n' "$plan" | sed -n 3p | grep -q "image overlay files place '$img'" && printf '%s\n' "$plan" | sed -n 4p | grep -q "image overlay pack '$img'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image firstboot conf '$img'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "guest install 'firstboot' '$TEST_DIR/alpine-virt-3.22.1-x86_64.iso'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image console watch '$img'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image firstboot gone" && printf '%s\n' "$plan" | tail -1 | grep -q "image firstboot conf drop"; then
+    pass "image install apkovl: record, overlay, files, pack, conf, link, install from the live ISO, watch, gone, link drop, conf drop"
+  else
+    fail "image install apkovl plan: $plan"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake image check apkovl freebsd-dev 2>&1 | grep -q "Error" && run_vmbake image check apkovl openbsd-dev 2>&1 | grep -q "Error" && [ -z "$(run_vmbake image check apkovl alpine-dev 2>&1)" ] && mv "$TEST_DIR/alpine-virt-3.22.1-x86_64.iso" "$TEST_DIR/alpine.iso.away" && run_vmbake image check apkovl alpine-dev 2>&1 | grep -q "Error" && mv "$TEST_DIR/alpine.iso.away" "$TEST_DIR/alpine-virt-3.22.1-x86_64.iso"; then
+    pass "image check apkovl: a release base, an autoinstall ISO and a missing live ISO are errors, a readable alpine-*.iso with the bake apkovl passes"
+  else
+    fail "image check apkovl: $(run_vmbake image check apkovl alpine-dev 2>&1 | tail -2)"
+  fi
+  if pin_image_cat; then
+    pass "every image and guest act is pinned to cat in the sandbox"
+  else
+    fail "acts not pinned to cat -- not calling them"; return
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_guest_hostkey_bind" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
+  run_vmbake setenv VM_BAKE_GUEST_DIR "$TEST_DIR/gst" > /dev/null
+  printf 'ssh-ed25519 AAAATEST test@host\n' > "$TEST_DIR/key.pub"
+  run_vmbake setenv VM_BAKE_HOST_KEY "$TEST_DIR/key.pub" > /dev/null
+  out=$(run_vmbake image overlay write $img 2>&1)
+  if printf '%s\n' "$out" | grep -q "^HOSTNAMEOPTS=firstboot$" && printf '%s\n' "$out" | grep -q "^    address 172.16.100.249$" && printf '%s\n' "$out" | grep -q "^    netmask 255.255.255.0$" && printf '%s\n' "$out" | grep -q "^    gateway 172.16.100.100$" && printf '%s\n' "$out" | grep -q "^DNSOPTS=\"-d local 172.16.100.100\"$" && printf '%s\n' "$out" | grep -q "^USEROPTS=none$" && printf '%s\n' "$out" | grep -q "^DISKOPTS=\"-m sys /dev/vda\"$" && printf '%s\n' "$out" | grep -q "^APKREPOSOPTS=\"-1 -c\"$" && printf '%s\n' "$out" | grep -q "^SSHDOPTS=openssh$" && printf '%s\n' "$out" | grep -q "ln -sf /etc/init.d/local '$TEST_DIR/img/$img/overlay.d/etc/runlevels/default/local'"; then
+    pass "image overlay write, the answer file: the bake's hostname and static address, gateway and nameserver, no user, the whole disk in the sys mode, the first mirror with community, openssh; the local service linked into the default runlevel"
+  else
+    fail "image overlay write, the answer file: $out"
+  fi
+  if printf '%s\n' "$out" | grep -q "^rm -f /etc/local.d/vm-bake-install.start$" && printf '%s\n' "$out" | grep -q "^export ERASE_DISKS=/dev/vda$" && printf '%s\n' "$out" | grep -q "^if setup-alpine -e -f /etc/vm-bake/answerfile; then$" && printf '%s\n' "$out" | grep -qF "printf '# vm-bake install: complete, powering off\n' | tee /dev/ttyS0 > /dev/console; poweroff" && printf '%s\n' "$out" | grep -qF "printf '# vm-bake install: failed\n' | tee /dev/ttyS0 > /dev/console"; then
+    pass "image overlay write, the installer hook: removes itself, names the disk to erase, runs setup-alpine against the answer file without a root password, reports complete or failed on the console and powers off"
+  else
+    fail "image overlay write, the installer hook: $out"
+  fi
+  if printf '%s\n' "$out" | grep -qF "/proc/mounts)\" != tmpfs || exit 0" && printf '%s\n' "$out" | grep -q "^rm -f /etc/local.d/vm-bake-firstboot.start$" && printf '%s\n' "$out" | grep -q "^apk add --no-progress git doas 2>&1 | tee /dev/console$" && printf '%s\n' "$out" | grep -qF "grep -qx 'git' /etc/vm-bake/packages || missing=\"\$missing git\"" && printf '%s\n' "$out" | grep -qF "grep -qx 'doas' /etc/vm-bake/packages || missing=\"\$missing doas\"" && ! printf '%s\n' "$out" | grep -q "for p in" && printf '%s\n' "$out" | grep -q "^Port 2222$" && printf '%s\n' "$out" | grep -q "^PermitRootLogin no$" && printf '%s\n' "$out" | grep -q "^adduser -D -u $(id -u) -G wheel -s /bin/sh '$u'$" && printf '%s\n' "$out" | grep -qF "sed -i 's/^$u:!:/$u:*:/' /etc/shadow" && printf '%s\n' "$out" | grep -qF "printf '%s\n' 'ssh-ed25519 AAAATEST test@host' > '/etc/ssh/authorized_keys/$u' && chmod 644 '/etc/ssh/authorized_keys/$u'" && printf '%s\n' "$out" | grep -q "^permit nopass keepenv $u as root$" && printf '%s\n' "$out" | grep -q "^export EDITOR=\"vi\"$" && printf '%s\n' "$out" | grep -q "^passwd -l root$"; then
+    pass "image overlay write, the first boot: nothing on the live tmpfs, removes itself, the packages added and each checked against apk info, sshd on the port without root, the host-uid user with the key and the shadow field *, doas from the package, the env line, root locked"
+  else
+    fail "image overlay write, the first boot: $out"
+  fi
+  if printf '%s\n' "$out" | grep -qF "printf '%s\n' sr_mod isofs >> /etc/modules" && printf '%s\n' "$out" | grep -qF "printf '%s\n' 9p 9pnet_virtio >> /etc/modules" && printf '%s\n' "$out" | grep -qF "'home /home/$u 9p trans=virtio,version=9p2000.L,rw,nofail 0 0' '/var/git /home/$u/git/local none bind,nofail 0 0' >> /etc/fstab" && printf '%s\n' "$out" | grep -q "^seed /dev/sr0$" && printf '%s\n' "$out" | grep -q "^seed /dev/sr1$" && ! printf '%s\n' "$out" | grep -q "^for " && printf '%s\n' "$out" | grep -q "^    up /usr/local/libexec/vm-bake-seed$" && printf '%s\n' "$out" | grep -qF "'172.16.100.249' > /etc/vm-bake/address" && printf '%s\n' "$out" | grep -qF "test -n \"\$missing\" && printf '# vm-bake firstboot: missing%s\\n' \"\$missing\" | tee /dev/ttyS0 > /dev/console || printf '# vm-bake firstboot: packages complete\\n' | tee /dev/ttyS0 > /dev/console" && printf '%s\n' "$out" | grep -q "^sync; poweroff$"; then
+    pass "image overlay write, the first boot: the CD and 9p modules, the view's fstab lines, the seed hook called per CD device as the up command of eth0, the bake's address kept, the report line on the console, the power-off after it"
+  else
+    fail "image overlay write, the view and the seed: $out"
+  fi
+  out=$(run_vmbake image overlay pack $img 2>&1)
+  if printf '%s\n' "$out" | grep -qF "(cd '$TEST_DIR/img/$img/overlay.d' && find . -type f -o -type l | sed 's|^\./||' | bsdtar -czf '$TEST_DIR/img/$img/overlay/vmbake.apkovl.tar.gz' --uid 0 --gid 0 --uname root --gname root -n -T -) || exit 1" && printf '%s\n' "$out" | grep -q "label=vmbakeovl '$TEST_DIR/img/$img/overlay.iso' '$TEST_DIR/img/$img/overlay'"; then
+    pass "image overlay pack: the files and links of overlay.d as root:root without directory entries, as the apkovl the live system looks for, the overlay directory as overlay.iso"
+  else
+    fail "image overlay pack: $out"
+  fi
+  if run_vmbake image overlay files place $img | grep -q "no file lines in alpine-dev"; then
+    pass "image overlay files place: no file lines is a comment"
+  else
+    fail "overlay files place without lines: $(run_vmbake image overlay files place $img)"
+  fi
+  printf 'hosts: files dns\n' > "$TEST_DIR/nss.conf"
+  run_vmbake dowry add nss "$TEST_DIR/nss.conf" > /dev/null
+  run_vmbake template file add alpine-dev nss /etc/nsswitch.conf 0644 > /dev/null
+  out=$(run_vmbake image overlay files place $img)
+  plan=$(run_vmbake image overlay write $img)
+  if printf '%s\n' "$out" | grep -q "^install -d -m 755 '$TEST_DIR/img/$img/overlay.d/etc/vm-bake/files/etc' && install -m 0644 '$TEST_DIR/dowry/nss/object' '$TEST_DIR/img/$img/overlay.d/etc/vm-bake/files/etc/nsswitch.conf' || exit 1$" && printf '%s\n' "$out" | grep -q "files from dowries in the overlay.*'$img' '1' >&2" && printf '%s\n' "$plan" | grep -q "^install -d -m 755 '/etc' && install -m 0644 '/etc/vm-bake/files/etc/nsswitch.conf' '/etc/nsswitch.conf'$" && printf '%s\n' "$plan" | grep -q "^rm -rf /etc/vm-bake/files$"; then
+    pass "image overlay files place: the dowry's object staged under etc/vm-bake/files at its path with the line's mode; the first boot installs it at its path and removes the staging"
+  else
+    fail "overlay files place: $out / $plan"
+  fi
+  run_vmbake template file drop alpine-dev nss /etc/nsswitch.conf 0644 > /dev/null
+  out=$(run_vmbake image firstboot conf write $img "$TEST_DIR/img/$img/overlay.iso")
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if printf '%s\n' "$out" | grep -q '^cpu=2$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/$img/overlay.iso\"$" && ! printf '%s\n' "$out" | grep -q "alpine-virt" && run_vmbake image firstboot conf $img | grep -q "image firstboot conf 'apkovl' '$img'" && run_vmbake image firstboot conf apkovl $img | grep -q "image firstboot conf write '$img' '$TEST_DIR/img/$img/overlay.iso'"; then
+    pass "image firstboot conf: apkovl hangs the overlay.iso on as the one CD, the live ISO is not in the configuration"
+  else
+    fail "firstboot conf apkovl: $out"
+  fi
+  if run_vmbake image console watch $img | grep -q "image console watch 'nmdm' '$img'" && run_vmbake image console watch foo $img | grep -q "tmux | nmdm"; then
+    pass "image console watch: VM_BAKE_CONSOLE picks the watcher, nmdm by default, another word is an error"
+  else
+    fail "image console watch: $(run_vmbake image console watch $img)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  out=$(run_vmbake image console watch tmux $img 2>&1)
+  plan=$(run_vmbake image console watch nmdm $img 2>&1)
+  if printf '%s\n' "$out" | grep -q "^g='firstboot'$" && printf '%s\n' "$out" | grep -q 'tmux capture-pane' && printf '%s\n' "$plan" | grep -q '^exec 3<> "$dev"; stty raw -echo <&3$' && [ "$(printf '%s\n' "$out$plan" | grep -c "^wait_for '# vm-bake install: complete' 1800$")" = "2" ] && [ "$(printf '%s\n' "$out$plan" | grep -c '^vm start "$g" >&2 || give_up')" = "2" ] && [ "$(printf '%s\n' "$out$plan" | grep -c "^wait_for '# vm-bake firstboot:' 1800$")" = "2" ] && [ "$(printf '%s\n' "$out$plan" | grep -c "vm-bake install: failed.*give_up")" = "2" ] && ! printf '%s\n' "$out$plan" | grep -q "send"; then
+    pass "image console watch tmux and nmdm: nothing typed; the installer's report line awaited (failed ends the wait), the guest started again from its disk, the first boot's report awaited; over the session or the raw device"
+  else
+    fail "console watch: $out / $plan"
+  fi
+  run_vmbake guest record write $img dacia 172.16.100.104/24 > /dev/null
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake guest disk write dacia | grep -q "guest disk write 'apkovl' 'dacia'" && run_vmbake guest disk write apkovl dacia | grep -q "guest seed write autoinstall 'dacia'"; then
+    pass "guest disk write: an apkovl guest gets the autoinstall seed, the CD its hook reads"
+  else
+    fail "guest disk write apkovl: $(run_vmbake guest disk write dacia)"
+  fi
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  out=$(run_vmbake guest conf write dacia)
+  if printf '%s\n' "$out" | grep -q '^network0_mac="58:9c:fc:10:64:68"$' && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/gst/dacia/seed.iso\"$" && ! printf '%s\n' "$out" | grep -q 'bhyve_options=.*-w'; then
+    pass "guest conf write: an apkovl guest carries the MAC of its address and the seed as disk1, without -w"
+  else
+    fail "guest conf write apkovl: $out"
+  fi
+}
+
 main() {
   if [ "$MAXPROCS" -gt 1 ]; then
     parallel_main
@@ -2573,6 +2729,7 @@ main() {
   should_run_test test_hostkey
   should_run_test test_linux_plan
   should_run_test test_openbsd_plan
+  should_run_test test_alpine_plan
   should_run_test test_dump_witness
   should_run_test test_archive_pair
 

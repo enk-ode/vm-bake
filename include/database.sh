@@ -84,13 +84,13 @@ __bootstrap_init2() {
 # @see     bootstrap
 #@end
 _bootstrap_link2() {
-        local db="$2/db" new="$2/$1"
-        printf '%s\n' "if test -d '$db' && ! test -L '$db'; then"
-        printf '%s\n' "  (cd '$db' && find .tmp .log \\( -type f -o -type l \\) 2>/dev/null) | while IFS= read -r f; do"
-        printf '%s\n' "    $MODIFY_DIR_CREATE \"$new/\$(dirname \"\$f\")\" && mv -f \"$db/\$f\" \"$new/\$f\" || exit 1"
-        printf '%s\n' "  done || exit 1"
-        printf '%s\n' "  rm -rf '$db/.tmp' '$db/.log' && rmdir '$db' || { printf '# Error: bootstrap link: %s is a directory, not the active-DB link (a database of that name? move it away)\\n' '$db' >&2; exit 1; }"
-        printf '%s\n' "fi"
+        local db="$2/db" new="$2/$1" f=""
+        if test -d "$db" && ! test -L "$db"; then
+                (cd "$db" && find .tmp .log \( -type f -o -type l \) 2>/dev/null) | while IFS= read -r f; do
+                        printf '%s\n' "$MODIFY_DIR_CREATE '$new/$(dirname "$f")' && mv -f '$db/$f' '$new/$f' || exit 1"
+                done
+                printf '%s\n' "rm -rf '$db/.tmp' '$db/.log' && rmdir '$db' || { printf '# Error: bootstrap link: %s is a directory, not the active-DB link (a database of that name? move it away)\\n' '$db' >&2; exit 1; }"
+        fi
         printf '%s\n' "$MODIFY_LINK_FORCE '$1' '$db'"
 }
 

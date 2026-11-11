@@ -380,7 +380,7 @@ _guest_conf_write1() {
 	test "$view" = no || opts="-s $VM_BAKE_VIEW_SLOT,virtio-9p,home=$dir/$1"
 	test "$bake" != autoinstall || opts="${opts:+$opts }-w"
 	test -z "$opts" || printf '%s\n' "bhyve_options=\"$opts\""
-	case "$bake" in cloud-init|autoinstall) printf '%s\n' "network0_mac=\"$mac\"" 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_GUEST_DIR/$1/seed.iso\"" 'disk1_dev="custom"' ;; esac
+	case "$bake" in cloud-init|autoinstall|apkovl) printf '%s\n' "network0_mac=\"$mac\"" 'disk1_type="ahci-cd"' "disk1_name=\"$VM_BAKE_GUEST_DIR/$1/seed.iso\"" 'disk1_dev="custom"' ;; esac
 	printf '%s\n' "EOF_CONF"
 	printf '%s\n' "printf '# guest %s: %s (cpu %s as %s, memory %s, view $view)\\n' '$1' '$conf' '$2' $(sq "$top") '$3' >&2"
 }
@@ -599,7 +599,7 @@ _guest_find2() {
 			cur=$p; n=$((n + 1))
 		done
 		own=$(awk -v g="$g" '{ printf "#   %-16s %s\n", g, $0 }' "$d/tag" 2>/dev/null || true)
-		hit=$( { printf '%s\n' "$own"; awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk"; } | VM_BAKE_PATTERN=$2 awk -v k="$1" 'BEGIN { p = tolower(ENVIRON["VM_BAKE_PATTERN"]) } $3 == k { t = $0; sub(/^#   [^ ]+ +[^ ]+ +/, "", t); if (tolower(t) ~ p) print }' || true)
+		hit=$( { printf '%s\n' "$own"; awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk"; } | TAG_PATTERN=$2 awk -v k="$1" 'BEGIN { p = tolower(ENVIRON["TAG_PATTERN"]) } $3 == k { t = $0; sub(/^#   [^ ]+ +[^ ]+ +/, "", t); if (tolower(t) ~ p) print }' || true)
 		test -z "$hit" || { printf '%s\n' "$hit" | sed "s/^#   /#   $(printf '%-12s %-26s' "$g" "$img") /"; found=$((found + 1)); }
 	done
 	test "$found" -gt 0 || printf '%s\n' "#   (none)"
@@ -1307,7 +1307,7 @@ _guest_repo_show1() {
 	done < "$f"
 	test "$n" -gt 0 || emit_note "  (none)"
 	emit_note "clones on the disk of $1 under $loc (name  branch)"
-	remote='n=0; for h in '"$loc"'/*/.git/HEAD; do test -f "$h" || continue; d=${h%/.git/HEAD}; b=$(cat "$h"); printf "#   %-40s %s\n" "${d##*/}" "${b#ref: refs/heads/}" >&2; n=$((n + 1)); done; test "$n" -gt 0 || printf "#   (none)\n" >&2'
+	remote='grep -H "" '"$loc"'/*/.git/HEAD 2>/dev/null | awk -F: '"'"'{ n = $1; sub("^'"$loc"'/", "", n); sub("/.git/HEAD$", "", n); b = $2; sub("^ref: refs/heads/", "", b); print sprintf("#   %-40s %s", n, b); c++ } END { if (!c) print "#   (none)" }'"'"' >&2'
 	printf '%s\n' "ssh -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$1' -o StrictHostKeyChecking=accept-new -o BatchMode=yes '$(id -un)@$1.$VM_BAKE_GUEST_DOMAIN' $(sq "$remote") || exit 1"
 }
 
@@ -1785,7 +1785,7 @@ _guest_seed_write_cloud_init1() {
 
 #@help _guest_seed_write_autoinstall1
 # @command guest seed write autoinstall <guest>
-# @summary Act terminal: the guest's seed VM_BAKE_GUEST_DIR/<guest>/seed.iso for an OpenBSD image (makefs cd9660, label vmbakeseed) -- the marker vm-bake-seed, myname <guest>.VM_BAKE_GUEST_DOMAIN, address and netmask from the guest's record, mygate and resolv.conf from VM_BAKE_GUEST_GATEWAY, and the ssh host key the guest carries (the binding of its record, read at generation time; the key files are copied when the act runs, never emitted). The image's /etc/hostname.vio0 runs /usr/local/libexec/vm-bake-seed (image site write), which applies the seed at every boot before sshd starts. 'guest conf write' hangs the seed on the guest as disk1
+# @summary Act terminal: the guest's seed VM_BAKE_GUEST_DIR/<guest>/seed.iso for an OpenBSD or an Alpine image (makefs cd9660, label vmbakeseed) -- the marker vm-bake-seed, myname <guest>.VM_BAKE_GUEST_DOMAIN, address and netmask from the guest's record, mygate and resolv.conf from VM_BAKE_GUEST_GATEWAY, and the ssh host key the guest carries (the binding of its record, read at generation time; the key files are copied when the act runs, never emitted). The image's /etc/hostname.vio0 runs /usr/local/libexec/vm-bake-seed (image site write), which applies the seed at every boot before sshd starts. 'guest conf write' hangs the seed on the guest as disk1
 # @group   guest
 # @internal
 # @see     guest disk write
@@ -1816,7 +1816,7 @@ _guest_seed_write_autoinstall1() {
 
 #@help __guest_disk_write1
 # @command guest disk write <guest>
-# @summary What the host writes into a new guest before its first start, by the bake of its image's template (read at generation time; no bake record is chroot): rewrite to 'guest disk write chroot <guest>' (the FreeBSD disk mounted: network, home paths, host key), 'guest disk write cloud-init <guest>' or 'guest disk write autoinstall <guest>' (never mounted on the host: a seed of its own with network, hostname and host key; the home paths stay with the view)
+# @summary What the host writes into a new guest before its first start, by the bake of its image's template (read at generation time; no bake record is chroot): rewrite to 'guest disk write chroot <guest>' (the FreeBSD disk mounted: network, home paths, host key), 'guest disk write cloud-init <guest>' or 'guest disk write autoinstall <guest>' or 'guest disk write apkovl <guest>' (never mounted on the host: a seed of its own with network, hostname and host key; the home paths stay with the view)
 # @group   guest
 # @internal
 # @see     guest make
@@ -1868,9 +1868,16 @@ __guest_disk_write_autoinstall1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest seed write autoinstall $(sq "$1")"
 }
 
+#@help __guest_disk_write_apkovl1
+# @internal the apkovl case of 'guest disk write <guest>' (guest disk write apkovl <guest>): rewrite to 'guest seed write autoinstall <guest>' -- an Alpine guest reads the same seed CD as an OpenBSD guest (image overlay write puts the hook into /etc/network/interfaces)
+#@end
+__guest_disk_write_apkovl1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" guest seed write autoinstall $(sq "$1")"
+}
+
 #@help __guest_disk_write2
-# @internal dispatch fallback of 'guest disk write <bake> <guest>' for a bake that is neither chroot, cloud-init nor autoinstall: an error line
+# @internal dispatch fallback of 'guest disk write <bake> <guest>' for a bake that is neither chroot, cloud-init, autoinstall nor apkovl: an error line
 #@end
 __guest_disk_write2() {
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest disk write: the image of $2 was baked by $1, which has no disk write (chroot | cloud-init | autoinstall)")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "guest disk write: the image of $2 was baked by $1, which has no disk write (chroot | cloud-init | autoinstall | apkovl)")"
 }

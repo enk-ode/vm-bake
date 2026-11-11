@@ -361,7 +361,7 @@ ___template_base_image5() {
 
 #@help ___template_base_iso4
 # @command template base iso <template> <arch> <path> <sha256>
-# @summary The base is an installation medium (Windows; bake: cloud-init via cloudbase-init): the template exists, arch, path and digest are valid; then the record 'iso <arch> <path> <sha256>'
+# @summary The base is an installation medium -- the install ISO of OpenBSD (bake autoinstall), a live ISO of Alpine (bake apkovl), Windows (bake cloud-init via cloudbase-init): the template exists, arch, path and digest are valid; then the record 'iso <arch> <path> <sha256>'
 # @group   template
 # @example vm-bake template base iso windows amd64 /data/iso/Win11_24H2_German_x64.iso 0123...cdef
 # @see     template base image
@@ -426,11 +426,25 @@ ___template_bake_autoinstall1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf record $(sq "$1") bake autoinstall"
 }
 
+#@help ___template_bake_apkovl1
+# @command template bake apkovl <template>
+# @summary The image is installed by Alpine's setup-alpine in a throwaway guest: the base is a live ISO of Alpine (template base iso), an overlay rendered from the template (the apkovl the live system takes from a second CD) answers the installer, the first boot adds the packages and powers off, then the disk is sealed: the template exists; then the record
+# @group   template
+# @example vm-bake template bake apkovl alpine
+# @see     template base iso
+# @see     template bake autoinstall
+# @see     image make alpine
+#@end
+___template_bake_apkovl1() {
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template leaf record $(sq "$1") bake apkovl"
+}
+
 #@help __template_bake2
-# @internal dispatch fallback of 'template bake <word> <template>' for a word that is neither chroot, cloud-init nor autoinstall: an error line
+# @internal dispatch fallback of 'template bake <word> <template>' for a word that is neither chroot, cloud-init, autoinstall nor apkovl: an error line
 #@end
 __template_bake2() {
-	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template bake: unknown way $1 (chroot | cloud-init | autoinstall)")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "template bake: unknown way $1 (chroot | cloud-init | autoinstall | apkovl)")"
 }
 
 #@help ___template_bake_drop1
@@ -938,7 +952,7 @@ _template_find2() {
 			IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
 			cur=$p; n=$((n + 1))
 		done
-		hit=$(awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | VM_BAKE_PATTERN=$2 awk -v k="$1" 'BEGIN { p = tolower(ENVIRON["VM_BAKE_PATTERN"]) } $3 == k { t = $0; sub(/^#   [^ ]+ +[^ ]+ +/, "", t); if (tolower(t) ~ p) print }' || true)
+		hit=$(awk -v base="$VM_BAKE_BASE" -v family=tag -v chain="empty${chain:+ $chain}" -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | TAG_PATTERN=$2 awk -v k="$1" 'BEGIN { p = tolower(ENVIRON["TAG_PATTERN"]) } $3 == k { t = $0; sub(/^#   [^ ]+ +[^ ]+ +/, "", t); if (tolower(t) ~ p) print }' || true)
 		test -z "$hit" || { printf '%s\n' "$hit" | sed "s/^#   /#   $(printf '%-16s' "$t") /"; found=$((found + 1)); }
 	done
 	test "$found" -gt 0 || printf '%s\n' "#   (none)"
