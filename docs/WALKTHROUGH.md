@@ -210,10 +210,14 @@ template's sha256, written, grown, relabelled), baked on the host:
 
 A template that lists `doas` gives its users doas without a password; that
 is how the builder's user escalates. `image builder use` sets
-`VM_BAKE_BAKE_IN=builder` and pins the twelve content terminals to
+`VM_BAKE_BAKE_IN=builder` and pins the twenty content terminals to
 `ssh ... doas sh`, one setintp line each; `image builder leave` takes them
 back. The emissions are the same on both sides: the interpreter decides
 where they run.
+Run `image builder use` again after a pull that brings a new content
+terminal: until then it sits on the profile's `sudo sh` and would act on
+the host, where the image is not mounted. Every bake step checks the pins
+first (`image check pins`) and stops with the strays named.
 
 ## The guest
 

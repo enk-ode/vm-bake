@@ -68,7 +68,7 @@ __image_make_freebsd3() {
 
 #@help ___image_make_freebsd_from3
 # @command image make freebsd from <template> <version> <image>
-# @summary The bake behind the three spellings of 'image make freebsd': the template exists, the image name is img:<name>:<version> and free; then 'image create', 'image base', 'image burn', 'image close' and 'image seal' in turn (each a command of its own; create decides by the template's base kind)
+# @summary The bake behind the three spellings of 'image make freebsd': the template exists, the image name is img:<name>:<version> and free, the content terminals are pinned where VM_BAKE_BAKE_IN says (image check pins, before anything is made); then 'image create', 'image base', 'image burn', 'image close' and 'image seal' in turn (each a command of its own; create decides by the template's base kind)
 # @group   image
 # @internal
 # @see     image make freebsd
@@ -79,6 +79,7 @@ ___image_make_freebsd_from3() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" template check template $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image name valid $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check absent $(sq "$3")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pins"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image create $(sq "$1") $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image base $(sq "$3")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image burn $(sq "$3")"
@@ -194,13 +195,14 @@ __image_base1() {
 
 #@help ___image_base_host1
 # @command image base host <image>
-# @summary The base on the host: the image has a record; the disk attached as md and mounted by its labels, then 'image base content'
+# @summary The base on the host: the image has a record and no content terminal is pinned away (image check pins host); the disk attached as md and mounted by its labels, then 'image base content'
 # @group   image
 # @internal
 # @see     image base
 #@end
 ___image_base_host1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pins host"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk attach $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk mount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check mounted $(sq "$1")"
@@ -209,7 +211,7 @@ ___image_base_host1() {
 
 #@help ___image_base_builder1
 # @command image base builder <image>
-# @summary The base in the builder guest: the image has a record; the builder's configuration gets the image's disk as its second disk, the builder starts, answers ssh, mounts the disk by its labels under the image's path, then 'image base content' runs there (the content terminals are pinned to ssh)
+# @summary The base in the builder guest: the image has a record and the content terminals are pinned into the builder (image check pins builder); the builder's configuration gets the image's disk as its second disk, the builder starts, answers ssh, mounts the disk by its labels under the image's path, then 'image base content' runs there (the content terminals are pinned to ssh)
 # @group   image
 # @internal
 # @see     image base
@@ -217,6 +219,7 @@ ___image_base_host1() {
 #@end
 ___image_base_builder1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pins builder"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image builder start $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk mount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image base content $(sq "$1")"
@@ -304,7 +307,7 @@ ___image_base_content_image1() {
 
 #@help ___image_burn1
 # @command image burn <image>
-# @summary Step 3, the template: the image has a record, every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its package files from VM_BAKE_PKG_DIR staged and added, its ports built and installed in the builder (an error line when ports are listed and VM_BAKE_BAKE_IN is host), its rc.conf lines, its env variables as profile.d, its users with the host key in authorized_keys, the view of the host's home when the template says 'service files view', root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
+# @summary Step 3, the template: the image has a record, the content terminals are pinned where VM_BAKE_BAKE_IN says (image check pins), every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its package files from VM_BAKE_PKG_DIR staged and added, its ports built and installed in the builder (an error line when ports are listed and VM_BAKE_BAKE_IN is host), its rc.conf lines, its env variables as profile.d, its users with the host key in authorized_keys, the view of the host's home when the template says 'service files view', root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
 # @group   image
 # @example vm-bake image burn freebsd-dev-20261101
 # @see     image base
@@ -326,6 +329,7 @@ ___image_burn1() {
 	abi=$(printf '%s\n' "$base" | awk '{ split($3, v, /[.-]/); printf "FreeBSD:%d:%s", v[1], $2 }')
 	osv=$(printf '%s\n' "$base" | awk '{ split($3, v, /[.-]/); printf "%d", v[1] * 100000 + v[2] * 1000 }')
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pins"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check users $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check daemons $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkg install $(sq "$1") $(sq "$abi") $(sq "$osv")"
@@ -366,13 +370,14 @@ __image_close1() {
 
 #@help ___image_close_host1
 # @command image close host <image>
-# @summary The disk closed on the host: the image has a record and is mounted; the package report into the image, unmounted, the md detached, the sha256 of disk0.img written beside it and into the record
+# @summary The disk closed on the host: the image has a record and is mounted, no content terminal is pinned away (image check pins host); the package report into the image, unmounted, the md detached, the sha256 of disk0.img written beside it and into the record
 # @group   image
 # @internal
 # @see     image close
 #@end
 ___image_close_host1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pins host"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check mounted $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkg report $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk unmount $(sq "$1")"
@@ -382,7 +387,7 @@ ___image_close_host1() {
 
 #@help ___image_close_builder1
 # @command image close builder <image>
-# @summary The disk closed in the builder: the image has a record; the package report into the image, unmounted there, the builder shut down, then the sha256 of disk0.img on the host
+# @summary The disk closed in the builder: the image has a record and the content terminals are pinned into the builder (image check pins builder); the package report into the image, unmounted there, the builder shut down, then the sha256 of disk0.img on the host
 # @group   image
 # @internal
 # @see     image close
@@ -390,6 +395,7 @@ ___image_close_host1() {
 #@end
 ___image_close_builder1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pins builder"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkg report $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk unmount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image builder stop"
@@ -455,9 +461,80 @@ $img"
 	test "$dropped" -gt 0 || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'image prune: every sealed image has a guest, nothing to drop'"
 }
 
+#@help __image_check_pins0
+# @command image check pins
+# @summary The content terminals are pinned where VM_BAKE_BAKE_IN says: by its value rewrite to 'image check pins host' or 'image check pins builder'; any other value is an error line. The pins are read when a step acts, so a pull that brings a new content terminal leaves it on the profile's sudo sh until 'image builder use' runs again -- the check stops a bake before such an act writes into a path the host has not mounted
+# @group   image
+# @internal
+# @see     image make freebsd from
+# @see     image burn
+# @see     image builder use
+# @see     image builder leave
+# @env     VM_BAKE_BAKE_IN  the place: host or builder
+#@end
+__image_check_pins0() {
+	case "$VM_BAKE_BAKE_IN" in
+		host|builder) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pins $VM_BAKE_BAKE_IN" ;;
+		*) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image check pins: VM_BAKE_BAKE_IN is '$VM_BAKE_BAKE_IN' (host | builder: image builder use, image builder leave)")" ;;
+	esac
+}
+
+#@help __image_check_pins_builder0
+# @command image check pins builder
+# @summary The builder branch of 'image check pins' (VM_BAKE_BAKE_IN=builder): every one of the twenty content terminals is pinned to the builder's ssh line as 'image builder use' spells it now (the pins read at generation time from the environment, VM_BAKE_INTERPRETER_<terminal>) -- a comment line, else an error line naming the strays and 'image builder use'
+# @group   image
+# @internal
+# @see     image check pins
+# @see     image base builder
+# @see     image close builder
+# @see     image builder use
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the builder's sshd port
+# @env     VM_BAKE_BUILDER  the builder guest's name (its known_hosts file lives under .tmp)
+# @env     VM_BAKE_BUILDER_USER  the user ssh logs in as
+# @env     VM_BAKE_BUILDER_ADDRESS  the builder's address
+#@end
+__image_check_pins_builder0() {
+	local key="$VM_BAKE_HOST_KEY" f="" ssh="" pin="" bad=""
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	ssh="ssh -p $VM_BAKE_SSH_PORT -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS doas sh"
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+		eval "pin=\${VM_BAKE_INTERPRETER_$f:-}"
+		test "$pin" = "$ssh" || bad="$bad $f"
+	done
+	if test -z "$bad"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'image check pins: the twenty content terminals are pinned into the builder'"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image check pins: VM_BAKE_BAKE_IN is builder, but these content terminals are not pinned to the builder's ssh line:$bad -- run 'image builder use' again (a pull that brings a new content terminal leaves it on the profile's pin)")"
+	fi
+}
+
+#@help __image_check_pins_host0
+# @command image check pins host
+# @summary The host branch of 'image check pins' (VM_BAKE_BAKE_IN=host): no content terminal is pinned to an ssh line (the pins read at generation time from the environment, VM_BAKE_INTERPRETER_<terminal>): on the host the twenty run under the profile's sudo sh -- a comment line, else an error line naming the strays and 'image builder leave'
+# @group   image
+# @internal
+# @see     image check pins
+# @see     image base host
+# @see     image close host
+# @see     image builder leave
+#@end
+__image_check_pins_host0() {
+	local f="" pin="" bad=""
+	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+		eval "pin=\${VM_BAKE_INTERPRETER_$f:-}"
+		case "$pin" in "ssh "*) bad="$bad $f" ;; esac
+	done
+	if test -z "$bad"; then
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'image check pins: no content terminal is pinned away from the host'"
+	else
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image check pins: VM_BAKE_BAKE_IN is host, but these content terminals are pinned to an ssh line:$bad -- run 'image builder leave' (or 'image builder use' to bake in the builder)")"
+	fi
+}
+
 #@help ___image_builder_use0
 # @command image builder use
-# @summary Bake in the builder guest from now on: VM_BAKE_BAKE_IN=builder, and the content terminals (disk mount, keys, pkg base, repo, boot, pkg install, rc, user, view, root lock, doas, ssh, pkg report, disk unmount) pinned to 'ssh -p VM_BAKE_SSH_PORT -i <key> VM_BAKE_BUILDER_USER@VM_BAKE_BUILDER_ADDRESS doas sh' -- one setintp line each, so the pins are seen
+# @summary Bake in the builder guest from now on: VM_BAKE_BAKE_IN=builder, and the content terminals (disk mount, keys, pkg base, repo, boot, pkg install, rc, user, view, root lock, doas, ssh, pkg report, disk unmount) pinned to 'ssh -p VM_BAKE_SSH_PORT -i <key> VM_BAKE_BUILDER_USER@VM_BAKE_BUILDER_ADDRESS doas sh' -- one setintp line each, so the pins are seen. Run it again after a pull that brings a new content terminal: it would sit on the profile's sudo sh, and every bake step checks the pins first (image check pins) and names the strays
 # @group   image
 # @example vm-bake image builder use
 # @see     image builder leave

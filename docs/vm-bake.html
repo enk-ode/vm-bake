@@ -925,14 +925,15 @@
       is an error line</dd>
   <dt id="image~4"><a class="permalink" href="#image~4"><b>image burn
     &lt;image&gt;</b></a></dt>
-  <dd>Step 3, the template: the image has a record, every user of the template
-      resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable);
-      then the template&#x2019;s packages via `pkg -r', its package files from
-      VM_BAKE_PKG_DIR staged and added, its ports built and installed in the
-      builder (an error line when ports are listed and VM_BAKE_BAKE_IN is host),
-      its rc.conf lines, its env variables as profile.d, its users with the host
-      key in authorized_keys, the view of the host&#x2019;s home when the
-      template says `service files view', root locked (pkgbase ships root
+  <dd>Step 3, the template: the image has a record, the content terminals are
+      pinned where VM_BAKE_BAKE_IN says (image check pins), every user of the
+      template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is
+      readable); then the template&#x2019;s packages via `pkg -r', its package
+      files from VM_BAKE_PKG_DIR staged and added, its ports built and installed
+      in the builder (an error line when ports are listed and VM_BAKE_BAKE_IN is
+      host), its rc.conf lines, its env variables as profile.d, its users with
+      the host key in authorized_keys, the view of the host&#x2019;s home when
+      the template says `service files view', root locked (pkgbase ships root
       without a password), doas for them when the template lists doas, and sshd
       on VM_BAKE_SSH_PORT with keys only and no root &#x2013; where
       VM_BAKE_BAKE_IN says (the pins)</dd>
@@ -966,7 +967,10 @@
       rc, user, view, root lock, doas, ssh, pkg report, disk unmount) pinned to
       `ssh -p VM_BAKE_SSH_PORT -i &lt;key&gt;
       VM_BAKE_BUILDER_USER@VM_BAKE_BUILDER_ADDRESS doas sh' &#x2013; one setintp
-      line each, so the pins are seen</dd>
+      line each, so the pins are seen. Run it again after a pull that brings a
+      new content terminal: it would sit on the profile&#x2019;s sudo sh, and
+      every bake step checks the pins first (image check pins) and names the
+      strays</dd>
   <dt id="image~10"><a class="permalink" href="#image~10"><b>image builder
     leave</b></a></dt>
   <dd>Bake on the host again: VM_BAKE_BAKE_IN=host, the content
@@ -1874,6 +1878,6 @@ vm-bake restore templates.dump
 </main>
 <div class="foot" role="doc-pagefooter" aria-label="Manual footer
   line"><span class="foot-left">vm-bake</span> <span class="foot-date">November
-  11, 2026</span> <span class="foot-right">VM_BAKE(8)</span></div>
+  12, 2026</span> <span class="foot-right">VM_BAKE(8)</span></div>
 </body>
 </html>

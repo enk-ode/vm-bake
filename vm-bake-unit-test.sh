@@ -742,7 +742,7 @@ test_image_plan() {
   local plan today
   today=$(date -u '+%Y%m%d')
   plan=$(run_vmbake image make freebsd freebsd-x v1 img:ides:v1)
-  if [ "$(printf '%s\n' "$plan" | grep -c '"\$VM_BAKE_CONTEXT_SCRIPT"')" = "9" ] && printf '%s\n' "$plan" | sed -n 1p | grep -q "note 'image make freebsd: template freebsd-x, version v1 -> image img:ides:v1" && printf '%s\n' "$plan" | grep -q "image name valid 'img:ides:v1'" && printf '%s\n' "$plan" | grep -q "image check absent 'img:ides:v1'" && printf '%s\n' "$plan" | grep -q "image create 'freebsd-x' 'img:ides:v1'" && printf '%s\n' "$plan" | sed -n 9p | grep -q "image seal 'img:ides:v1'"; then
+  if [ "$(printf '%s\n' "$plan" | grep -c '"\$VM_BAKE_CONTEXT_SCRIPT"')" = "10" ] && printf '%s\n' "$plan" | sed -n 1p | grep -q "note 'image make freebsd: template freebsd-x, version v1 -> image img:ides:v1" && printf '%s\n' "$plan" | grep -q "image name valid 'img:ides:v1'" && printf '%s\n' "$plan" | grep -q "image check absent 'img:ides:v1'" && printf '%s\n' "$plan" | grep -q "image create 'freebsd-x' 'img:ides:v1'" && printf '%s\n' "$plan" | sed -n 10p | grep -q "image seal 'img:ides:v1'"; then
     pass "make freebsd with a name of its own: announced, template checked, name valid and free, then create, base, burn, close, seal"
   else
     fail "make plan: $plan"
@@ -774,7 +774,7 @@ test_image_plan() {
   fi
   run_vmbake image record write freebsd-dev x > /dev/null
   run_vmbake image record write freebsd-builder b > /dev/null
-  if [ "$(run_vmbake image base x | grep -c .)" = "5" ] && run_vmbake image base x | grep -q "image disk attach 'x'" && run_vmbake image base content x | grep -q "image pkg base 'x' 'FreeBSD:15:amd64' '1501000'" && [ "$(run_vmbake image base content b | grep -c .)" = "2" ]; then
+  if [ "$(run_vmbake image base x | grep -c .)" = "6" ] && run_vmbake image base x | grep -q "image disk attach 'x'" && run_vmbake image base content x | grep -q "image pkg base 'x' 'FreeBSD:15:amd64' '1501000'" && [ "$(run_vmbake image base content b | grep -c .)" = "2" ]; then
     pass "base on the host: attach, mount, content; release content installs pkgbase, image content only repos and loader"
   else
     fail "base plan: $(run_vmbake image base x; run_vmbake image base content x; run_vmbake image base content b)"
@@ -797,26 +797,26 @@ test_image_plan() {
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   printf 'builder\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  if run_vmbake image base x | grep -q "image builder start 'x'" && [ "$(run_vmbake image base x | grep -c .)" = "4" ] && run_vmbake image close x | grep -q "image builder stop" && run_vmbake image builder start x | grep -q "guest check record 'bake'"; then
+  if run_vmbake image base x | grep -q "image builder start 'x'" && [ "$(run_vmbake image base x | grep -c .)" = "5" ] && run_vmbake image close x | grep -q "image builder stop" && run_vmbake image builder start x | grep -q "guest check record 'bake'"; then
     pass "base and close in the builder: the builder started with the disk, stopped before the digest"
   else
     fail "builder plans: $(run_vmbake image base x; run_vmbake image close x)"
   fi
   printf 'elsewhere\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  if run_vmbake image base x | grep -q "VM_BAKE_BAKE_IN is 'elsewhere'"; then
+  if run_vmbake image base x | grep -q "VM_BAKE_BAKE_IN is 'elsewhere'" && run_vmbake image check pins | grep -q "image check pins: VM_BAKE_BAKE_IN is 'elsewhere'"; then
     pass "an unknown VM_BAKE_BAKE_IN falls to the error line"
   else
     fail "bake-in guard: $(run_vmbake image base x)"
   fi
   printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   plan=$(run_vmbake image burn x)
-  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image root lock 'x'" && printf '%s\n' "$plan" | grep -q "image view write 'x'" && printf '%s\n' "$plan" | grep -q "image check daemons 'x'" && ! printf '%s\n' "$plan" | grep -q "image daemon write" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "11" ]; then
+  if printf '%s\n' "$plan" | grep -q "image check users 'x'" && printf '%s\n' "$plan" | grep -q "image root lock 'x'" && printf '%s\n' "$plan" | grep -q "image view write 'x'" && printf '%s\n' "$plan" | grep -q "image check daemons 'x'" && ! printf '%s\n' "$plan" | grep -q "image daemon write" && [ "$(printf '%s\n' "$plan" | grep -c .)" = "12" ]; then
     pass "burn: users and daemons checked, then packages, rc, users, the view, root locked, doas, sshd; no daemon write without daemon lines"
   else
     fail "burn plan: $plan"
   fi
-  if [ "$(run_vmbake image close x | grep -c .)" = "6" ] && [ "$(run_vmbake image seal x | grep -c .)" = "6" ] && [ "$(run_vmbake image drop x | grep -c .)" = "5" ] && run_vmbake image drop x | grep -q "image dataset destroy 'x'"; then
-    pass "close and seal six lines each, drop five: release, destroy, record, lock"
+  if [ "$(run_vmbake image close x | grep -c .)" = "7" ] && [ "$(run_vmbake image seal x | grep -c .)" = "6" ] && [ "$(run_vmbake image drop x | grep -c .)" = "5" ] && run_vmbake image drop x | grep -q "image dataset destroy 'x'"; then
+    pass "close seven lines with the pins checked, seal six, drop five: release, destroy, record, lock"
   else
     fail "close/seal/drop plan: $(run_vmbake image close x; run_vmbake image seal x; run_vmbake image drop x)"
   fi
@@ -826,6 +826,32 @@ test_image_plan() {
   else
     fail "builder use/leave: $plan"
   fi
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if run_vmbake image check pins | grep -q "image check pins host$" && run_vmbake image check pins host | grep -q "comment 'image check pins: no content terminal is pinned away from the host'" && [ "$(run_vmbake image make freebsd from freebsd-x v1 img:ides:v1 | grep -c .)" = "10" ] && run_vmbake image make freebsd from freebsd-x v1 img:ides:v1 | sed -n 5p | grep -q "image check pins$" && run_vmbake image burn x | sed -n 2p | grep -q "image check pins$" && run_vmbake image base host x | sed -n 2p | grep -q "image check pins host$" && run_vmbake image close host x | sed -n 2p | grep -q "image check pins host$"; then
+    pass "check pins on the host: the dispatcher names the place, no stray pin is a comment; the check sits before image create, second in burn, base and close"
+  else
+    fail "check pins host: $(run_vmbake image check pins; run_vmbake image check pins host; run_vmbake image make freebsd from freebsd-x v1 img:ides:v1)"
+  fi
+  printf 'builder\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  out=$(run_vmbake image check pins builder)
+  if run_vmbake image check pins | grep -q "image check pins builder$" && printf '%s\n' "$out" | grep -q "error 'image check pins: VM_BAKE_BAKE_IN is builder, but these content terminals are not pinned to the builder" && printf '%s\n' "$out" | grep -q " image_disk_mount .* image_daemon_write .* image_disk_unmount --" && printf '%s\n' "$out" | grep -q "run .*image builder use.* again" && run_vmbake image base builder x | sed -n 2p | grep -q "image check pins builder$" && run_vmbake image close builder x | sed -n 2p | grep -q "image check pins builder$"; then
+    pass "check pins in the builder: twenty unpinned terminals are one error line naming them and 'image builder use'; base and close ask for the builder's pins"
+  else
+    fail "check pins builder: $out"
+  fi
+  local ssh="" f=""
+  ssh=$(printf '%s\n' "$plan" | sed -n "s/.*setintp image_pkg_base '\(.*\)'$/\1/p")
+  for f in $(printf '%s\n' "$plan" | sed -n 's/.*setintp \(image_[a-z_]*\) .*/\1/p'); do printf '%s\n' "$ssh" > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_$f"; done
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
+  if [ -n "$ssh" ] && run_vmbake image check pins builder | grep -q "comment 'image check pins: the twenty content terminals are pinned into the builder'" && { rm -f "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_daemon_write" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"; run_vmbake image check pins builder | grep -q "ssh line: image_daemon_write -- run"; } && { printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"; run_vmbake image check pins host | grep -q "pinned to an ssh line: image_disk_mount image_keys_write .* image_disk_unmount -- run .*image builder leave"; }; then
+    pass "check pins: the twenty pins as builder use sets them pass; one missing after a pull is named alone; on the host the ssh pins are the strays"
+  else
+    fail "check pins builder/host: $(run_vmbake image check pins builder; run_vmbake image check pins host)"
+  fi
+  for f in $(printf '%s\n' "$plan" | sed -n 's/.*setintp \(image_[a-z_]*\) .*/\1/p'); do rm -f "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_$f"; done
+  rm -f "$TEST_DIR/.env/local/VM_BAKE_COMBINATOR_INTERPRETER"
+  printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
 }
 
 test_image_guards() {
@@ -1217,14 +1243,14 @@ test_port_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake image burn x)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "12" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image port build 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image port install 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "10" ]; then
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "14" ] && printf '%s\n' "$plan" | sed -n 6p | grep -q "image port build 'x'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "image port install 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "12" ]; then
     pass "burn in the builder: port build and install after the packages, only when ports are listed"
   else
     fail "burn ports plan: $plan"
   fi
   printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  if run_vmbake image burn x | grep -q "ports build in the builder only" && [ "$(run_vmbake image burn d | grep -c .)" = "10" ]; then
+  if run_vmbake image burn x | grep -q "ports build in the builder only" && [ "$(run_vmbake image burn d | grep -c .)" = "12" ]; then
     pass "burn on the host refuses listed ports with an error line"
   else
     fail "burn host ports: $(run_vmbake image burn x)"
@@ -1284,7 +1310,7 @@ test_pkgfile_plan() {
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   local plan
   plan=$(run_vmbake image burn x)
-  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "13" ] && printf '%s\n' "$plan" | sed -n 4p | grep -q "image check pkgfiles 'x'" && printf '%s\n' "$plan" | sed -n 5p | grep -q "image pkgfile stage 'x'" && printf '%s\n' "$plan" | sed -n 6p | grep -q "image pkgfile add 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "10" ] && run_vmbake image pkgfile stage x | grep -q "streamed into the builder"; then
+  if [ "$(printf '%s\n' "$plan" | grep -c .)" = "15" ] && printf '%s\n' "$plan" | sed -n 6p | grep -q "image check pkgfiles 'x'" && printf '%s\n' "$plan" | sed -n 7p | grep -q "image pkgfile stage 'x'" && printf '%s\n' "$plan" | sed -n 8p | grep -q "image pkgfile add 'x'" && [ "$(run_vmbake image burn d | grep -c .)" = "12" ] && run_vmbake image pkgfile stage x | grep -q "streamed into the builder"; then
     pass "burn: check, stage and add after the packages, only when files are listed; stage chooses by the place"
   else
     fail "burn pkgfile plan: $plan"

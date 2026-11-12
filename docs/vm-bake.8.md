@@ -1,6 +1,6 @@
 % VM_BAKE(8) vm-bake | System Manager's Manual
 % Dr. Johannes Brügmann
-% November 11, 2026
+% November 12, 2026
 
 # NAME
 
@@ -551,7 +551,7 @@ create takes a lock under .tmp, seal drops it.
 :   Step 2, the operating system: by VM_BAKE_BAKE_IN rewrite to 'image base host' (the disk attached and mounted on the host) or 'image base builder' (the builder guest started with the disk, mounted there); any other value is an error line
 
 **image burn \<image\>**
-:   Step 3, the template: the image has a record, every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its package files from VM_BAKE_PKG_DIR staged and added, its ports built and installed in the builder (an error line when ports are listed and VM_BAKE_BAKE_IN is host), its rc.conf lines, its env variables as profile.d, its users with the host key in authorized_keys, the view of the host's home when the template says 'service files view', root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
+:   Step 3, the template: the image has a record, the content terminals are pinned where VM_BAKE_BAKE_IN says (image check pins), every user of the template resolves (a host uid exists, the key file VM_BAKE_HOST_KEY is readable); then the template's packages via 'pkg -r', its package files from VM_BAKE_PKG_DIR staged and added, its ports built and installed in the builder (an error line when ports are listed and VM_BAKE_BAKE_IN is host), its rc.conf lines, its env variables as profile.d, its users with the host key in authorized_keys, the view of the host's home when the template says 'service files view', root locked (pkgbase ships root without a password), doas for them when the template lists doas, and sshd on VM_BAKE_SSH_PORT with keys only and no root -- where VM_BAKE_BAKE_IN says (the pins)
 
 **image close \<image\>**
 :   Step 4, the disk closed: by VM_BAKE_BAKE_IN rewrite to 'image close host' or 'image close builder'; any other value is an error line
@@ -566,7 +566,7 @@ create takes a lock under .tmp, seal drops it.
 :   Drop every image no guest is made from: the image records and the image file of every guest record read at generation time; a sealed image (it has a digest) that no guest names gets its 'image drop' line, an open image (no digest: a bake under way, or one that died with the lock -- image lock drop, then image drop by name) is left with a note; every image in use is a comment
 
 **image builder use**
-:   Bake in the builder guest from now on: VM_BAKE_BAKE_IN=builder, and the content terminals (disk mount, keys, pkg base, repo, boot, pkg install, rc, user, view, root lock, doas, ssh, pkg report, disk unmount) pinned to 'ssh -p VM_BAKE_SSH_PORT -i \<key\> VM_BAKE_BUILDER_USER@VM_BAKE_BUILDER_ADDRESS doas sh' -- one setintp line each, so the pins are seen
+:   Bake in the builder guest from now on: VM_BAKE_BAKE_IN=builder, and the content terminals (disk mount, keys, pkg base, repo, boot, pkg install, rc, user, view, root lock, doas, ssh, pkg report, disk unmount) pinned to 'ssh -p VM_BAKE_SSH_PORT -i \<key\> VM_BAKE_BUILDER_USER@VM_BAKE_BUILDER_ADDRESS doas sh' -- one setintp line each, so the pins are seen. Run it again after a pull that brings a new content terminal: it would sit on the profile's sudo sh, and every bake step checks the pins first (image check pins) and names the strays
 
 **image builder leave**
 :   Bake on the host again: VM_BAKE_BAKE_IN=host, the content terminals' pins dropped (their profile defaults, sudo sh, apply) -- one unsetintp line each
