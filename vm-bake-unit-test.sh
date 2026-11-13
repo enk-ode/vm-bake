@@ -957,7 +957,7 @@ test_image_emissions() {
     fail "boot write: $out"
   fi
   out=$(run_vmbake image pkg install x FreeBSD:15:amd64 1501000; run_vmbake image rc write x)
-  if printf '%s\n' "$out" | grep -q "pkg -c '$TEST_DIR/img/x/mnt' -o ABI='FreeBSD:15:amd64' .* install claude-code git && pkg -c '$TEST_DIR/img/x/mnt' clean -ay" && printf '%s\n' "$out" | grep -q "cp /etc/resolv.conf '$TEST_DIR/img/x/mnt/etc/resolv.conf'" && printf '%s\n' "$out" | grep -q '^sshd_enable="YES"$' && printf '%s\n' "$out" | grep -q '^kern_securelevel="2"$'; then
+  if printf '%s\n' "$out" | grep -q "^n=0; until pkg -c '$TEST_DIR/img/x/mnt' -o ABI='FreeBSD:15:amd64' -o OSVERSION='1501000' -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes -o FETCH_TIMEOUT=3600 install claude-code git; do n=\$((n + 1)); test \"\$n\" -lt 3 || exit 1; printf '# image %s: pkg install broke off, try %s of %s follows.*' 'x' \"\$((n + 1))\" '3' >&2; done$" && printf '%s\n' "$out" | grep -q "^pkg -c '$TEST_DIR/img/x/mnt' clean -ay > /dev/null || exit 1$" && printf '%s\n' "$out" | grep -q "cp /etc/resolv.conf '$TEST_DIR/img/x/mnt/etc/resolv.conf'" && printf '%s\n' "$out" | grep -q '^sshd_enable="YES"$' && printf '%s\n' "$out" | grep -q '^kern_securelevel="2"$'; then
     pass "pkg install in a chroot with resolv.conf and a cleaned cache; rc write with quoted values"
   else
     fail "pkg install/rc: $out"

@@ -1105,12 +1105,14 @@ _image_boot_write1() {
 
 #@help _image_pkg_install3
 # @command image pkg install <image> <abi> <osversion>
-# @summary Act terminal (root, host or builder): the template's resolved package list (read at generation time) installed with 'pkg -c <mnt>' -- a chroot into the image, so the packages' scripts run with the image's own tools (indexinfo and the like) -- under the pinned ABI and OSVERSION, the resolver of the place copied in for the fetch, the image's package cache emptied afterwards; an empty list is a note
+# @summary Act terminal (root, host or builder): the template's resolved package list (read at generation time) installed with 'pkg -c <mnt>' -- a chroot into the image, so the packages' scripts run with the image's own tools (indexinfo and the like) -- under the pinned ABI and OSVERSION, the resolver of the place copied in for the fetch, pkg's FETCH_TIMEOUT raised to VM_BAKE_PKG_FETCH_TIMEOUT (its default of 30 seconds ends a large package on a slow uplink), the install run again when it breaks off, up to VM_BAKE_PKG_INSTALL_TRIES times (pkg takes what it fetched before from the image's cache and fetches only the rest), the image's package cache emptied afterwards; an empty list is a note
 # @group   image
 # @internal
 # @see     image burn
 # @env     VM_BAKE_IMAGE_DIR  the image's directory
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+# @env     VM_BAKE_PKG_FETCH_TIMEOUT  pkg's FETCH_TIMEOUT for the bake, seconds
+# @env     VM_BAKE_PKG_INSTALL_TRIES  how often pkg install runs before the bake fails
 #@end
 _image_pkg_install3() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" t="" cur="" chain="" p="" n=0 pkgs=""
@@ -1124,7 +1126,8 @@ _image_pkg_install3() {
 	pkgs=$(awk -v base="$VM_BAKE_BASE" -v family=package -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | tr '\n' ' ')
 	if test -n "${pkgs% }"; then
 		printf '%s\n' "cp /etc/resolv.conf '$mnt/etc/resolv.conf' || exit 1"
-		printf '%s\n' "pkg -c '$mnt' -o ABI=$(sq "$2") -o OSVERSION=$(sq "$3") -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes install $pkgs&& pkg -c '$mnt' clean -ay > /dev/null || exit 1"
+		printf '%s\n' "n=0; until pkg -c '$mnt' -o ABI=$(sq "$2") -o OSVERSION=$(sq "$3") -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes -o FETCH_TIMEOUT=$VM_BAKE_PKG_FETCH_TIMEOUT install ${pkgs% }; do n=\$((n + 1)); test \"\$n\" -lt $VM_BAKE_PKG_INSTALL_TRIES || exit 1; printf '# image %s: pkg install broke off, try %s of %s follows -- the packages fetched so far wait in the image cache\\n' '$1' \"\$((n + 1))\" '$VM_BAKE_PKG_INSTALL_TRIES' >&2; done"
+		printf '%s\n' "pkg -c '$mnt' clean -ay > /dev/null || exit 1"
 		printf '%s\n' "printf '# image %s: packages %s\\n' '$1' $(sq "${pkgs% }") >&2"
 	else
 		emit_note "image $1: the template lists no packages"

@@ -1,0 +1,2 @@
+3600
+# @summary pkg's FETCH_TIMEOUT in seconds for the packages of a bake (image pkg install). pkg.conf(5) calls it the maximum wait for any one file, and pkg's default of 30 ended a 2.8 GB texlive-docs after 600 MB on a slow uplink on 13.11.2026; an hour carries such a file at under 1 MB/s under either reading of the manual, and a connection that is really dead is ended by TCP itself long before. The retries are VM_BAKE_PKG_INSTALL_TRIES.

@@ -1,0 +1,2 @@
+3
+# @summary How often 'image pkg install' runs pkg install before the bake fails. A try that breaks off in a fetch leaves every package fetched so far in the image's cache, and the next try takes them from there, so a transient fetch error costs one package, not the bake. A template that names a package the repository does not have fails in every try alike, in seconds.
