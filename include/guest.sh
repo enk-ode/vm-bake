@@ -851,7 +851,7 @@ _guest_dowry_place_overwrite1() {
 
 #@help _guest_view_mount1
 # @command guest view mount <guest>
-# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first and its parents with it, all owned by the user -- the guest writes beside the overlay, not into it; before the overlays the mount point VM_BAKE_REPO_LOCAL, where the guest hangs the directory of its own disk in; a line already hung in stays, a line from before the modes (a bare path) counts as ro; a ro line whose source is an engine database (.env, .tmp and .log in it -- vm-bake, elvboot and vpn-switch share that layout) gets .tmp and .log from the view, rw nullfs of <path>.tmp and <path>.log made beside the mount point with the layout's modes, so the database answers every reading command in the guest while the host's own scratch, bake lock and known_hosts stay out of its reach. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
+# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first and its parents with it, all owned by the user -- the guest writes beside the overlay, not into it; before the overlays the mount point VM_BAKE_REPO_LOCAL, where the guest hangs the directory of its own disk in; a line already hung in is left alone (no install -d on a mounted ro directory, which would warn chown/chmod), a line from before the modes (a bare path) counts as ro; a ro line whose source is an engine database (.env, .tmp and .log in it -- vm-bake, elvboot and vpn-switch share that layout) gets .tmp and .log from the view, rw nullfs of <path>.tmp and <path>.log made beside the mount point with the layout's modes, so the database answers every reading command in the guest while the host's own scratch, bake lock and known_hosts stay out of its reach. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
 # @group   guest
 # @internal
 # @see     guest start
@@ -891,8 +891,7 @@ _guest_view_mount1() {
 		test -d "$home/$path" || { generate_error "guest view mount: $home/$path is no directory, and an overlay of a view is one"; return 0; }
 		parents=""; p=$path
 		while case "$p" in */*) ;; *) false ;; esac; do p=${p%/*}; parents="'$dir/$name/$p' $parents"; done
-		printf '%s\n' "install -d -o $(sq "$u") -g $(sq "$g") -m 755 $parents'$dir/$name/$path' || exit 1"
-		printf '%s\n' "mount | grep -q \" on $dir/$name/$path (\" || mount -t nullfs -o $mode '$home/$path' '$dir/$name/$path' || exit 1"
+		printf '%s\n' "mount | grep -q \" on $dir/$name/$path (\" || { install -d -o $(sq "$u") -g $(sq "$g") -m 755 $parents'$dir/$name/$path' && mount -t nullfs -o $mode '$home/$path' '$dir/$name/$path'; } || exit 1"
 		printf '%s\n' "printf '# guest %s: %s %s in its view\\n' '$name' '$path' '$mode' >&2"
 		test "$mode" = ro && test -d "$home/$path/.env" && test -d "$home/$path/.tmp" && test -d "$home/$path/.log" || continue
 		for d in .tmp .log; do
