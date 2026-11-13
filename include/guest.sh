@@ -851,7 +851,7 @@ _guest_dowry_place_overwrite1() {
 
 #@help _guest_view_mount1
 # @command guest view mount <guest>
-# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first and its parents with it, all owned by the user -- the guest writes beside the overlay, not into it; before the overlays the mount point VM_BAKE_REPO_LOCAL, where the guest hangs the directory of its own disk in; a line already hung in stays, a line from before the modes (a bare path) counts as ro. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
+# @summary Act terminal (root): the view is there and every home line of the image's template (read at generation time over the chain, '<path> <mode>') is hung into it as a nullfs overlay, ro or rw as the line says, the directory in the view made first and its parents with it, all owned by the user -- the guest writes beside the overlay, not into it; before the overlays the mount point VM_BAKE_REPO_LOCAL, where the guest hangs the directory of its own disk in; a line already hung in stays, a line from before the modes (a bare path) counts as ro; a ro line whose source is an engine database (.env, .tmp and .log in it -- vm-bake, elvboot and vpn-switch share that layout) gets .tmp and .log from the view, rw nullfs of <path>.tmp and <path>.log made beside the mount point with the layout's modes, so the database answers every reading command in the guest while the host's own scratch, bake lock and known_hosts stay out of its reach. No view in the template is a note, a path that is no directory on the host an error -- an overlay is a directory
 # @group   guest
 # @internal
 # @see     guest start
@@ -862,7 +862,7 @@ _guest_dowry_place_overwrite1() {
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
 #@end
 _guest_view_mount1() {
-	local name="$1" dir="$VM_BAKE_VIEW_DIR" home="" img="" t="" cur="" chain="" p="" n=0 lines="" l="" path="" mode="" u="" g="" parents=""
+	local name="$1" dir="$VM_BAKE_VIEW_DIR" home="" img="" t="" cur="" chain="" p="" n=0 lines="" l="" path="" mode="" u="" g="" parents="" d="" m=""
 	eval "home=~$(id -un)"
 	case "$dir" in "~/"*) dir="$home${dir#\~}" ;; esac
 	u=$(id -un); g=$(id -gn)
@@ -894,6 +894,13 @@ _guest_view_mount1() {
 		printf '%s\n' "install -d -o $(sq "$u") -g $(sq "$g") -m 755 $parents'$dir/$name/$path' || exit 1"
 		printf '%s\n' "mount | grep -q \" on $dir/$name/$path (\" || mount -t nullfs -o $mode '$home/$path' '$dir/$name/$path' || exit 1"
 		printf '%s\n' "printf '# guest %s: %s %s in its view\\n' '$name' '$path' '$mode' >&2"
+		test "$mode" = ro && test -d "$home/$path/.env" && test -d "$home/$path/.tmp" && test -d "$home/$path/.log" || continue
+		for d in .tmp .log; do
+			m=$(printf '%s\n' "$VM_BAKE_INIT_DIR_CONFIG" | awk -F: -v d="$d" '$1 == d { print $2 }')
+			printf '%s\n' "install -d -o $(sq "$u") -g $(sq "$g") -m ${m:-0750} '$dir/$name/$path$d' || exit 1"
+			printf '%s\n' "mount | grep -q \" on $dir/$name/$path/$d (\" || mount -t nullfs -o rw '$dir/$name/$path$d' '$dir/$name/$path/$d' || exit 1"
+			printf '%s\n' "printf '# guest %s: %s/%s rw from %s%s in its view -- the database writes its scratch and log beside the records\\n' '$name' '$path' '$d' '$path' '$d' >&2"
+		done
 	done
 }
 

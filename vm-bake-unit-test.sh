@@ -24,7 +24,7 @@ TEST_SCRIPT="./vm-bake.sh"
 # dotfiles that happen to be there.
 HOME_FIXTURE=".vm-bake-unit-test.$$"
 home_fixture() {
-  mkdir -p "$HOME/$HOME_FIXTURE/config/gtk-3.0" "$HOME/$HOME_FIXTURE/cache" "$HOME/$HOME_FIXTURE/db" "$HOME/$HOME_FIXTURE/themes/NsCDE" "$HOME/$HOME_FIXTURE/ssh"
+  mkdir -p "$HOME/$HOME_FIXTURE/config/gtk-3.0" "$HOME/$HOME_FIXTURE/cache" "$HOME/$HOME_FIXTURE/db/.env" "$HOME/$HOME_FIXTURE/db/.tmp" "$HOME/$HOME_FIXTURE/db/.log" "$HOME/$HOME_FIXTURE/themes/NsCDE" "$HOME/$HOME_FIXTURE/ssh"
 }
 trap 'rm -rf "$HOME/$HOME_FIXTURE"' EXIT
 trap 'exit 1' INT TERM HUP
@@ -1665,6 +1665,11 @@ test_view_acts() {
     pass "view mount hangs every home line in with its own mode, the directory made first"
   else
     fail "view mount: $out"
+  fi
+  if printf '%s\n' "$out" | grep -q "mount -t nullfs -o rw '$view/caledonia/$HOME_FIXTURE/db.tmp' '$view/caledonia/$HOME_FIXTURE/db/.tmp'" && printf '%s\n' "$out" | grep -q "mount -t nullfs -o rw '$view/caledonia/$HOME_FIXTURE/db.log' '$view/caledonia/$HOME_FIXTURE/db/.log'" && printf '%s\n' "$out" | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 0750 '$view/caledonia/$HOME_FIXTURE/db.tmp'" && ! printf '%s\n' "$out" | grep -q "config/.tmp"; then
+    pass "a ro engine database (.env, .tmp, .log) gets .tmp and .log rw from the view, a plain directory does not"
+  else
+    fail "view mount database overlays: $out"
   fi
   if printf '%s\n' "$out" | grep -n "git/local\|mount -t nullfs" | sed -n 1p | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 755 '$view/caledonia/git' '$view/caledonia/git/local'"; then
     pass "view mount makes the mount point git/local (and its parent) for the guest's disk before the overlays"
