@@ -539,20 +539,30 @@ test_template_source_file() {
   printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"
   run_vmbake image record write freebsd-dev x > /dev/null
   out=$(run_vmbake image burn x)
-  if printf '%s\n' "$out" | grep -q "image file write 'x'" && printf '%s\n' "$out" | grep -q "note 'image x: source lines are apt sources, a FreeBSD image takes its packages from pkg" && printf '%s\n' "$out" | grep -n "env write\|file write\|user make" | tr '\n' ' ' | grep -q "env write.* file write.* user make"; then
-    pass "image burn: file write after env write when there are file lines, source lines noted"
+  if printf '%s\n' "$out" | grep -q "image file stage 'x'" && printf '%s\n' "$out" | grep -q "image file write 'x'" && printf '%s\n' "$out" | grep -q "note 'image x: source lines are apt sources, a FreeBSD image takes its packages from pkg" && printf '%s\n' "$out" | grep -n "env write\|file stage\|file write\|user make" | tr '\n' ' ' | grep -q "env write.* file stage.* file write.* user make"; then
+    pass "image burn: file stage and file write after env write when there are file lines, source lines noted"
   else
     fail "burn with files: $out"
   fi
   rm -f "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   run_vmbake setenv VM_BAKE_IMAGE_DIR "$TEST_DIR/img" > /dev/null
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_file_write"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_file_stage_host"
+  printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_file_stage_builder"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   out=$(run_vmbake image file write x)
-  if printf '%s\n' "$out" | grep -q "^install -d -m 755 -o root -g wheel '$TEST_DIR/img/x/mnt/etc/docker' && install -m 0644 -o root -g wheel '$TEST_DIR/dowry/daemon/object' '$TEST_DIR/img/x/mnt/etc/docker/daemon.json' || exit 1$" && printf '%s\n' "$out" | grep -q "files from dowries.*'x' '1' >&2"; then
-    pass "image file write: the object installed into the mounted disk at its path, root:wheel, the line's mode"
+  if printf '%s\n' "$out" | grep -q "^install -d -m 755 -o root -g wheel '$TEST_DIR/img/x/mnt/etc/docker' && install -m 0644 -o root -g wheel '$TEST_DIR/img/x/mnt/var/cache/vm-bake/dowry/daemon' '$TEST_DIR/img/x/mnt/etc/docker/daemon.json' || exit 1$" && printf '%s\n' "$out" | grep -q "^rm -rf '$TEST_DIR/img/x/mnt/var/cache/vm-bake/dowry' || exit 1$" && printf '%s\n' "$out" | grep -q "files from dowries.*'x' '1' >&2"; then
+    pass "image file write: the staged copy installed into the mounted disk at its path, root:wheel, the line's mode, the staging removed"
   else
     fail "image file write: $out"
+  fi
+  printf 'ssh-ed25519 AAAATEST test@host\n' > "$TEST_DIR/key.pub"
+  run_vmbake setenv VM_BAKE_HOST_KEY "$TEST_DIR/key.pub" > /dev/null
+  out=$(run_vmbake image file stage x; run_vmbake image file stage builder x)
+  if printf '%s\n' "$out" | grep -q "^cp '$TEST_DIR/dowry/daemon/object' '$TEST_DIR/img/x/mnt/var/cache/vm-bake/dowry/daemon' || exit 1$" && printf '%s\n' "$out" | grep -q "dowry %s staged.*'x' 'daemon'" && printf '%s\n' "$out" | grep -q "ssh -p 2222 -i '$TEST_DIR/key' .* 'bake@172.16.100.250' \"doas sh -c .*cat > '$TEST_DIR/img/x/mnt/var/cache/vm-bake/dowry/daemon'.*\" < '$TEST_DIR/dowry/daemon/object' || exit 1$" && printf '%s\n' "$out" | grep -q "dowry %s streamed into the builder.*'x' 'daemon'"; then
+    pass "image file stage: the place chooses; host copies the dowry into the mount, builder streams it over ssh into the builder's mount"
+  else
+    fail "image file stage: $out"
   fi
 }
 
@@ -702,7 +712,7 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify key_fetch key_verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_source_write seed_sshd_write seed_file_write seed_check_write seed_view_write seed_pack firstboot_conf_write firstboot_report_tmux firstboot_report_nmdm firstboot_gone firstboot_conf_drop response_write site_files_place site_pack console_drive_tmux console_drive_nmdm overlay_files_place overlay_pack site_head_write site_user_write site_env_write site_net_write site_firsttime_write overlay_answer_write overlay_install_write overlay_firstboot_write overlay_sshd_write overlay_user_write overlay_env_write overlay_file_write overlay_view_write overlay_net_write overlay_report_write console_watch_tmux console_watch_nmdm file_write daemon_write site_daemon_write overlay_daemon_write seed_daemon_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify key_fetch key_verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_source_write seed_sshd_write seed_file_write seed_check_write seed_view_write seed_pack firstboot_conf_write firstboot_report_tmux firstboot_report_nmdm firstboot_gone firstboot_conf_drop response_write site_files_place site_pack console_drive_tmux console_drive_nmdm overlay_files_place overlay_pack site_head_write site_user_write site_env_write site_net_write site_firsttime_write overlay_answer_write overlay_install_write overlay_firstboot_write overlay_sshd_write overlay_user_write overlay_env_write overlay_file_write overlay_view_write overlay_net_write overlay_report_write console_watch_tmux console_watch_nmdm file_write daemon_write site_daemon_write overlay_daemon_write seed_daemon_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add file_stage_host file_stage_builder port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
 GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write seed_write_cloud_init seed_write_autoinstall home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run install halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure data_ensure data_conf_write data_write data_destroy data_show"
 pin_image_cat() {
   local f

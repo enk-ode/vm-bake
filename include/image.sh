@@ -341,7 +341,7 @@ ___image_burn1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image rc write $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image env write $(sq "$1")"
 	test -z "$(awk -v base="$VM_BAKE_BASE" -v family=daemon -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image daemon write $(sq "$1")"
-	test -z "$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image file write $(sq "$1")"
+	test -z "$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image file stage $(sq "$1")" "\"\$VM_BAKE_CONTEXT_SCRIPT\" image file write $(sq "$1")"
 	srcs=$(awk -v base="$VM_BAKE_BASE" -v family=source -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	test -z "$srcs" || printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" note $(sq "image $1: source lines are apt sources, a FreeBSD image takes its packages from pkg's repositories: $(printf '%s' "$srcs" | awk '{ print $1 }' | tr '\n' ' ')")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image user make $(sq "$1")"
@@ -3648,12 +3648,89 @@ printf '# firstboot %s: the first boot reports its packages complete\n' "$g" >&2
 EOF_REPORT
 }
 
-#@help _image_file_write1
-# @command image file write <image>
-# @summary Act terminal (root, host or builder): the template's file lines (read at generation time) into the mounted disk of a FreeBSD image -- each dowry's object installed at its path with the mode of the line, owner root:wheel, the directory made; 'image burn' calls it only when there are lines
+#@help __image_file_stage1
+# @command image file stage <image>
+# @summary By VM_BAKE_BAKE_IN rewrite to 'image file stage host' (the dowries of the template's file lines copied into the mounted image) or 'image file stage builder' (streamed over ssh into the image mounted in the builder); any other value is an error line. The database with the dowries is the host's alone, so 'image file write' installs from the staged copy wherever it runs
 # @group   image
 # @internal
 # @see     image burn
+# @see     image file write
+# @env     VM_BAKE_BAKE_IN  host | builder
+#@end
+__image_file_stage1() {
+	case "$VM_BAKE_BAKE_IN" in
+		host|builder) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image file stage $VM_BAKE_BAKE_IN $(sq "$1")" ;;
+		*) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image file stage: VM_BAKE_BAKE_IN is '$VM_BAKE_BAKE_IN' (host | builder)")" ;;
+	esac
+}
+
+#@help _image_file_stage_host1
+# @command image file stage host <image>
+# @summary Act terminal (root, host): the dowry of every file line of the template (read at generation time over the chain, each dowry once) copied from the database into the mounted image under /var/cache/vm-bake/dowry/<dowry>
+# @group   image
+# @internal
+# @see     image file stage
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_file_stage_host1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" t="" cur="" chain="" p="" n=0 d="" dowries=""
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	dowries=$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | awk '{ print $1 }' | sort -u)
+	printf '%s\n' "install -d -m 755 '$mnt/var/cache/vm-bake/dowry' || exit 1"
+	for d in $dowries; do
+		printf '%s\n' "cp '$VM_BAKE_BASE/dowry/$d/object' '$mnt/var/cache/vm-bake/dowry/$d' || exit 1"
+		printf '%s\n' "printf '# image %s: dowry %s staged\\n' '$1' '$d' >&2"
+	done
+	test -n "$dowries" || emit_note "image $1: the template lists no file lines"
+}
+
+#@help _image_file_stage_builder1
+# @command image file stage builder <image>
+# @summary Act terminal (the invoking user, host side): the dowry of every file line of the template (read at generation time over the chain, each dowry once) streamed over ssh into the builder, where doas writes it into the mounted image under /var/cache/vm-bake/dowry/<dowry> -- the builder has no view of the database
+# @group   image
+# @internal
+# @see     image file stage
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_HOST_KEY  its private counterpart is the ssh identity
+# @env     VM_BAKE_SSH_PORT  the builder's sshd port
+# @env     VM_BAKE_BUILDER  the builder guest's name
+# @env     VM_BAKE_BUILDER_USER  the user ssh logs in as
+# @env     VM_BAKE_BUILDER_ADDRESS  the builder's address
+# @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
+#@end
+_image_file_stage_builder1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt" key="$VM_BAKE_HOST_KEY" t="" cur="" chain="" p="" n=0 d="" dowries="" ssh=""
+	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
+	ssh="ssh -p $VM_BAKE_SSH_PORT -i '${key%.pub}' -o UserKnownHostsFile='$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER' -o StrictHostKeyChecking=accept-new -o BatchMode=yes '$VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS'"
+	IFS= read -r t 2>/dev/null < "$VM_BAKE_BASE/image/$1/template" || t=empty
+	cur=$t
+	while test "$cur" != empty && test "$n" -lt 32; do
+		chain="$cur${chain:+ $chain}"
+		IFS= read -r p 2>/dev/null < "$VM_BAKE_BASE/template/$cur/parent" || p=empty
+		cur=$p; n=$((n + 1))
+	done
+	dowries=$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk" | awk '{ print $1 }' | sort -u)
+	for d in $dowries; do
+		printf '%s\n' "$ssh \"doas sh -c \\\"install -d -m 755 '$mnt/var/cache/vm-bake/dowry' && cat > '$mnt/var/cache/vm-bake/dowry/$d'\\\"\" < '$VM_BAKE_BASE/dowry/$d/object' || exit 1"
+		printf '%s\n' "printf '# image %s: dowry %s streamed into the builder\\n' '$1' '$d' >&2"
+	done
+	test -n "$dowries" || emit_note "image $1: the template lists no file lines"
+}
+
+#@help _image_file_write1
+# @command image file write <image>
+# @summary Act terminal (root, host or builder): the template's file lines (read at generation time) into the mounted disk of a FreeBSD image -- each dowry's staged copy (image file stage, under /var/cache/vm-bake/dowry) installed at its path with the mode of the line, owner root:wheel, the directory made, the staged copies removed at the end; 'image burn' calls stage and write only when there are lines. The database is the host's alone, so the builder sees a dowry only through the staged copy
+# @group   image
+# @internal
+# @see     image burn
+# @see     image file stage
 # @see     template file add
 # @env     VM_BAKE_IMAGE_DIR  the image's directory, the disk is mounted under <image>/mnt
 # @env     VM_BAKE_TEMPLATE_DIR  the awk program template/awk/template-table.awk
@@ -3670,8 +3747,9 @@ _image_file_write1() {
 	files=$(awk -v base="$VM_BAKE_BASE" -v family=file -v chain="empty${chain:+ $chain}" -v plain=1 -f "$VM_BAKE_TEMPLATE_DIR/awk/template-table.awk")
 	printf '%s\n' "$files" | while IFS= read -r line; do
 		set -- $line
-		printf '%s\n' "install -d -m 755 -o root -g wheel '$mnt$(dirname "$2")' && install -m $3 -o root -g wheel '$VM_BAKE_BASE/dowry/$1/object' '$mnt$2' || exit 1"
+		printf '%s\n' "install -d -m 755 -o root -g wheel '$mnt$(dirname "$2")' && install -m $3 -o root -g wheel '$mnt/var/cache/vm-bake/dowry/$1' '$mnt$2' || exit 1"
 	done
+	printf '%s\n' "rm -rf '$mnt/var/cache/vm-bake/dowry' || exit 1"
 	printf '%s\n' "printf '# image %s: %s files from dowries\\n' $(sq "$1") '$(printf '%s\n' "$files" | grep -c .)' >&2"
 }
 
