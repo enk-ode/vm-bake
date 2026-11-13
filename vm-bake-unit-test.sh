@@ -1676,8 +1676,13 @@ test_view_acts() {
   else
     fail "view mount: $out"
   fi
-  if printf '%s\n' "$out" | grep -q "mount -t nullfs -o rw '$view/caledonia/$HOME_FIXTURE/db.tmp' '$view/caledonia/$HOME_FIXTURE/db/.tmp'" && printf '%s\n' "$out" | grep -q "mount -t nullfs -o rw '$view/caledonia/$HOME_FIXTURE/db.log' '$view/caledonia/$HOME_FIXTURE/db/.log'" && printf '%s\n' "$out" | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 0750 '$view/caledonia/$HOME_FIXTURE/db.tmp'" && ! printf '%s\n' "$out" | grep -q "config/.tmp"; then
-    pass "a ro engine database (.env, .tmp, .log) gets .tmp and .log rw from the view, a plain directory does not"
+  if kldstat -q -m unionfs 2>/dev/null; then
+    logmount="mount -t unionfs '$view/caledonia/$HOME_FIXTURE/db.log' '$view/caledonia/$HOME_FIXTURE/db/.log'"; lognote="db/.log as unionfs"
+  else
+    logmount="mount -t nullfs -o rw '$view/caledonia/$HOME_FIXTURE/db.log' '$view/caledonia/$HOME_FIXTURE/db/.log'"; lognote="the traces of the host stay hidden"
+  fi
+  if printf '%s\n' "$out" | grep -q "mount -t nullfs -o rw '$view/caledonia/$HOME_FIXTURE/db.tmp' '$view/caledonia/$HOME_FIXTURE/db/.tmp'" && printf '%s\n' "$out" | grep -q "$logmount" && printf '%s\n' "$out" | grep -q "$lognote" && printf '%s\n' "$out" | grep -q "bake lock and known_hosts of the host stay out of reach" && printf '%s\n' "$out" | grep -q "install -d -o '$(id -un)' -g '$(id -gn)' -m 0750 '$view/caledonia/$HOME_FIXTURE/db.tmp'" && ! printf '%s\n' "$out" | grep -q "config/.tmp"; then
+    pass "a ro engine database (.env, .tmp, .log) gets .tmp rw from the view and .log as the kernel allows (unionfs above the host's, else rw alone with the host's hidden), a plain directory does not"
   else
     fail "view mount database overlays: $out"
   fi
