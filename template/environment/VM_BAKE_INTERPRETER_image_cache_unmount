@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal (image cache unmount), a content terminal of the bake, pinned where the image is mounted (sudo sh on the host, the builder's ssh line after image builder use): lets /var/cache/pkg of the image go. Inspect first: vm-bake setintp image_cache_unmount cat.

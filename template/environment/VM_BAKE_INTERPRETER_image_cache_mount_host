@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal (image cache mount host), pinned to sudo sh: nullfs of VM_BAKE_DISTFILES onto /var/cache/pkg of the image mounted on the host. Inspect first: vm-bake setintp image_cache_mount_host cat.

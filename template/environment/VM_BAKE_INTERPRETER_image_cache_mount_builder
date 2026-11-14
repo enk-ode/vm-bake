@@ -1,0 +1,2 @@
+sudo sh
+# Act terminal (image cache mount builder), a content terminal of the bake: 'image builder use' pins it to the builder's ssh line, where it mounts the virtio-9p share distfiles onto /var/cache/pkg of the image. Inspect first: vm-bake setintp image_cache_mount_builder cat.

@@ -206,6 +206,7 @@ ___image_base_host1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk attach $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk mount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check mounted $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image cache mount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image base content $(sq "$1")"
 }
 
@@ -222,6 +223,7 @@ ___image_base_builder1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pins builder"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image builder start $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk mount $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image cache mount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image base content $(sq "$1")"
 }
 
@@ -380,6 +382,7 @@ ___image_close_host1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pins host"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check mounted $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkg report $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image cache unmount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk unmount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk detach $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image digest write $(sq "$1")"
@@ -397,6 +400,7 @@ ___image_close_builder1() {
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check record $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image check pins builder"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image pkg report $(sq "$1")"
+	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image cache unmount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image disk unmount $(sq "$1")"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image builder stop"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image digest write $(sq "$1")"
@@ -481,7 +485,7 @@ __image_check_pins0() {
 
 #@help __image_check_pins_builder0
 # @command image check pins builder
-# @summary The builder branch of 'image check pins' (VM_BAKE_BAKE_IN=builder): every one of the twenty content terminals is pinned to the builder's ssh line as 'image builder use' spells it now (the pins read at generation time from the environment, VM_BAKE_INTERPRETER_<terminal>) -- a comment line, else an error line naming the strays and 'image builder use'
+# @summary The builder branch of 'image check pins' (VM_BAKE_BAKE_IN=builder): every one of the twenty-two content terminals is pinned to the builder's ssh line as 'image builder use' spells it now (the pins read at generation time from the environment, VM_BAKE_INTERPRETER_<terminal>) -- a comment line, else an error line naming the strays and 'image builder use'
 # @group   image
 # @internal
 # @see     image check pins
@@ -498,12 +502,12 @@ __image_check_pins_builder0() {
 	local key="$VM_BAKE_HOST_KEY" f="" ssh="" pin="" bad=""
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	ssh="ssh -p $VM_BAKE_SSH_PORT -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS doas sh"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_cache_mount_builder image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_cache_unmount image_disk_unmount; do
 		eval "pin=\${VM_BAKE_INTERPRETER_$f:-}"
 		test "$pin" = "$ssh" || bad="$bad $f"
 	done
 	if test -z "$bad"; then
-		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'image check pins: the twenty content terminals are pinned into the builder'"
+		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" comment 'image check pins: the twenty-two content terminals are pinned into the builder'"
 	else
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image check pins: VM_BAKE_BAKE_IN is builder, but these content terminals are not pinned to the builder's ssh line:$bad -- run 'image builder use' again (a pull that brings a new content terminal leaves it on the profile's pin)")"
 	fi
@@ -521,7 +525,7 @@ __image_check_pins_builder0() {
 #@end
 __image_check_pins_host0() {
 	local f="" pin="" bad=""
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_cache_mount_builder image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_cache_unmount image_disk_unmount; do
 		eval "pin=\${VM_BAKE_INTERPRETER_$f:-}"
 		case "$pin" in "ssh "*) bad="$bad $f" ;; esac
 	done
@@ -550,7 +554,7 @@ ___image_builder_use0() {
 	case "$key" in "~/"*) eval "key=~$(id -un)${key#\~}" ;; esac
 	ssh="ssh -p $VM_BAKE_SSH_PORT -i ${key%.pub} -o UserKnownHostsFile=$VM_BAKE_BASE/.tmp/known_hosts.$VM_BAKE_BUILDER -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $VM_BAKE_BUILDER_USER@$VM_BAKE_BUILDER_ADDRESS doas sh"
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN builder"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_cache_mount_builder image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_cache_unmount image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setintp $f $(sq "$ssh")"
 	done
 }
@@ -565,7 +569,7 @@ ___image_builder_use0() {
 ___image_builder_leave0() {
 	local f=""
 	printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" setenv VM_BAKE_BAKE_IN host"
-	for f in image_disk_mount image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_disk_unmount; do
+	for f in image_disk_mount image_cache_mount_builder image_keys_write image_pkg_base image_repo_write image_boot_write image_pkg_install image_pkgfile_add image_port_build image_port_install image_rc_write image_env_write image_daemon_write image_file_write image_user_make image_view_write image_root_lock image_doas_write image_ssh_write image_pkg_report image_cache_unmount image_disk_unmount; do
 		printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" unsetintp $f"
 	done
 }
@@ -1105,7 +1109,7 @@ _image_boot_write1() {
 
 #@help _image_pkg_install3
 # @command image pkg install <image> <abi> <osversion>
-# @summary Act terminal (root, host or builder): the template's resolved package list (read at generation time) installed with 'pkg -c <mnt>' -- a chroot into the image, so the packages' scripts run with the image's own tools (indexinfo and the like) -- under the pinned ABI and OSVERSION, the resolver of the place copied in for the fetch, pkg's FETCH_TIMEOUT raised to VM_BAKE_PKG_FETCH_TIMEOUT (its default of 30 seconds ends a large package on a slow uplink), the install run again when it breaks off, up to VM_BAKE_PKG_INSTALL_TRIES times with VM_BAKE_PKG_INSTALL_PAUSE seconds between them (pkg takes what it fetched before from the image's cache and fetches only the rest; the pause keeps a try from starting into the outage that broke the one before), the image's package cache emptied afterwards; an empty list is a note
+# @summary Act terminal (root, host or builder): the template's resolved package list (read at generation time) installed with 'pkg -c <mnt>' -- a chroot into the image, so the packages' scripts run with the image's own tools (indexinfo and the like) -- under the pinned ABI and OSVERSION, the resolver of the place copied in for the fetch, pkg's FETCH_TIMEOUT raised to VM_BAKE_PKG_FETCH_TIMEOUT (its default of 30 seconds ends a large package on a slow uplink), the install run again when it breaks off, up to VM_BAKE_PKG_INSTALL_TRIES times with VM_BAKE_PKG_INSTALL_PAUSE seconds between them (the pause keeps a try from starting into the outage that broke the one before); /var/cache/pkg of the image is VM_BAKE_DISTFILES for the whole bake (image cache mount), so pkg keeps every package it fetches for the next try and the next bake and no pkg clean runs here; an empty list is a note
 # @group   image
 # @internal
 # @see     image burn
@@ -1128,7 +1132,6 @@ _image_pkg_install3() {
 	if test -n "${pkgs% }"; then
 		printf '%s\n' "cp /etc/resolv.conf '$mnt/etc/resolv.conf' || exit 1"
 		printf '%s\n' "n=0; until pkg -c '$mnt' -o ABI=$(sq "$2") -o OSVERSION=$(sq "$3") -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes -o FETCH_TIMEOUT=$VM_BAKE_PKG_FETCH_TIMEOUT install ${pkgs% }; do n=\$((n + 1)); test \"\$n\" -lt $VM_BAKE_PKG_INSTALL_TRIES || exit 1; printf '# image %s: pkg install broke off, try %s of %s follows in %s s -- the packages fetched so far wait in the image cache\\n' '$1' \"\$((n + 1))\" '$VM_BAKE_PKG_INSTALL_TRIES' '$VM_BAKE_PKG_INSTALL_PAUSE' >&2; sleep $VM_BAKE_PKG_INSTALL_PAUSE; done"
-		printf '%s\n' "pkg -c '$mnt' clean -ay > /dev/null || exit 1"
 		printf '%s\n' "printf '# image %s: packages %s\\n' '$1' $(sq "${pkgs% }") >&2"
 	else
 		emit_note "image $1: the template lists no packages"
@@ -1542,6 +1545,71 @@ _image_pkg_report1() {
 	printf '%s\n' "pkg -r '$mnt' audit -F > '$mnt/var/log/vm-bake/audit.txt' 2>&1; chmod 644 '$mnt/var/log/vm-bake/audit.txt'; printf '# image %s: %s packages, audit exit %s (/var/log/vm-bake in the image)\\n' '$1' \"\$(grep -c . '$mnt/var/log/vm-bake/packages.txt')\" \"\$?\" >&2"
 }
 
+#@help __image_cache_mount1
+# @command image cache mount <image>
+# @summary By VM_BAKE_BAKE_IN rewrite to 'image cache mount host' (nullfs of VM_BAKE_DISTFILES onto /var/cache/pkg of the mounted image) or 'image cache mount builder' (the virtio-9p share distfiles of the builder's configuration mounted there); any other value is an error line. pkg then fetches into distfiles of the host, in its own layout, and finds there what an earlier bake or a broken-off try fetched (decided 31.10.2026: the same cache as the host; until 14.11. every bake fetched everything anew into the image and pkg clean threw it away)
+# @group   image
+# @internal
+# @see     image base host
+# @see     image base builder
+# @see     image cache unmount
+# @env     VM_BAKE_BAKE_IN  host | builder
+#@end
+__image_cache_mount1() {
+	case "$VM_BAKE_BAKE_IN" in
+		host|builder) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" image cache mount $VM_BAKE_BAKE_IN $(sq "$1")" ;;
+		*) printf '%s\n' "\"\$VM_BAKE_CONTEXT_SCRIPT\" error $(sq "image cache mount: VM_BAKE_BAKE_IN is '$VM_BAKE_BAKE_IN' (host | builder)")" ;;
+	esac
+}
+
+#@help _image_cache_mount_host1
+# @command image cache mount host <image>
+# @summary Act terminal (root, host): /var/cache/pkg made in the mounted image and VM_BAKE_DISTFILES hung onto it as a rw nullfs; already hung in is left alone
+# @group   image
+# @internal
+# @see     image cache mount
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_DISTFILES  the directory hung in
+#@end
+_image_cache_mount_host1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
+	printf '%s\n' "install -d -m 755 '$mnt/var/cache/pkg' || exit 1"
+	printf '%s\n' "mount | grep -q \" on $mnt/var/cache/pkg (\" || mount -t nullfs -o rw '$VM_BAKE_DISTFILES' '$mnt/var/cache/pkg' || exit 1"
+	printf '%s\n' "printf '# image %s: /var/cache/pkg is %s of the host (nullfs)\\n' '$1' '$VM_BAKE_DISTFILES' >&2"
+}
+
+#@help _image_cache_mount_builder1
+# @command image cache mount builder <image>
+# @summary Act terminal (root, builder): virtio_p9fs loaded, /var/cache/pkg made in the mounted image and the share distfiles (image builder conf write hands it to bhyve on VM_BAKE_VIEW_SLOT) mounted onto it as p9fs; already mounted is left alone
+# @group   image
+# @internal
+# @see     image cache mount
+# @see     image builder conf write
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+#@end
+_image_cache_mount_builder1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
+	printf '%s\n' "kldload -n virtio_p9fs || exit 1"
+	printf '%s\n' "install -d -m 755 '$mnt/var/cache/pkg' || exit 1"
+	printf '%s\n' "mount | grep -q \" on $mnt/var/cache/pkg (\" || mount -t p9fs distfiles '$mnt/var/cache/pkg' || exit 1"
+	printf '%s\n' "printf '# image %s: /var/cache/pkg is the share distfiles of the host (p9fs)\\n' '$1' >&2"
+}
+
+#@help _image_cache_unmount1
+# @command image cache unmount <image>
+# @summary Act terminal (root, host or builder): /var/cache/pkg of the mounted image let go when it is hung in, so the image carries no package and the next 'image disk unmount' finds nothing below the root; nothing hung in is a note
+# @group   image
+# @internal
+# @see     image cache mount
+# @see     image close host
+# @see     image close builder
+# @env     VM_BAKE_IMAGE_DIR  the image's directory
+#@end
+_image_cache_unmount1() {
+	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
+	printf '%s\n' "if mount | grep -q \" on $mnt/var/cache/pkg (\"; then umount '$mnt/var/cache/pkg' || exit 1; printf '# image %s: /var/cache/pkg let go, the packages stay in distfiles of the host\\n' '$1' >&2; else printf '# image %s: no cache hung into /var/cache/pkg\\n' '$1' >&2; fi"
+}
+
 #@help _image_disk_unmount1
 # @command image disk unmount <image>
 # @summary Act terminal (root, host or builder): devfs, the system partition and the root unmounted
@@ -1552,6 +1620,7 @@ _image_pkg_report1() {
 #@end
 _image_disk_unmount1() {
 	local mnt="$VM_BAKE_IMAGE_DIR/$1/mnt"
+	printf '%s\n' "! mount | grep -q \" on $mnt/var/cache/pkg (\" || umount '$mnt/var/cache/pkg' || exit 1"
 	printf '%s\n' "umount '$mnt/dev' || exit 1"
 	printf '%s\n' "umount '$mnt/boot/efi' || exit 1"
 	printf '%s\n' "umount '$mnt' || exit 1"
@@ -1583,7 +1652,7 @@ _image_disk_detach1() {
 #@end
 _image_disk_release1() {
 	local dir="$VM_BAKE_IMAGE_DIR/$1" img="$VM_BAKE_IMAGE_DIR/$1/disk0.img"
-	printf '%s\n' "umount '$dir/mnt/dev' 2>/dev/null; umount '$dir/mnt/boot/efi' 2>/dev/null; umount '$dir/mnt' 2>/dev/null; true"
+	printf '%s\n' "umount '$dir/mnt/var/cache/pkg' 2>/dev/null; umount '$dir/mnt/dev' 2>/dev/null; umount '$dir/mnt/boot/efi' 2>/dev/null; umount '$dir/mnt' 2>/dev/null; true"
 	printf '%s\n' "md=\$(mdconfig -lv | awk -v f='$img' '\$4 == f { print \$1; exit }'); test -z \"\$md\" || mdconfig -d -u \"\${md#md}\" || exit 1"
 	printf '%s\n' "printf '# image %s: released on the host\\n' '$1' >&2"
 }
@@ -1644,6 +1713,8 @@ _image_readonly_set1() {
 # @env     VM_BAKE_GUEST_SWITCH  the vm-bhyve switch the guests hang on
 # @env     VM_BAKE_BUILDER  the builder guest's name
 # @env     VM_BAKE_IMAGE_DIR  the image's directory
+# @env     VM_BAKE_VIEW_SLOT  the PCI slot of the virtio-9p device, here the share distfiles
+# @env     VM_BAKE_DISTFILES  the directory shared as distfiles
 #@end
 _image_builder_conf_write1() {
 	local g="$VM_BAKE_BUILDER" conf="$VM_BAKE_GUEST_DIR/$VM_BAKE_BUILDER/$VM_BAKE_BUILDER.conf" img="" t="" cur="" chain="" p="" n=0 a="" res=""
@@ -1658,7 +1729,7 @@ _image_builder_conf_write1() {
 	for a in $chain; do test -f "$VM_BAKE_BASE/template/$a/resource" && IFS= read -r res < "$VM_BAKE_BASE/template/$a/resource"; done
 	set -- "$1" ${res:-1 1G 0}
 	printf '%s\n' "cat > '$conf' <<'EOF_CONF'"
-	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" 'disk0_type="virtio-blk"' 'disk0_name="disk0.img"' 'disk1_type="virtio-blk"' "disk1_name=\"$VM_BAKE_IMAGE_DIR/$1/disk0.img\"" 'disk1_dev="custom"'
+	printf '%s\n' 'loader="uefi"' "cpu=$2" "memory=$3" 'network0_type="virtio-net"' "network0_switch=\"$VM_BAKE_GUEST_SWITCH\"" 'disk0_type="virtio-blk"' 'disk0_name="disk0.img"' 'disk1_type="virtio-blk"' "disk1_name=\"$VM_BAKE_IMAGE_DIR/$1/disk0.img\"" 'disk1_dev="custom"' "bhyve_options=\"-s $VM_BAKE_VIEW_SLOT,virtio-9p,distfiles=$VM_BAKE_DISTFILES\""
 	printf '%s\n' "EOF_CONF"
 	printf '%s\n' "printf '# builder %s: %s with disk1 %s\\n' '$g' '$conf' '$VM_BAKE_IMAGE_DIR/$1/disk0.img' >&2"
 }

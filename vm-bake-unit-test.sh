@@ -712,7 +712,7 @@ test_inspect_by_default() {
 # to cat in the sandbox, VERIFIED through getintp before any of them is
 # called: the acts default to 'sudo sh', and a sudo that does not ask would
 # run them for real.
-IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify key_fetch key_verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_source_write seed_sshd_write seed_file_write seed_check_write seed_view_write seed_pack firstboot_conf_write firstboot_report_tmux firstboot_report_nmdm firstboot_gone firstboot_conf_drop response_write site_files_place site_pack console_drive_tmux console_drive_nmdm overlay_files_place overlay_pack site_head_write site_user_write site_env_write site_net_write site_firsttime_write overlay_answer_write overlay_install_write overlay_firstboot_write overlay_sshd_write overlay_user_write overlay_env_write overlay_file_write overlay_view_write overlay_net_write overlay_report_write console_watch_tmux console_watch_nmdm file_write daemon_write site_daemon_write overlay_daemon_write seed_daemon_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install pkgfile_stage_host pkgfile_stage_builder pkgfile_add file_stage_host file_stage_builder port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
+IMAGE_ACTS="lock_take lock_drop lock_release tree_ensure dataset_create dataset_destroy fetch verify key_fetch key_verify disk_write disk_place seed_meta_write seed_net_write seed_user_write seed_source_write seed_sshd_write seed_file_write seed_check_write seed_view_write seed_pack firstboot_conf_write firstboot_report_tmux firstboot_report_nmdm firstboot_gone firstboot_conf_drop response_write site_files_place site_pack console_drive_tmux console_drive_nmdm overlay_files_place overlay_pack site_head_write site_user_write site_env_write site_net_write site_firsttime_write overlay_answer_write overlay_install_write overlay_firstboot_write overlay_sshd_write overlay_user_write overlay_env_write overlay_file_write overlay_view_write overlay_net_write overlay_report_write console_watch_tmux console_watch_nmdm file_write daemon_write site_daemon_write overlay_daemon_write seed_daemon_write disk_create disk_attach disk_partition disk_format disk_grow disk_relabel disk_mount keys_write pkg_base repo_write boot_write pkg_install cache_mount_host cache_mount_builder cache_unmount pkgfile_stage_host pkgfile_stage_builder pkgfile_add file_stage_host file_stage_builder port_build port_install rc_write env_write user_make view_write root_lock doas_write ssh_write pkg_report disk_unmount disk_detach disk_release digest_write snapshot_take readonly_set builder_conf_write builder_wait builder_shutdown builder_gone"
 GUEST_ACTS="switch_ensure clone conf_write link_write link_drop disk_release network_write seed_write_cloud_init seed_write_autoinstall home_write hostkey_bind hostkey_unbind hostkey_write dns_write knownhosts_drop run install halt gone dataset_destroy view_tree_ensure view_ensure view_mount view_unmount view_destroy repo_clone repo_refs repo_merge repo_remove repo_show repo_tree_ensure repo_mirror repo_record repo_unrecord repo_wait fetched_write fetched_drop report_place dowry_place_idem dowry_place_overwrite vmm_release log_rotate_ensure data_ensure data_conf_write data_write data_destroy data_show"
 pin_image_cat() {
   local f
@@ -784,7 +784,7 @@ test_image_plan() {
   fi
   run_vmbake image record write freebsd-dev x > /dev/null
   run_vmbake image record write freebsd-builder b > /dev/null
-  if [ "$(run_vmbake image base x | grep -c .)" = "6" ] && run_vmbake image base x | grep -q "image disk attach 'x'" && run_vmbake image base content x | grep -q "image pkg base 'x' 'FreeBSD:15:amd64' '1501000'" && [ "$(run_vmbake image base content b | grep -c .)" = "2" ]; then
+  if [ "$(run_vmbake image base x | grep -c .)" = "7" ] && run_vmbake image base x | grep -q "image disk attach 'x'" && run_vmbake image base content x | grep -q "image pkg base 'x' 'FreeBSD:15:amd64' '1501000'" && [ "$(run_vmbake image base content b | grep -c .)" = "2" ]; then
     pass "base on the host: attach, mount, content; release content installs pkgbase, image content only repos and loader"
   else
     fail "base plan: $(run_vmbake image base x; run_vmbake image base content x; run_vmbake image base content b)"
@@ -807,7 +807,7 @@ test_image_plan() {
   printf 'cat\n' > "$TEST_DIR/.env/local/VM_BAKE_BATCH_COMBINATOR_INTERPRETER"
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   printf 'builder\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  if run_vmbake image base x | grep -q "image builder start 'x'" && [ "$(run_vmbake image base x | grep -c .)" = "5" ] && run_vmbake image close x | grep -q "image builder stop" && run_vmbake image builder start x | grep -q "guest check record 'bake'"; then
+  if run_vmbake image base x | grep -q "image builder start 'x'" && [ "$(run_vmbake image base x | grep -c .)" = "6" ] && run_vmbake image close x | grep -q "image builder stop" && run_vmbake image builder start x | grep -q "guest check record 'bake'"; then
     pass "base and close in the builder: the builder started with the disk, stopped before the digest"
   else
     fail "builder plans: $(run_vmbake image base x; run_vmbake image close x)"
@@ -825,14 +825,14 @@ test_image_plan() {
   else
     fail "burn plan: $plan"
   fi
-  if [ "$(run_vmbake image close x | grep -c .)" = "7" ] && [ "$(run_vmbake image seal x | grep -c .)" = "6" ] && [ "$(run_vmbake image drop x | grep -c .)" = "5" ] && run_vmbake image drop x | grep -q "image dataset destroy 'x'"; then
-    pass "close seven lines with the pins checked, seal six, drop five: release, destroy, record, lock"
+  if [ "$(run_vmbake image close x | grep -c .)" = "8" ] && [ "$(run_vmbake image seal x | grep -c .)" = "6" ] && [ "$(run_vmbake image drop x | grep -c .)" = "5" ] && run_vmbake image drop x | grep -q "image dataset destroy 'x'"; then
+    pass "close eight lines with the pins checked and the cache let go, seal six, drop five: release, destroy, record, lock"
   else
     fail "close/seal/drop plan: $(run_vmbake image close x; run_vmbake image seal x; run_vmbake image drop x)"
   fi
   plan=$(run_vmbake image builder use)
-  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "20" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && printf '%s\n' "$plan" | grep -q "setintp image_daemon_write " && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "20" ]; then
-    pass "builder use and leave: the place and twenty pins, each a setintp or unsetintp line"
+  if printf '%s\n' "$plan" | sed -n 1p | grep -q "setenv VM_BAKE_BAKE_IN builder" && [ "$(printf '%s\n' "$plan" | grep -c "setintp image_")" = "22" ] && printf '%s\n' "$plan" | grep -q "setintp image_pkg_base 'ssh -p 2222 -i .* bake@172.16.100.250 doas sh'" && printf '%s\n' "$plan" | grep -q "setintp image_daemon_write " && [ "$(run_vmbake image builder leave | grep -c "unsetintp image_")" = "22" ]; then
+    pass "builder use and leave: the place and twenty-two pins, each a setintp or unsetintp line"
   else
     fail "builder use/leave: $plan"
   fi
@@ -846,7 +846,7 @@ test_image_plan() {
   printf 'builder\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
   out=$(run_vmbake image check pins builder)
   if run_vmbake image check pins | grep -q "image check pins builder$" && printf '%s\n' "$out" | grep -q "error 'image check pins: VM_BAKE_BAKE_IN is builder, but these content terminals are not pinned to the builder" && printf '%s\n' "$out" | grep -q " image_disk_mount .* image_daemon_write .* image_disk_unmount --" && printf '%s\n' "$out" | grep -q "run .*image builder use.* again" && run_vmbake image base builder x | sed -n 2p | grep -q "image check pins builder$" && run_vmbake image close builder x | sed -n 2p | grep -q "image check pins builder$"; then
-    pass "check pins in the builder: twenty unpinned terminals are one error line naming them and 'image builder use'; base and close ask for the builder's pins"
+    pass "check pins in the builder: twenty-two unpinned terminals are one error line naming them and 'image builder use'; base and close ask for the builder's pins"
   else
     fail "check pins builder: $out"
   fi
@@ -854,8 +854,8 @@ test_image_plan() {
   ssh=$(printf '%s\n' "$plan" | sed -n "s/.*setintp image_pkg_base '\(.*\)'$/\1/p")
   for f in $(printf '%s\n' "$plan" | sed -n 's/.*setintp \(image_[a-z_]*\) .*/\1/p'); do printf '%s\n' "$ssh" > "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_$f"; done
   rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"
-  if [ -n "$ssh" ] && run_vmbake image check pins builder | grep -q "comment 'image check pins: the twenty content terminals are pinned into the builder'" && { rm -f "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_daemon_write" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"; run_vmbake image check pins builder | grep -q "ssh line: image_daemon_write -- run"; } && { printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"; run_vmbake image check pins host | grep -q "pinned to an ssh line: image_disk_mount image_keys_write .* image_disk_unmount -- run .*image builder leave"; }; then
-    pass "check pins: the twenty pins as builder use sets them pass; one missing after a pull is named alone; on the host the ssh pins are the strays"
+  if [ -n "$ssh" ] && run_vmbake image check pins builder | grep -q "comment 'image check pins: the twenty-two content terminals are pinned into the builder'" && { rm -f "$TEST_DIR/.env/local/VM_BAKE_INTERPRETER_image_daemon_write" "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"; run_vmbake image check pins builder | grep -q "ssh line: image_daemon_write -- run"; } && { printf 'host\n' > "$TEST_DIR/.env/local/VM_BAKE_BAKE_IN"; rm -f "$TEST_DIR/.env/local/VM_BAKE_CACHE_ENV_ARGS"; run_vmbake image check pins host | grep -q "pinned to an ssh line: image_disk_mount image_cache_mount_builder .* image_disk_unmount -- run .*image builder leave"; }; then
+    pass "check pins: the twenty-two pins as builder use sets them pass; one missing after a pull is named alone; on the host the ssh pins are the strays"
   else
     fail "check pins builder/host: $(run_vmbake image check pins builder; run_vmbake image check pins host)"
   fi
@@ -957,7 +957,7 @@ test_image_emissions() {
     fail "boot write: $out"
   fi
   out=$(run_vmbake image pkg install x FreeBSD:15:amd64 1501000; run_vmbake image rc write x)
-  if printf '%s\n' "$out" | grep -q "^n=0; until pkg -c '$TEST_DIR/img/x/mnt' -o ABI='FreeBSD:15:amd64' -o OSVERSION='1501000' -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes -o FETCH_TIMEOUT=300 install claude-code git; do n=\$((n + 1)); test \"\$n\" -lt 3 || exit 1; printf '# image %s: pkg install broke off, try %s of %s follows in %s s.*' 'x' \"\$((n + 1))\" '3' '300' >&2; sleep 300; done$" && printf '%s\n' "$out" | grep -q "^pkg -c '$TEST_DIR/img/x/mnt' clean -ay > /dev/null || exit 1$" && printf '%s\n' "$out" | grep -q "cp /etc/resolv.conf '$TEST_DIR/img/x/mnt/etc/resolv.conf'" && printf '%s\n' "$out" | grep -q '^sshd_enable="YES"$' && printf '%s\n' "$out" | grep -q '^kern_securelevel="2"$'; then
+  if printf '%s\n' "$out" | grep -q "^n=0; until pkg -c '$TEST_DIR/img/x/mnt' -o ABI='FreeBSD:15:amd64' -o OSVERSION='1501000' -o IGNORE_OSVERSION=yes -o ASSUME_ALWAYS_YES=yes -o FETCH_TIMEOUT=300 install claude-code git; do n=\$((n + 1)); test \"\$n\" -lt 3 || exit 1; printf '# image %s: pkg install broke off, try %s of %s follows in %s s.*' 'x' \"\$((n + 1))\" '3' '300' >&2; sleep 300; done$" && ! printf '%s\n' "$out" | grep -q "pkg -c '$TEST_DIR/img/x/mnt' clean" && printf '%s\n' "$out" | grep -q "cp /etc/resolv.conf '$TEST_DIR/img/x/mnt/etc/resolv.conf'" && printf '%s\n' "$out" | grep -q '^sshd_enable="YES"$' && printf '%s\n' "$out" | grep -q '^kern_securelevel="2"$'; then
     pass "pkg install in a chroot with resolv.conf and a cleaned cache; rc write with quoted values"
   else
     fail "pkg install/rc: $out"
@@ -987,14 +987,14 @@ test_image_emissions() {
   run_vmbake template daemon drop freebsd-dev relay_imap root 'socat TCP4-LISTEN:1143,fork TCP4:127.0.0.1:1144' > /dev/null
   run_vmbake template daemon drop freebsd-dev bridge "$(id -un)" 'protonmail-bridge --noninteractive --log-level info' > /dev/null
   out=$(run_vmbake image pkg report x; run_vmbake image disk unmount x; run_vmbake image disk detach x; run_vmbake image digest write x; run_vmbake image snapshot take x; run_vmbake image readonly set x; run_vmbake image disk release x; run_vmbake image dataset destroy x)
-  if printf '%s\n' "$out" | grep -q "audit -F > '$TEST_DIR/img/x/mnt/var/log/vm-bake/audit.txt'" && printf '%s\n' "$out" | grep -q "umount '$TEST_DIR/img/x/mnt/dev'" && printf '%s\n' "$out" | grep -q 'mdconfig -d -u "${md#md}"' && printf '%s\n' "$out" | grep -q "sha256 -q '$TEST_DIR/img/x/disk0.img'" && printf '%s\n' "$out" | grep -q 'zfs snapshot "$ds@image"' && printf '%s\n' "$out" | grep -q 'zfs set readonly=on "$ds"' && printf '%s\n' "$out" | grep -q 'zfs destroy -r "$ds"'; then
+  if printf '%s\n' "$out" | grep -q "audit -F > '$TEST_DIR/img/x/mnt/var/log/vm-bake/audit.txt'" && printf '%s\n' "$out" | grep -q "umount '$TEST_DIR/img/x/mnt/dev'" && printf '%s\n' "$out" | grep -q "^! mount | grep -q \" on $TEST_DIR/img/x/mnt/var/cache/pkg (\" || umount '$TEST_DIR/img/x/mnt/var/cache/pkg' || exit 1$" && printf '%s\n' "$out" | grep -q 'mdconfig -d -u "${md#md}"' && printf '%s\n' "$out" | grep -q "sha256 -q '$TEST_DIR/img/x/disk0.img'" && printf '%s\n' "$out" | grep -q 'zfs snapshot "$ds@image"' && printf '%s\n' "$out" | grep -q 'zfs set readonly=on "$ds"' && printf '%s\n' "$out" | grep -q 'zfs destroy -r "$ds"'; then
     pass "report into the image, unmount, detach, digest, snapshot, readonly, release, destroy in their words"
   else
     fail "close/seal/drop emissions: $out"
   fi
   run_vmbake guest record write b bake 172.16.100.250/24 > /dev/null
   out=$(run_vmbake image builder conf write x; run_vmbake image builder wait; run_vmbake image builder shutdown; run_vmbake image builder gone)
-  if printf '%s\n' "$out" | grep -q "cat > '/data/vm/vm-bake/guest/bake/bake.conf'" && printf '%s\n' "$out" | grep -q "^cpu=2$" && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/x/disk0.img\"$" && printf '%s\n' "$out" | grep -q 'disk1_dev="custom"' && printf '%s\n' "$out" | grep -q "until ssh -p 2222 -i '$TEST_DIR/key'" && printf '%s\n' "$out" | grep -q "'doas shutdown -p now'" && printf '%s\n' "$out" | grep -q "pgrep -q -f 'bhyve: bake"; then
+  if printf '%s\n' "$out" | grep -q "cat > '/data/vm/vm-bake/guest/bake/bake.conf'" && printf '%s\n' "$out" | grep -q "^cpu=2$" && printf '%s\n' "$out" | grep -q "^disk1_name=\"$TEST_DIR/img/x/disk0.img\"$" && printf '%s\n' "$out" | grep -q 'disk1_dev="custom"' && printf '%s\n' "$out" | grep -q '^bhyve_options="-s 30,virtio-9p,distfiles=/data/vm/vm-bake/distfiles"$' && printf '%s\n' "$out" | grep -q "until ssh -p 2222 -i '$TEST_DIR/key'" && printf '%s\n' "$out" | grep -q "'doas shutdown -p now'" && printf '%s\n' "$out" | grep -q "pgrep -q -f 'bhyve: bake"; then
     pass "builder: conf with the image as disk1 and the builder template's resources, wait on ssh, shutdown, gone"
   else
     fail "builder emissions: $out"
