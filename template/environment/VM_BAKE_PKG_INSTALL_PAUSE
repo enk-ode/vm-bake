@@ -1,0 +1,2 @@
+300
+# @summary Seconds 'image pkg install' waits between two tries. A fetch that broke off usually broke because the uplink was gone, and a try that starts into the same outage is spent in seconds: on 13.11.2026 the third try of a bake died on 'Transient resolver failure' for every catalogue right after the second had lost its connection. Five minutes ride out a short outage; the tries are VM_BAKE_PKG_INSTALL_TRIES, the stall watch VM_BAKE_PKG_FETCH_TIMEOUT.
